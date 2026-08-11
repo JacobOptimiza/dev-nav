@@ -3,6 +3,18 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.3.0] - 2026-08-11
+
+### Added
+
+- Use `e` as the discoverable, single-key shortcut for running a command in the selected directory.
+
+### Changed
+
+- Group README shortcuts by workflow and prioritize common actions in the TUI help.
+- Keep `:` as a backwards-compatible command-mode alias.
+- Align the public documentation with the repository's read-only policy.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added

@@ -210,7 +210,7 @@ impl App {
             }
             Key::Char('f') => self.toggle_favorite()?,
             Key::Char('a') => self.begin_alias(),
-            Key::Char(':') => self.begin_command(),
+            Key::Char(character) if is_command_shortcut(character) => self.begin_command(),
             Key::Char(character) => {
                 if let Some(command) = agent_command(character) {
                     return Ok(self.execute_selected(command));
@@ -453,7 +453,7 @@ impl App {
             "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
             fit(&prompt, inner)
         ));
-        let help = "c Codex  r última sesión Codex del repo  d Claude  o OpenCode  i Kimi  Mayús+D/O/I última sesión  ↑↓ mover  Enter cd  → abrir  p ruta  f favorito  a alias  / filtrar  q salir";
+        let help = "↑↓ mover  Enter cd  → entrar  e comando  / filtrar  c Codex  r última sesión Codex del repo  d/o/i agentes  Mayús reanuda  f favorito  a alias  q salir";
         rows.push(format!(
             "\x1b[38;2;90;100;120m╰─{}─╯\x1b[0m",
             fit(help, width.saturating_sub(4))
@@ -474,6 +474,10 @@ fn agent_command(key: char) -> Option<&'static str> {
         'I' => Some("kimi --continue"),
         _ => None,
     }
+}
+
+fn is_command_shortcut(key: char) -> bool {
+    matches!(key, 'e' | ':')
 }
 
 fn fuzzy_score(candidate: &str, query: &str) -> Option<i32> {
@@ -510,7 +514,7 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::{App, agent_command, fuzzy_score};
+    use super::{App, agent_command, fuzzy_score, is_command_shortcut};
     use crate::{config::Config, render::fit};
 
     #[test]
@@ -536,6 +540,13 @@ mod tests {
         assert_eq!(agent_command('i'), Some("kimi"));
         assert_eq!(agent_command('I'), Some("kimi --continue"));
         assert_eq!(agent_command('x'), None);
+    }
+
+    #[test]
+    fn execute_uses_a_mnemonic_key_and_keeps_the_legacy_alias() {
+        assert!(is_command_shortcut('e'));
+        assert!(is_command_shortcut(':'));
+        assert!(!is_command_shortcut('x'));
     }
 
     #[test]

@@ -112,20 +112,28 @@ pulsar `f` para eliminarla de favoritos. `a` permite mostrarla como
 Los favoritos y alias son locales y se guardan fuera del repositorio en
 `%LOCALAPPDATA%\DevNav\config.tsv`.
 
-## Teclas
+## Shortcuts
 
-| Tecla | Acción |
+Los shortcuts están agrupados por flujo de trabajo. Las acciones más frecuentes
+aparecen primero para que sean fáciles de descubrir y recordar.
+
+### Navegación y selección
+
+| Shortcut | Acción |
 |---|---|
-| `↑` / `↓`, `j` / `k` | mover selección |
-| `Enter` | seleccionar carpeta y volver a PowerShell |
+| `↑` / `↓` o `j` / `k` | mover la selección |
+| `Enter` | seleccionar la carpeta y volver a PowerShell |
 | `→` / `l` | entrar en la carpeta resaltada |
 | `←` / `h` | subir al directorio padre |
-| `p` | ir a cualquier ruta absoluta, incluso otro disco |
 | `.` | seleccionar el directorio mostrado |
 | `g` | volver a la raíz configurada |
-| `f` | añadir o quitar favorito global |
-| `a` | editar alias |
-| `c` | abrir `codex` en la carpeta resaltada |
+| `p` | ir a cualquier ruta absoluta, incluso de otro disco |
+
+### Agentes
+
+| Shortcut | Acción |
+|---|---|
+| `c` | abrir Codex (`codex`) en la carpeta resaltada |
 | `r` | reanudar la última sesión de Codex del repositorio (`codex resume --last`) |
 | `d` | abrir Claude Code (`claude`) en la carpeta resaltada |
 | `Shift+D` | reanudar la última sesión de Claude Code del repositorio (`claude --continue`) |
@@ -133,10 +141,20 @@ Los favoritos y alias son locales y se guardan fuera del repositorio en
 | `Shift+O` | reanudar la última sesión de OpenCode del repositorio (`opencode --continue`) |
 | `i` | abrir Kimi Code (`kimi`) en la carpeta resaltada |
 | `Shift+I` | reanudar la última sesión de Kimi Code del repositorio (`kimi --continue`) |
-| `/` | filtro fuzzy incremental |
-| `:` | ejecutar un comando en la carpeta resaltada |
-| `u` | refrescar |
-| `q` / `Esc` | cancelar |
+
+### Organización, búsqueda y acciones
+
+| Shortcut | Acción |
+|---|---|
+| `/` | activar el filtro fuzzy incremental |
+| `f` | añadir o quitar un favorito global |
+| `a` | editar el alias de la carpeta resaltada |
+| `e` | escribir y ejecutar un comando en la carpeta resaltada |
+| `u` | refrescar el directorio mostrado |
+| `q` / `Esc` | cancelar y volver a PowerShell |
+
+`:` se conserva como alias compatible de `e` para quienes prefieran el estilo de
+comandos de Vim.
 
 También puedes elegir primero el repositorio y pasar un comando desde el shell:
 
@@ -165,10 +183,13 @@ quieras abrir.
 - Binarios de release con checksum SHA-256.
 - Workflows con permisos mínimos y acciones fijadas a commits concretos.
 - Dependabot revisa Cargo y GitHub Actions.
-- `main` se protege mediante reglas de GitHub; las contribuciones se realizan por PR.
+- `main` está protegida y únicamente los administradores pueden actualizarla.
+- El repositorio público es de solo lectura: permite consultar, clonar y descargar,
+  pero no acepta Issues ni Pull Requests externos.
 
-Consulta [SECURITY.md](SECURITY.md) para informar vulnerabilidades y
-[CONTRIBUTING.md](CONTRIBUTING.md) antes de enviar cambios.
+Consulta [SECURITY.md](SECURITY.md) para informar vulnerabilidades de forma
+privada y [CONTRIBUTING.md](CONTRIBUTING.md) para conocer la política del
+repositorio.
 
 ## Desarrollo
 
