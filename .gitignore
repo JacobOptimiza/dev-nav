@@ -1,0 +1,9 @@
+/target/
+*.result
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.pfx
+*.p12
