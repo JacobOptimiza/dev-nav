@@ -13,4 +13,4 @@ Versioning.
 - Fuzzy filtering and direct command execution.
 - Codex launch and `resume --last` shortcuts.
 - Differential VT renderer and native Win32 keyboard input.
-- Verified x64 and ARM64 release installation workflow.
+- Automated x64 and ARM64 release installation workflow.
