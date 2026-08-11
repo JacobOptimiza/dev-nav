@@ -3,6 +3,13 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.3.1] - 2026-08-11
+
+### Documentation
+
+- Add a user-friendly FAQ and troubleshooting guide for installation, project roots, PowerShell profiles, PATH, agent CLIs, checksums, updates, and source builds.
+- Explain which setup tasks the installer handles automatically and when Rust or MSVC are required.
+
 ## [0.3.0] - 2026-08-11
 
 ### Added
