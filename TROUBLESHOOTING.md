@@ -188,7 +188,16 @@ Get-DevRoot
 
 ### Actualización
 
-Actualiza el clon y vuelve a ejecutar el instalador:
+La instalación publicada se actualiza directamente con:
+
+```powershell
+dev update
+```
+
+El comando informa de la versión instalada y la última publicada, evita una
+descarga innecesaria si coinciden y verifica los checksums antes de sustituir
+archivos. Si `dev update` todavía no existe porque utilizas una versión anterior
+a la 0.5.0, actualiza una vez desde el clon:
 
 ```powershell
 Set-Location C:\ruta\al\clon\dev-nav

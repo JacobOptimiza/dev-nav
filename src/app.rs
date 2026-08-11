@@ -227,6 +227,7 @@ impl App {
                 self.refresh()?;
                 self.message = "Directorio actualizado".into();
             }
+            Key::Char('U') => return Ok(Some(Some(ShellResult::Update))),
             Key::Char('/') => {
                 self.input.clear();
                 self.mode = Mode::Filter;
@@ -533,10 +534,11 @@ const HELP_LINES: &[HelpLine] = &[
     HelpLine::Shortcut("f", "Añadir o quitar un favorito global"),
     HelpLine::Shortcut("a", "Crear o editar el alias de la carpeta"),
     HelpLine::Shortcut("u", "Actualizar el directorio actual"),
+    HelpLine::Shortcut("Mayús+U", "Actualizar DevNav a la última versión"),
     HelpLine::Blank,
     HelpLine::Section("AGENTES EN EL REPOSITORIO"),
-    HelpLine::Shortcut("c", "Abrir una sesión nueva de Codex"),
-    HelpLine::Shortcut("r", "Reanudar la última sesión Codex del repo"),
+    HelpLine::Shortcut("c", "Codex: sesión nueva"),
+    HelpLine::Shortcut("r", "Codex: última sesión del repositorio"),
     HelpLine::Shortcut("d / Mayús+D", "Claude Code: sesión nueva / última sesión"),
     HelpLine::Shortcut("o / Mayús+O", "OpenCode: sesión nueva / última sesión"),
     HelpLine::Shortcut("i / Mayús+I", "Kimi: sesión nueva / última sesión"),

@@ -24,6 +24,10 @@ fn main() -> ExitCode {
 
 fn run() -> io::Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
+    if matches!(args.as_slice(), [argument] if argument == "--version" || argument == "-V") {
+        println!("dev-nav {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     let result_path = argument_value(&args, "--result").map(PathBuf::from);
     let root = argument_value(&args, "--root")
         .map(PathBuf::from)

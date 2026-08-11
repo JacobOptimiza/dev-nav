@@ -17,6 +17,7 @@ $installedExecutable = Join-Path $installRoot 'dev.exe'
 $installedModule = Join-Path $installRoot 'DevNav.psm1'
 $sourceModule = Join-Path $projectRoot 'powershell\DevNav.psm1'
 $temporaryDownload = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.exe" -f [guid]::NewGuid().ToString('N'))
+$temporaryModule = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.psm1" -f [guid]::NewGuid().ToString('N'))
 $temporaryChecksums = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.sha256" -f [guid]::NewGuid().ToString('N'))
 
 New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
@@ -55,15 +56,23 @@ try {
         $downloadUrl = "https://github.com/JacobOptimiza/dev-nav/releases/latest/download/$asset"
         Write-Host "Descargando $asset..."
         Invoke-WebRequest -Uri $downloadUrl -OutFile $temporaryDownload
+        Invoke-WebRequest -Uri 'https://github.com/JacobOptimiza/dev-nav/releases/latest/download/DevNav.psm1' -OutFile $temporaryModule
         Invoke-WebRequest -Uri 'https://github.com/JacobOptimiza/dev-nav/releases/latest/download/SHA256SUMS.txt' -OutFile $temporaryChecksums
-        $checksumLine = Get-Content -LiteralPath $temporaryChecksums | Where-Object { $_ -match "\s$([regex]::Escape($asset))$" } | Select-Object -First 1
-        if (-not $checksumLine) { throw "No se encontró el checksum publicado para $asset." }
-        $expectedHash = ($checksumLine -split '\s+')[0]
-        $actualHash = (Get-FileHash -LiteralPath $temporaryDownload -Algorithm SHA256).Hash
-        if ($actualHash -ne $expectedHash) {
-            throw "El checksum de $asset no coincide; se cancela la instalación."
+        $checksumLines = Get-Content -LiteralPath $temporaryChecksums
+        foreach ($downloadedAsset in @(
+            @{ Name = $asset; Path = $temporaryDownload },
+            @{ Name = 'DevNav.psm1'; Path = $temporaryModule }
+        )) {
+            $checksumLine = $checksumLines | Where-Object { $_ -match "\s$([regex]::Escape($downloadedAsset.Name))$" } | Select-Object -First 1
+            if (-not $checksumLine) { throw "No se encontró el checksum publicado para $($downloadedAsset.Name)." }
+            $expectedHash = (($checksumLine -split '\s+')[0]).ToUpperInvariant()
+            $actualHash = (Get-FileHash -LiteralPath $downloadedAsset.Path -Algorithm SHA256).Hash
+            if ($actualHash -ne $expectedHash) {
+                throw "El checksum de $($downloadedAsset.Name) no coincide; se cancela la instalación."
+            }
         }
         $sourceExecutable = $temporaryDownload
+        $sourceModule = $temporaryModule
     }
 
     Copy-Item -LiteralPath $sourceExecutable -Destination $installedExecutable -Force
@@ -71,6 +80,7 @@ try {
 }
 finally {
     Remove-Item -LiteralPath $temporaryDownload -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $temporaryModule -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $temporaryChecksums -Force -ErrorAction SilentlyContinue
 }
 

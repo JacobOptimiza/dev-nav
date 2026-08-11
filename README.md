@@ -70,7 +70,7 @@ El instalador:
 
 1. Detecta si Windows es x64 o ARM64.
 2. Descarga el binario desde GitHub Releases.
-3. Verifica su checksum SHA-256 antes de instalarlo.
+3. Verifica los checksums SHA-256 del ejecutable y del módulo antes de instalarlos.
 4. Copia DevNav a `%LOCALAPPDATA%\Programs\DevNav`.
 5. Añade el módulo al perfil de PowerShell 7 sin modificar el `PATH` global.
 
@@ -84,6 +84,19 @@ dev
 
 `Get-Command dev` debe mostrar un alias y `Get-DevRoot` debe mostrar la carpeta
 configurada en el paso 1.
+
+### Actualizar
+
+No necesitas volver a clonar el repositorio. Ejecuta:
+
+```powershell
+dev update
+```
+
+DevNav compara la versión instalada con la última release publicada. Si ya
+tienes la última, no modifica ningún archivo. Si existe una versión nueva,
+descarga el ejecutable adecuado para tu arquitectura y el módulo de PowerShell,
+verifica ambos con SHA-256, los instala y confirma la versión actualizada.
 
 ### Compilar desde el código fuente
 
@@ -136,8 +149,8 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 
 | Shortcut | Acción |
 |---|---|
-| `c` | abrir Codex (`codex`) en la carpeta resaltada |
-| `r` | reanudar la última sesión de Codex del repositorio (`codex resume --last`) |
+| `c` | Codex: abrir una sesión nueva (`codex`) en la carpeta resaltada |
+| `r` | Codex: reanudar la última sesión del repositorio (`codex resume --last`) |
 | `d` | abrir Claude Code (`claude`) en la carpeta resaltada |
 | `Shift+D` | reanudar la última sesión de Claude Code del repositorio (`claude --continue`) |
 | `o` | abrir OpenCode (`opencode`) en la carpeta resaltada |
@@ -154,6 +167,7 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 | `a` | editar el alias de la carpeta resaltada |
 | `e` | escribir y ejecutar un comando en la carpeta resaltada |
 | `u` | refrescar el directorio mostrado |
+| `Shift+U` | comprobar y actualizar DevNav a la última versión publicada |
 | `q` / `Esc` | cancelar y volver a PowerShell |
 
 La barra inferior muestra sólo las acciones esenciales para no saturar la
@@ -251,7 +265,8 @@ y actualiza DevNav. [Ver diagnóstico](TROUBLESHOOTING.md#cierre-inesperado-o-en
 
 ### ¿Cómo actualizo DevNav?
 
-Actualiza el clon con `git pull --ff-only` y vuelve a ejecutar `install.ps1`.
+Ejecuta `dev update`; comprobará la release más reciente y solo descargará e
+instalará archivos si existe una versión nueva.
 [Ver pasos](TROUBLESHOOTING.md#actualización).
 
 ## Licencia

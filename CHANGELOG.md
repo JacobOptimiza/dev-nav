@@ -3,6 +3,19 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.5.0] - 2026-08-11
+
+### Added
+
+- Add `dev update` with semantic version comparison, architecture detection, checksum verification, and clear status messages.
+- Add `Shift+U` to launch the updater directly from the TUI.
+- Publish the PowerShell module as a checksummed release asset so the updater can update the complete installation.
+- Add native `dev.exe --version` reporting.
+
+### Changed
+
+- Use the same `Codex: session` wording as every other agent in the shortcuts panel.
+
 ## [0.4.0] - 2026-08-11
 
 ### Added
