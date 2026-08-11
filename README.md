@@ -87,11 +87,17 @@ configurada en el paso 1.
 
 ### Actualizar
 
-No necesitas volver a clonar el repositorio. Ejecuta:
+No necesitas volver a clonar el repositorio. Puedes actualizar de cualquiera de
+estas dos formas:
+
+- Desde PowerShell, ejecuta:
 
 ```powershell
 dev update
 ```
+
+- Desde la TUI de DevNav, pulsa `Shift+U` (`Mayús+U`). Puedes consultar este y
+  el resto de shortcuts en cualquier momento pulsando `F1`.
 
 DevNav compara la versión instalada con la última release publicada. Si ya
 tienes la última, no modifica ningún archivo. Si existe una versión nueva,
@@ -265,8 +271,9 @@ y actualiza DevNav. [Ver diagnóstico](TROUBLESHOOTING.md#cierre-inesperado-o-en
 
 ### ¿Cómo actualizo DevNav?
 
-Ejecuta `dev update`; comprobará la release más reciente y solo descargará e
-instalará archivos si existe una versión nueva.
+Ejecuta `dev update` desde PowerShell o pulsa `Shift+U` dentro de la TUI. Ambas
+opciones comprueban la release más reciente y solo descargan e instalan archivos
+si existe una versión nueva.
 [Ver pasos](TROUBLESHOOTING.md#actualización).
 
 ## Licencia
