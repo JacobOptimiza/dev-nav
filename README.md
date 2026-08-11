@@ -91,6 +91,115 @@ Solo para desarrollo; requiere Rust stable y MSVC Build Tools:
 .\install.ps1 -BuildFromSource
 ```
 
+## Favoritos globales, incluso fuera de la raíz
+
+Los favoritos no están limitados a la carpeta principal. Siempre aparecen al
+principio de la lista, aunque estés navegando por otra ubicación.
+
+Para añadir una carpeta de otro disco o de fuera de `DEV_HOME`:
+
+1. Ejecuta `dev`.
+2. Pulsa `p`.
+3. Escribe una ruta absoluta, por ejemplo `D:\Clientes` o `C:\Trabajo\Repo`.
+4. Pulsa `Enter` para ir a esa ubicación.
+5. Navega con las flechas y `→` hasta resaltar la carpeta deseada.
+6. Pulsa `f` para guardarla como favorita.
+
+Desde ese momento aparecerá arriba en cualquier ubicación. Resáltala y vuelve a
+pulsar `f` para eliminarla de favoritos. `a` permite mostrarla como
+`alias - nombre-de-carpeta`.
+
+Los favoritos y alias son locales y se guardan fuera del repositorio en
+`%LOCALAPPDATA%\DevNav\config.tsv`.
+
+## Shortcuts
+
+Los shortcuts están agrupados por flujo de trabajo. Las acciones más frecuentes
+aparecen primero para que sean fáciles de descubrir y recordar.
+
+### Navegación y selección
+
+| Shortcut | Acción |
+|---|---|
+| `↑` / `↓` o `j` / `k` | mover la selección |
+| `Enter` | seleccionar la carpeta y volver a PowerShell |
+| `→` / `l` | entrar en la carpeta resaltada |
+| `←` / `h` | subir al directorio padre |
+| `.` | seleccionar el directorio mostrado |
+| `g` | volver a la raíz configurada |
+| `p` | ir a cualquier ruta absoluta, incluso de otro disco |
+
+### Agentes
+
+| Shortcut | Acción |
+|---|---|
+| `c` | abrir Codex (`codex`) en la carpeta resaltada |
+| `r` | reanudar la última sesión de Codex del repositorio (`codex resume --last`) |
+| `d` | abrir Claude Code (`claude`) en la carpeta resaltada |
+| `Shift+D` | reanudar la última sesión de Claude Code del repositorio (`claude --continue`) |
+| `o` | abrir OpenCode (`opencode`) en la carpeta resaltada |
+| `Shift+O` | reanudar la última sesión de OpenCode del repositorio (`opencode --continue`) |
+| `i` | abrir Kimi Code (`kimi`) en la carpeta resaltada |
+| `Shift+I` | reanudar la última sesión de Kimi Code del repositorio (`kimi --continue`) |
+
+### Organización, búsqueda y acciones
+
+| Shortcut | Acción |
+|---|---|
+| `/` | activar el filtro fuzzy incremental |
+| `f` | añadir o quitar un favorito global |
+| `a` | editar el alias de la carpeta resaltada |
+| `e` | escribir y ejecutar un comando en la carpeta resaltada |
+| `u` | refrescar el directorio mostrado |
+| `q` / `Esc` | cancelar y volver a PowerShell |
+
+`:` se conserva como alias compatible de `e` para quienes prefieran el estilo de
+comandos de Vim.
+
+También puedes elegir primero el repositorio y pasar un comando desde el shell:
+
+```powershell
+dev codex
+dev "git status"
+```
+
+Los accesos de agentes son opcionales: DevNav devuelve el comando a PowerShell,
+por lo que únicamente necesitas tener instalado y disponible en `PATH` el CLI que
+quieras abrir.
+
+## Arquitectura
+
+- Rust 2024 y Win32 mediante `windows-sys`.
+- Renderer VT propio con buffer de filas y repintado diferencial.
+- Entrada raw mediante `ReadConsoleInputW`.
+- Event loop sin polling ni renders cuando no hay eventos.
+- Protocolo de resultados separado del stdout utilizado por la TUI.
+- Sin frameworks TUI y con una sola dependencia directa.
+
+## Seguridad y privacidad
+
+- Sin telemetría ni red durante la ejecución normal.
+- Sin credenciales, secretos o configuración personal en el repositorio.
+- Binarios de release con checksum SHA-256.
+- Workflows con permisos mínimos y acciones fijadas a commits concretos.
+- Dependabot revisa Cargo y GitHub Actions.
+- `main` está protegida y únicamente los administradores pueden actualizarla.
+- El repositorio público es de solo lectura: permite consultar, clonar y descargar,
+  pero no acepta Issues ni Pull Requests externos.
+
+Consulta [SECURITY.md](SECURITY.md) para informar vulnerabilidades de forma
+privada y [CONTRIBUTING.md](CONTRIBUTING.md) para conocer la política del
+repositorio.
+
+## Desarrollo
+
+```powershell
+cargo fmt -- --check
+cargo test
+cargo clippy --all-targets -- -D warnings
+cargo build --release
+```
+
 ## FAQ y solución de problemas
 
 ### ¿La instalación normal necesita Rust o Visual Studio?
@@ -261,115 +370,6 @@ git pull --ff-only
 El instalador puede ejecutarse varias veces: sustituye el binario y el módulo,
 verifica nuevamente el checksum y evita duplicar la línea de importación en el
 perfil.
-
-## Favoritos globales, incluso fuera de la raíz
-
-Los favoritos no están limitados a la carpeta principal. Siempre aparecen al
-principio de la lista, aunque estés navegando por otra ubicación.
-
-Para añadir una carpeta de otro disco o de fuera de `DEV_HOME`:
-
-1. Ejecuta `dev`.
-2. Pulsa `p`.
-3. Escribe una ruta absoluta, por ejemplo `D:\Clientes` o `C:\Trabajo\Repo`.
-4. Pulsa `Enter` para ir a esa ubicación.
-5. Navega con las flechas y `→` hasta resaltar la carpeta deseada.
-6. Pulsa `f` para guardarla como favorita.
-
-Desde ese momento aparecerá arriba en cualquier ubicación. Resáltala y vuelve a
-pulsar `f` para eliminarla de favoritos. `a` permite mostrarla como
-`alias - nombre-de-carpeta`.
-
-Los favoritos y alias son locales y se guardan fuera del repositorio en
-`%LOCALAPPDATA%\DevNav\config.tsv`.
-
-## Shortcuts
-
-Los shortcuts están agrupados por flujo de trabajo. Las acciones más frecuentes
-aparecen primero para que sean fáciles de descubrir y recordar.
-
-### Navegación y selección
-
-| Shortcut | Acción |
-|---|---|
-| `↑` / `↓` o `j` / `k` | mover la selección |
-| `Enter` | seleccionar la carpeta y volver a PowerShell |
-| `→` / `l` | entrar en la carpeta resaltada |
-| `←` / `h` | subir al directorio padre |
-| `.` | seleccionar el directorio mostrado |
-| `g` | volver a la raíz configurada |
-| `p` | ir a cualquier ruta absoluta, incluso de otro disco |
-
-### Agentes
-
-| Shortcut | Acción |
-|---|---|
-| `c` | abrir Codex (`codex`) en la carpeta resaltada |
-| `r` | reanudar la última sesión de Codex del repositorio (`codex resume --last`) |
-| `d` | abrir Claude Code (`claude`) en la carpeta resaltada |
-| `Shift+D` | reanudar la última sesión de Claude Code del repositorio (`claude --continue`) |
-| `o` | abrir OpenCode (`opencode`) en la carpeta resaltada |
-| `Shift+O` | reanudar la última sesión de OpenCode del repositorio (`opencode --continue`) |
-| `i` | abrir Kimi Code (`kimi`) en la carpeta resaltada |
-| `Shift+I` | reanudar la última sesión de Kimi Code del repositorio (`kimi --continue`) |
-
-### Organización, búsqueda y acciones
-
-| Shortcut | Acción |
-|---|---|
-| `/` | activar el filtro fuzzy incremental |
-| `f` | añadir o quitar un favorito global |
-| `a` | editar el alias de la carpeta resaltada |
-| `e` | escribir y ejecutar un comando en la carpeta resaltada |
-| `u` | refrescar el directorio mostrado |
-| `q` / `Esc` | cancelar y volver a PowerShell |
-
-`:` se conserva como alias compatible de `e` para quienes prefieran el estilo de
-comandos de Vim.
-
-También puedes elegir primero el repositorio y pasar un comando desde el shell:
-
-```powershell
-dev codex
-dev "git status"
-```
-
-Los accesos de agentes son opcionales: DevNav devuelve el comando a PowerShell,
-por lo que únicamente necesitas tener instalado y disponible en `PATH` el CLI que
-quieras abrir.
-
-## Arquitectura
-
-- Rust 2024 y Win32 mediante `windows-sys`.
-- Renderer VT propio con buffer de filas y repintado diferencial.
-- Entrada raw mediante `ReadConsoleInputW`.
-- Event loop sin polling ni renders cuando no hay eventos.
-- Protocolo de resultados separado del stdout utilizado por la TUI.
-- Sin frameworks TUI y con una sola dependencia directa.
-
-## Seguridad y privacidad
-
-- Sin telemetría ni red durante la ejecución normal.
-- Sin credenciales, secretos o configuración personal en el repositorio.
-- Binarios de release con checksum SHA-256.
-- Workflows con permisos mínimos y acciones fijadas a commits concretos.
-- Dependabot revisa Cargo y GitHub Actions.
-- `main` está protegida y únicamente los administradores pueden actualizarla.
-- El repositorio público es de solo lectura: permite consultar, clonar y descargar,
-  pero no acepta Issues ni Pull Requests externos.
-
-Consulta [SECURITY.md](SECURITY.md) para informar vulnerabilidades de forma
-privada y [CONTRIBUTING.md](CONTRIBUTING.md) para conocer la política del
-repositorio.
-
-## Desarrollo
-
-```powershell
-cargo fmt -- --check
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo build --release
-```
 
 ## Licencia
 
