@@ -208,44 +208,44 @@ completos se encuentran en la [guía de troubleshooting](TROUBLESHOOTING.md).
 ### ¿La instalación normal necesita Rust o Visual Studio?
 
 No. El instalador descarga y verifica el binario publicado. Rust y MSVC solo son
-necesarios con `-BuildFromSource`. [Ver detalles](TROUBLESHOOTING.md#la-instalación-normal-necesita-rust-o-visual-studio).
+necesarios con `-BuildFromSource`. [Ver detalles](TROUBLESHOOTING.md#rust-o-cargo-no-disponibles-al-compilar).
 
 ### ¿Por qué no se reconoce `dev` después de instalar?
 
 `dev` es un alias cargado por el módulo de PowerShell, no un ejecutable añadido
 al `PATH`. Reinicia PowerShell 7 y comprueba el perfil si no aparece.
-[Ver solución](TROUBLESHOOTING.md#dev-no-se-reconoce-después-de-instalar).
+[Ver solución](TROUBLESHOOTING.md#el-alias-dev-no-está-disponible).
 
 ### ¿Cómo corrijo la carpeta principal de proyectos?
 
 Actualiza `DEV_HOME` para el usuario y para la sesión actual; la carpeta debe
-existir. [Ver comandos](TROUBLESHOOTING.md#devnav-abre-una-carpeta-de-proyectos-incorrecta).
+existir. [Ver comandos](TROUBLESHOOTING.md#corregir-dev_home).
 
 ### ¿Por qué no se abre Codex, Claude, OpenCode o Kimi?
 
 Cada CLI es opcional y debe estar instalado y disponible en el `PATH` de
-PowerShell. [Ver diagnóstico](TROUBLESHOOTING.md#codex-claude-opencode-o-kimi-muestran-comando-no-encontrado).
+PowerShell. [Ver diagnóstico](TROUBLESHOOTING.md#cli-de-agente-no-encontrado).
 
 ### ¿Qué hago si PowerShell bloquea `install.ps1`?
 
 Revisa el script y desbloquea únicamente ese archivo si confías en su origen. No
 desactives globalmente las políticas de ejecución.
-[Ver procedimiento](TROUBLESHOOTING.md#powershell-bloquea-installps1).
+[Ver procedimiento](TROUBLESHOOTING.md#installps1-bloqueado-por-powershell).
 
 ### ¿Qué hago si falla la descarga o el checksum?
 
 Revisa la conexión, el proxy o el firewall y vuelve a intentarlo. No omitas la
-verificación SHA-256. [Ver explicación](TROUBLESHOOTING.md#falla-la-descarga-o-no-coincide-el-checksum).
+verificación SHA-256. [Ver explicación](TROUBLESHOOTING.md#fallo-de-descarga-o-checksum).
 
 ### ¿Qué hago si la TUI se cierra o las teclas no responden?
 
 Usa `dev` desde PowerShell 7 en Windows Terminal, cierra instancias anteriores
-y actualiza DevNav. [Ver diagnóstico](TROUBLESHOOTING.md#la-tui-se-cierra-o-las-teclas-no-responden-correctamente).
+y actualiza DevNav. [Ver diagnóstico](TROUBLESHOOTING.md#cierre-inesperado-o-entrada-de-teclado-incorrecta).
 
 ### ¿Cómo actualizo DevNav?
 
 Actualiza el clon con `git pull --ff-only` y vuelve a ejecutar `install.ps1`.
-[Ver pasos](TROUBLESHOOTING.md#cómo-se-actualiza-devnav).
+[Ver pasos](TROUBLESHOOTING.md#actualización).
 
 ## Licencia
 
