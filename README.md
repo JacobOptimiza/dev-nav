@@ -2,7 +2,8 @@
 
 DevNav es un navegador TUI nativo para moverse entre proyectos desde PowerShell
 7 en Windows. Permite seleccionar una carpeta, cambiar la ubicación del shell,
-guardar favoritos globales, asignar alias y abrir Codex en el repositorio activo.
+guardar favoritos globales, asignar alias y abrir Codex, Claude Code, OpenCode o
+Kimi en el repositorio activo.
 
 ## Requisitos
 
@@ -125,7 +126,13 @@ Los favoritos y alias son locales y se guardan fuera del repositorio en
 | `f` | añadir o quitar favorito global |
 | `a` | editar alias |
 | `c` | abrir `codex` en la carpeta resaltada |
-| `r` | ejecutar `codex resume --last` en la carpeta resaltada |
+| `r` | reanudar la última sesión de Codex del repositorio (`codex resume --last`) |
+| `d` | abrir Claude Code (`claude`) en la carpeta resaltada |
+| `Shift+D` | reanudar la última sesión de Claude Code del repositorio (`claude --continue`) |
+| `o` | abrir OpenCode (`opencode`) en la carpeta resaltada |
+| `Shift+O` | reanudar la última sesión de OpenCode del repositorio (`opencode --continue`) |
+| `i` | abrir Kimi Code (`kimi`) en la carpeta resaltada |
+| `Shift+I` | reanudar la última sesión de Kimi Code del repositorio (`kimi --continue`) |
 | `/` | filtro fuzzy incremental |
 | `:` | ejecutar un comando en la carpeta resaltada |
 | `u` | refrescar |
@@ -137,6 +144,10 @@ También puedes elegir primero el repositorio y pasar un comando desde el shell:
 dev codex
 dev "git status"
 ```
+
+Los accesos de agentes son opcionales: DevNav devuelve el comando a PowerShell,
+por lo que únicamente necesitas tener instalado y disponible en `PATH` el CLI que
+quieras abrir.
 
 ## Arquitectura
 

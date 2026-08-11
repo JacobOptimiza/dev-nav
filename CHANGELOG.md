@@ -3,6 +3,17 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.2.0] - 2026-08-11
+
+### Added
+
+- Launch Claude Code, OpenCode, or Kimi Code in the selected repository.
+- Resume the latest repository session for each additional agent with Shift shortcuts.
+
+### Changed
+
+- Clarify that `r` resumes the latest Codex session for the selected repository.
+
 ## [0.1.1] - 2026-08-11
 
 ### Fixed

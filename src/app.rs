@@ -210,9 +210,12 @@ impl App {
             }
             Key::Char('f') => self.toggle_favorite()?,
             Key::Char('a') => self.begin_alias(),
-            Key::Char('c') => return Ok(self.execute_selected("codex")),
-            Key::Char('r') => return Ok(self.execute_selected("codex resume --last")),
             Key::Char(':') => self.begin_command(),
+            Key::Char(character) => {
+                if let Some(command) = agent_command(character) {
+                    return Ok(self.execute_selected(command));
+                }
+            }
             _ => {}
         }
         Ok(None)
@@ -450,12 +453,26 @@ impl App {
             "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
             fit(&prompt, inner)
         ));
-        let help = "↑↓ mover  Enter cd  → abrir  p ruta  c Codex  r reanudar  f favorito  a alias  / filtrar  q salir";
+        let help = "c Codex  r última sesión Codex del repo  d Claude  o OpenCode  i Kimi  Mayús+D/O/I última sesión  ↑↓ mover  Enter cd  → abrir  p ruta  f favorito  a alias  / filtrar  q salir";
         rows.push(format!(
             "\x1b[38;2;90;100;120m╰─{}─╯\x1b[0m",
             fit(help, width.saturating_sub(4))
         ));
         self.renderer.draw(rows)
+    }
+}
+
+fn agent_command(key: char) -> Option<&'static str> {
+    match key {
+        'c' => Some("codex"),
+        'r' => Some("codex resume --last"),
+        'd' => Some("claude"),
+        'D' => Some("claude --continue"),
+        'o' => Some("opencode"),
+        'O' => Some("opencode --continue"),
+        'i' => Some("kimi"),
+        'I' => Some("kimi --continue"),
+        _ => None,
     }
 }
 
@@ -493,7 +510,7 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::{App, fuzzy_score};
+    use super::{App, agent_command, fuzzy_score};
     use crate::{config::Config, render::fit};
 
     #[test]
@@ -506,6 +523,19 @@ mod tests {
     #[test]
     fn rejects_non_matching_text() {
         assert_eq!(fuzzy_score("alpha", "xyz"), None);
+    }
+
+    #[test]
+    fn agent_shortcuts_map_to_new_and_previous_repo_sessions() {
+        assert_eq!(agent_command('c'), Some("codex"));
+        assert_eq!(agent_command('r'), Some("codex resume --last"));
+        assert_eq!(agent_command('d'), Some("claude"));
+        assert_eq!(agent_command('D'), Some("claude --continue"));
+        assert_eq!(agent_command('o'), Some("opencode"));
+        assert_eq!(agent_command('O'), Some("opencode --continue"));
+        assert_eq!(agent_command('i'), Some("kimi"));
+        assert_eq!(agent_command('I'), Some("kimi --continue"));
+        assert_eq!(agent_command('x'), None);
     }
 
     #[test]
