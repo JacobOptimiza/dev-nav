@@ -557,7 +557,7 @@ const HELP_LINES: &[HelpLine] = &[
     HelpLine::Shortcut("← / h / Retroceso", "Volver a la carpeta padre"),
     HelpLine::Shortcut("Enter", "Seleccionar carpeta y volver a PowerShell"),
     HelpLine::Shortcut(".", "Seleccionar la carpeta mostrada"),
-    HelpLine::Shortcut("g", "Volver a la raíz de proyectos"),
+    HelpLine::Shortcut("g", "Volver a la ruta de inicio"),
     HelpLine::Shortcut("p", "Abrir cualquier ruta o unidad"),
     HelpLine::Shortcut("Ctrl+S", "Guardar la carpeta resaltada como inicio"),
     HelpLine::Blank,
@@ -787,7 +787,7 @@ mod tests {
         let width = 120_usize;
         let border = format!(
             "╭─ DEV {}─╮",
-            fit("C:\\Users\\User\\programacion", width.saturating_sub(9))
+            fit("C:\\Users\\Example", width.saturating_sub(9))
         );
 
         assert_eq!(border.chars().count(), width);

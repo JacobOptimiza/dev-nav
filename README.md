@@ -1,6 +1,6 @@
 # DevNav
 
-DevNav es un navegador TUI nativo para moverse entre proyectos desde PowerShell
+DevNav es un navegador TUI nativo para moverse entre repositorios desde PowerShell
 7 en Windows. Permite seleccionar una carpeta, cambiar la ubicación del shell,
 guardar favoritos globales, asignar alias y abrir Codex, Claude Code, OpenCode o
 Kimi en el repositorio activo.
@@ -20,7 +20,7 @@ Los binarios publicados no requieren Rust ni Visual Studio. Windows PowerShell
 ## 1. Instalar DevNav
 
 El repositorio puede clonarse en cualquier ubicación; no tiene que estar dentro
-de la carpeta de proyectos:
+de la carpeta que contiene tus repositorios:
 
 ```powershell
 git clone https://github.com/JacobOptimiza/dev-nav.git
@@ -50,10 +50,9 @@ La **ruta de inicio** es la carpeta que contiene tus repositorios o aquella que
 quieres ver cada vez que ejecutas `dev`. La forma recomendada de configurarla no
 requiere comandos ni editar archivos:
 
-1. Ejecuta `dev`. En el primer inicio se abrirá `$HOME\programacion` si existe;
-   de lo contrario, se abrirá tu carpeta de usuario.
+1. Ejecuta `dev`. En el primer inicio se abrirá `$HOME`.
 2. Navega con `↑`, `↓` y `→`. Para ir directamente a otra ruta o unidad, pulsa
-   `p`, escribe por ejemplo `D:\Proyectos` y confirma con `Enter`.
+   `p`, escribe la ruta deseada y confirma con `Enter`.
 3. Resalta la carpeta que quieres utilizar como inicio.
 4. Pulsa `Ctrl+S` (**guardar como ruta de inicio**).
 5. Revisa la ruta mostrada y pulsa `Enter` para confirmar o `Esc` para cancelar.
@@ -68,7 +67,7 @@ Después de instalar, Codex, Cursor o cualquier script puede configurar la misma
 ruta sin abrir la TUI:
 
 ```powershell
-Set-DevRoot 'D:\Proyectos'
+Set-DevRoot $HOME
 Get-DevRoot
 ```
 
@@ -80,7 +79,7 @@ funcionando cuando todavía no existe una ruta guardada. La ruta elegida mediant
 `Ctrl+S` o `Set-DevRoot` tiene prioridad:
 
 ```powershell
-$env:DEV_HOME = 'D:\Proyectos'
+$env:DEV_HOME = $HOME
 ```
 
 ### Actualizar
@@ -101,6 +100,9 @@ DevNav compara la versión instalada con la última release publicada. Si ya
 tienes la última, no modifica ningún archivo. Si existe una versión nueva,
 descarga el ejecutable adecuado para tu arquitectura y el módulo de PowerShell,
 verifica ambos con SHA-256, los instala y confirma la versión actualizada.
+La actualización sólo sustituye `dev.exe` y `DevNav.psm1`: nunca elimina ni
+sobrescribe `%LOCALAPPDATA%\DevNav\config.tsv`, donde se conservan la ruta de
+inicio, los favoritos y los alias.
 
 ### Compilar desde el código fuente
 
@@ -206,6 +208,7 @@ quieras abrir.
 
 - Sin telemetría ni red durante la ejecución normal.
 - Sin credenciales, secretos o configuración personal en el repositorio.
+- La configuración local está separada de los archivos reemplazados al actualizar.
 - Binarios de release con checksum SHA-256.
 - Workflows con permisos mínimos y acciones fijadas a commits concretos.
 - Dependabot revisa Cargo y GitHub Actions.
@@ -242,10 +245,10 @@ necesarios con `-BuildFromSource`. [Ver detalles](TROUBLESHOOTING.md#rust-o-carg
 al `PATH`. Reinicia PowerShell 7 y comprueba el perfil si no aparece.
 [Ver solución](TROUBLESHOOTING.md#el-alias-dev-no-está-disponible).
 
-### ¿Cómo corrijo la carpeta principal de proyectos?
+### ¿Cómo corrijo la ruta de inicio?
 
 Resalta la carpeta correcta en la TUI y pulsa `Ctrl+S`, o ejecuta
-`Set-DevRoot 'D:\Proyectos'`. [Ver comandos](TROUBLESHOOTING.md#corregir-la-ruta-de-inicio).
+`Set-DevRoot $HOME`. [Ver comandos](TROUBLESHOOTING.md#corregir-la-ruta-de-inicio).
 
 ### ¿Por qué no se abre Codex, Claude, OpenCode o Kimi?
 

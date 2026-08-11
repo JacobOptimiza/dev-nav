@@ -117,14 +117,14 @@ La forma recomendada es abrir `dev`, resaltar la carpeta correcta, pulsar
 configuración con:
 
 ```powershell
-Set-DevRoot 'D:\Proyectos'
+Set-DevRoot $HOME
 Get-DevRoot
 ```
 
-La carpeta debe existir. Para volver a `$HOME\programacion`:
+La carpeta debe existir. Para volver a la carpeta de usuario:
 
 ```powershell
-Set-DevRoot (Join-Path $HOME 'programacion')
+Set-DevRoot $HOME
 ```
 
 `DEV_HOME` se mantiene como fallback de compatibilidad cuando todavía no existe
@@ -193,7 +193,9 @@ dev update
 
 El comando informa de la versión instalada y la última publicada, evita una
 descarga innecesaria si coinciden y verifica los checksums antes de sustituir
-archivos. Si `dev update` todavía no existe porque utilizas una versión anterior
+archivos. La ruta de inicio, los favoritos y los alias permanecen en el archivo
+de configuración separado y no se sobrescriben. Si `dev update` todavía no
+existe porque utilizas una versión anterior
 a la 0.5.0, actualiza una vez desde el clon:
 
 ```powershell

@@ -158,8 +158,6 @@ function Get-DevRoot {
         }
     }
     if ($env:DEV_HOME) { return $env:DEV_HOME }
-    $defaultRoot = Join-Path $HOME 'programacion'
-    if (Test-Path -LiteralPath $defaultRoot -PathType Container) { return $defaultRoot }
     return $HOME
 }
 

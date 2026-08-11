@@ -3,6 +3,13 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.6.1] - 2026-08-11
+
+### Changed
+
+- Use `$HOME` as the only public first-launch fallback and remove concrete personal folder names from code, tests, and documentation.
+- Document and verify that updates replace only application files and preserve the separate local configuration.
+
 ## [0.6.0] - 2026-08-11
 
 ### Added
@@ -14,7 +21,7 @@ Versioning.
 ### Changed
 
 - Make visual startup-root selection the primary onboarding path.
-- Fall back to the user profile on first launch when `$HOME\programacion` does not exist.
+- Use the user profile as the neutral first-launch fallback.
 - Keep `DEV_HOME` as a backwards-compatible fallback when no startup root has been saved.
 
 ## [0.5.0] - 2026-08-11

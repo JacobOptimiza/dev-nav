@@ -64,10 +64,7 @@ fn argument_value(args: &[String], name: &str) -> Option<String> {
 }
 
 fn default_root() -> Option<PathBuf> {
-    env::var_os("USERPROFILE").map(PathBuf::from).map(|home| {
-        let projects = home.join("programacion");
-        if projects.is_dir() { projects } else { home }
-    })
+    env::var_os("USERPROFILE").map(PathBuf::from)
 }
 
 #[allow(dead_code)]
