@@ -390,7 +390,7 @@ impl App {
         let mut rows = Vec::with_capacity(height);
         rows.push(format!(
             "\x1b[38;2;116;199;236m╭─ DEV \x1b[2m{}\x1b[22m{}╮\x1b[0m",
-            fit(&self.current.display().to_string(), inner.saturating_sub(7)),
+            fit(&self.current.display().to_string(), width.saturating_sub(9)),
             "─"
         ));
         rows.push(format!(
@@ -494,7 +494,7 @@ mod tests {
     };
 
     use super::{App, fuzzy_score};
-    use crate::config::Config;
+    use crate::{config::Config, render::fit};
 
     #[test]
     fn contiguous_matches_rank_higher() {
@@ -506,6 +506,17 @@ mod tests {
     #[test]
     fn rejects_non_matching_text() {
         assert_eq!(fuzzy_score("alpha", "xyz"), None);
+    }
+
+    #[test]
+    fn top_border_uses_the_full_terminal_width() {
+        let width = 120_usize;
+        let border = format!(
+            "╭─ DEV {}─╮",
+            fit("C:\\Users\\User\\programacion", width.saturating_sub(9))
+        );
+
+        assert_eq!(border.chars().count(), width);
     }
 
     #[test]

@@ -3,6 +3,12 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.1.1] - 2026-08-11
+
+### Fixed
+
+- Align the top-right border corner with the terminal edge.
+
 ## [0.1.0] - 2026-08-11
 
 ### Added
