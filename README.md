@@ -1,57 +1,128 @@
 # DevNav
 
-Navegador TUI nativo para moverse entre proyectos desde PowerShell 7 en Windows.
-Arranca en `$HOME\programacion`, muestra los favoritos primero y devuelve la
-selección al shell para que el cambio de directorio persista.
+DevNav es un navegador TUI nativo para moverse entre proyectos desde PowerShell
+7 en Windows. Permite seleccionar una carpeta, cambiar la ubicación del shell,
+guardar favoritos globales, asignar alias y abrir Codex en el repositorio activo.
 
-## Compatibilidad
+## Requisitos
 
-- Windows 10/11 x64 o ARM64.
-- PowerShell 7 o posterior.
+- Windows 10 u 11, x64 o ARM64.
+- PowerShell 7 o posterior (`pwsh`).
+- Git, únicamente para clonar el repositorio durante la instalación.
 - Windows Terminal recomendado.
-- No requiere Rust para instalar los binarios publicados.
 
-No es compatible con Linux, macOS, Windows PowerShell 5.1 ni arquitecturas x86 de
-32 bits. La raíz predeterminada es `$HOME\programacion`; puede cambiarse mediante
-la variable de entorno `DEV_HOME`.
+Los binarios publicados no requieren Rust ni Visual Studio. Windows PowerShell
+5.1, Windows de 32 bits, Linux y macOS no están soportados.
 
-## Instalación
+## 1. Configurar la carpeta de proyectos
+
+Haz esto **antes de instalar**. DevNav necesita saber en qué carpeta debe arrancar.
+
+### Opción A: usar la ruta predeterminada
+
+La ruta predeterminada es `$HOME\programacion`. Créala si no existe:
+
+```powershell
+New-Item -ItemType Directory -Path (Join-Path $HOME 'programacion') -Force
+```
+
+No necesitas configurar ninguna variable de entorno.
+
+### Opción B: utilizar otra ruta
+
+Sustituye `D:\Proyectos` por tu carpeta real:
+
+```powershell
+$projectRoot = 'D:\Proyectos'
+New-Item -ItemType Directory -Path $projectRoot -Force
+
+# La guarda permanentemente para tu usuario.
+[Environment]::SetEnvironmentVariable('DEV_HOME', $projectRoot, 'User')
+
+# También la activa en la PowerShell que tienes abierta ahora.
+$env:DEV_HOME = $projectRoot
+```
+
+Comprueba la configuración:
+
+```powershell
+Test-Path $env:DEV_HOME
+```
+
+Debe devolver `True`. Para cambiarla en el futuro, repite los comandos con la
+nueva ruta y abre una PowerShell 7 nueva.
+
+## 2. Instalar DevNav
+
+El repositorio puede clonarse en cualquier ubicación; no tiene que estar dentro
+de la carpeta de proyectos:
 
 ```powershell
 git clone https://github.com/JacobOptimiza/dev-nav.git
-cd dev-nav
+Set-Location dev-nav
 .\install.ps1
 ```
 
-El instalador detecta x64/ARM64, descarga el binario correspondiente desde GitHub
-Releases, lo copia a `%LOCALAPPDATA%\Programs\DevNav` y registra el módulo en el
-perfil de PowerShell 7. No modifica el `PATH` global.
+El instalador:
 
-Para compilar el código local en vez de descargar un release:
+1. Detecta si Windows es x64 o ARM64.
+2. Descarga el binario desde GitHub Releases.
+3. Verifica su checksum SHA-256 antes de instalarlo.
+4. Copia DevNav a `%LOCALAPPDATA%\Programs\DevNav`.
+5. Añade el módulo al perfil de PowerShell 7 sin modificar el `PATH` global.
+
+Cierra y vuelve a abrir PowerShell 7. Comprueba que quedó instalado:
+
+```powershell
+Get-Command dev
+Get-DevRoot
+dev
+```
+
+`Get-Command dev` debe mostrar un alias y `Get-DevRoot` debe mostrar la carpeta
+configurada en el paso 1.
+
+### Compilar desde el código fuente
+
+Solo para desarrollo; requiere Rust stable y MSVC Build Tools:
 
 ```powershell
 .\install.ps1 -BuildFromSource
 ```
 
-Ese modo sí requiere Rust stable y MSVC Build Tools.
+## Favoritos globales, incluso fuera de la raíz
 
-## Uso
+Los favoritos no están limitados a la carpeta principal. Siempre aparecen al
+principio de la lista, aunque estés navegando por otra ubicación.
 
-```powershell
-dev
-dev codex
-dev "git status"
-```
+Para añadir una carpeta de otro disco o de fuera de `DEV_HOME`:
+
+1. Ejecuta `dev`.
+2. Pulsa `p`.
+3. Escribe una ruta absoluta, por ejemplo `D:\Clientes` o `C:\Trabajo\Repo`.
+4. Pulsa `Enter` para ir a esa ubicación.
+5. Navega con las flechas y `→` hasta resaltar la carpeta deseada.
+6. Pulsa `f` para guardarla como favorita.
+
+Desde ese momento aparecerá arriba en cualquier ubicación. Resáltala y vuelve a
+pulsar `f` para eliminarla de favoritos. `a` permite mostrarla como
+`alias - nombre-de-carpeta`.
+
+Los favoritos y alias son locales y se guardan fuera del repositorio en
+`%LOCALAPPDATA%\DevNav\config.tsv`.
+
+## Teclas
 
 | Tecla | Acción |
 |---|---|
 | `↑` / `↓`, `j` / `k` | mover selección |
 | `Enter` | seleccionar carpeta y volver a PowerShell |
-| `→` / `l` | entrar en la carpeta |
+| `→` / `l` | entrar en la carpeta resaltada |
 | `←` / `h` | subir al directorio padre |
+| `p` | ir a cualquier ruta absoluta, incluso otro disco |
 | `.` | seleccionar el directorio mostrado |
-| `g` | volver a la raíz de proyectos |
-| `f` | añadir o quitar favorito |
+| `g` | volver a la raíz configurada |
+| `f` | añadir o quitar favorito global |
 | `a` | editar alias |
 | `c` | abrir `codex` en la carpeta resaltada |
 | `r` | ejecutar `codex resume --last` en la carpeta resaltada |
@@ -60,25 +131,33 @@ dev "git status"
 | `u` | refrescar |
 | `q` / `Esc` | cancelar |
 
-Los favoritos y alias se guardan fuera del repositorio, en
-`%LOCALAPPDATA%\DevNav\config.tsv`.
+También puedes elegir primero el repositorio y pasar un comando desde el shell:
+
+```powershell
+dev codex
+dev "git status"
+```
 
 ## Arquitectura
 
 - Rust 2024 y Win32 mediante `windows-sys`.
 - Renderer VT propio con buffer de filas y repintado diferencial.
-- Synchronized Output (`DEC 2026`) para minimizar tearing.
-- Entrada raw mediante `ReadConsoleInputW`, sin ambigüedad entre flechas y Escape.
+- Entrada raw mediante `ReadConsoleInputW`.
 - Event loop sin polling ni renders cuando no hay eventos.
 - Protocolo de resultados separado del stdout utilizado por la TUI.
-- Cero frameworks TUI y una sola dependencia directa.
+- Sin frameworks TUI y con una sola dependencia directa.
 
-## Privacidad y seguridad
+## Seguridad y privacidad
 
-DevNav no contiene telemetría, no necesita credenciales y no accede a la red en
-tiempo de ejecución. Únicamente `install.ps1` usa la red para descargar el binario
-público desde GitHub Releases. No se versionan favoritos, alias, variables de
-entorno, perfiles de PowerShell ni archivos de usuario.
+- Sin telemetría ni red durante la ejecución normal.
+- Sin credenciales, secretos o configuración personal en el repositorio.
+- Binarios de release con checksum SHA-256.
+- Workflows con permisos mínimos y acciones fijadas a commits concretos.
+- Dependabot revisa Cargo y GitHub Actions.
+- `main` se protege mediante reglas de GitHub; las contribuciones se realizan por PR.
+
+Consulta [SECURITY.md](SECURITY.md) para informar vulnerabilidades y
+[CONTRIBUTING.md](CONTRIBUTING.md) antes de enviar cambios.
 
 ## Desarrollo
 

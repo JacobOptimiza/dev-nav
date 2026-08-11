@@ -71,6 +71,10 @@ impl Config {
         self.favorites.contains(path)
     }
 
+    pub fn favorite_paths(&self) -> impl Iterator<Item = &Path> {
+        self.favorites.iter().map(PathBuf::as_path)
+    }
+
     pub fn toggle_favorite(&mut self, path: &Path) -> bool {
         if self.favorites.remove(path) {
             false

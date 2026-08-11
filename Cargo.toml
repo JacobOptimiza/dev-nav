@@ -2,9 +2,12 @@
 name = "dev-nav"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 description = "A fast, keyboard-first Windows workspace navigator for PowerShell 7"
 license = "MIT"
 repository = "https://github.com/JacobOptimiza/dev-nav"
+keywords = ["powershell", "tui", "windows", "navigation", "terminal"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "dev"
