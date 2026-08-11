@@ -49,4 +49,4 @@ jobs:
         run: sha256sum *.exe > SHA256SUMS.txt
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" artifacts/* --generate-notes --verify-tag
+        run: gh release create "${GITHUB_REF_NAME}" artifacts/* --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag
