@@ -25,6 +25,7 @@ pub enum Key {
     Escape,
     F1,
     CtrlC,
+    CtrlS,
     Resize,
     Char(char),
     Unknown,
@@ -67,6 +68,9 @@ fn map_key(event: windows_sys::Win32::System::Console::KEY_EVENT_RECORD) -> Key 
     if control && event.wVirtualKeyCode == b'C' as u16 {
         return Key::CtrlC;
     }
+    if control && event.wVirtualKeyCode == b'S' as u16 {
+        return Key::CtrlS;
+    }
 
     match event.wVirtualKeyCode {
         VK_UP => Key::Up,
@@ -91,6 +95,7 @@ fn map_key(event: windows_sys::Win32::System::Console::KEY_EVENT_RECORD) -> Key 
 mod tests {
     use super::{Key, VK_DOWN, VK_ESCAPE, VK_F1, VK_UP, map_key};
     use windows_sys::Win32::System::Console::KEY_EVENT_RECORD;
+    use windows_sys::Win32::System::Console::LEFT_CTRL_PRESSED;
 
     fn key_event(virtual_key: u16) -> KEY_EVENT_RECORD {
         KEY_EVENT_RECORD {
@@ -107,5 +112,13 @@ mod tests {
         assert_eq!(map_key(key_event(VK_DOWN)), Key::Down);
         assert_eq!(map_key(key_event(VK_ESCAPE)), Key::Escape);
         assert_eq!(map_key(key_event(VK_F1)), Key::F1);
+    }
+
+    #[test]
+    fn control_s_has_a_dedicated_shortcut() {
+        let mut event = key_event(b'S' as u16);
+        event.dwControlKeyState = LEFT_CTRL_PRESSED;
+
+        assert_eq!(map_key(event), Key::CtrlS);
     }
 }

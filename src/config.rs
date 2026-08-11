@@ -6,6 +6,7 @@ use std::{
 
 #[derive(Clone, Debug, Default)]
 pub struct Config {
+    root: Option<PathBuf>,
     favorites: HashSet<PathBuf>,
     aliases: HashMap<PathBuf, String>,
 }
@@ -28,6 +29,9 @@ impl Config {
         for line in contents.lines() {
             let mut fields = line.splitn(3, '\t');
             match (fields.next(), fields.next(), fields.next()) {
+                (Some("root"), Some(path), _) => {
+                    config.root = Some(PathBuf::from(decode(path)));
+                }
                 (Some("favorite"), Some(path), _) => {
                     config.favorites.insert(PathBuf::from(decode(path)));
                 }
@@ -52,6 +56,11 @@ impl Config {
         aliases.sort_by(|left, right| left.0.cmp(right.0));
 
         let mut output = String::new();
+        if let Some(root) = &self.root {
+            output.push_str("root\t");
+            output.push_str(&encode(&root.to_string_lossy()));
+            output.push('\n');
+        }
         for favorite in favorites {
             output.push_str("favorite\t");
             output.push_str(&encode(&favorite.to_string_lossy()));
@@ -69,6 +78,14 @@ impl Config {
 
     pub fn is_favorite(&self, path: &Path) -> bool {
         self.favorites.contains(path)
+    }
+
+    pub fn root(&self) -> Option<&Path> {
+        self.root.as_deref()
+    }
+
+    pub fn set_root(&mut self, path: PathBuf) {
+        self.root = Some(path);
     }
 
     pub fn favorite_paths(&self) -> impl Iterator<Item = &Path> {
@@ -113,11 +130,34 @@ fn decode(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{decode, encode};
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use super::{Config, decode, encode};
 
     #[test]
     fn encoding_round_trip() {
         let input = "C:\\code\t100%\nnext";
         assert_eq!(decode(&encode(input)), input);
+    }
+
+    #[test]
+    fn startup_root_is_persisted_with_the_rest_of_the_config() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let config_path = std::env::temp_dir().join(format!("devnav-config-{unique}.tsv"));
+        let root = std::env::temp_dir().join("repositorios");
+        let mut config = Config::default();
+        config.set_root(root.clone());
+
+        config.save(&config_path).expect("save config");
+        let loaded = Config::load(&config_path).expect("load config");
+
+        assert_eq!(loaded.root(), Some(root.as_path()));
+        fs::remove_file(config_path).expect("remove config");
     }
 }

@@ -149,9 +149,44 @@ function Invoke-DevNavigator {
 }
 
 function Get-DevRoot {
+    $configPath = Join-Path $env:LOCALAPPDATA 'DevNav\config.tsv'
+    if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+        $rootLine = Get-Content -LiteralPath $configPath | Where-Object { $_.StartsWith("root`t") } | Select-Object -First 1
+        if ($rootLine) {
+            $encodedRoot = $rootLine.Substring(5)
+            return $encodedRoot.Replace('%0A', "`n").Replace('%09', "`t").Replace('%25', '%')
+        }
+    }
     if ($env:DEV_HOME) { return $env:DEV_HOME }
-    return (Join-Path $HOME 'programacion')
+    $defaultRoot = Join-Path $HOME 'programacion'
+    if (Test-Path -LiteralPath $defaultRoot -PathType Container) { return $defaultRoot }
+    return $HOME
+}
+
+function Set-DevRoot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [string] $Path
+    )
+
+    $resolvedRoot = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+    if (-not (Test-Path -LiteralPath $resolvedRoot -PathType Container)) {
+        throw "La ruta no es una carpeta: $resolvedRoot"
+    }
+    $encodedRoot = $resolvedRoot.Replace('%', '%25').Replace("`t", '%09').Replace("`n", '%0A')
+    $configPath = Join-Path $env:LOCALAPPDATA 'DevNav\config.tsv'
+    $configDirectory = Split-Path -Parent $configPath
+    New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+    $existingLines = if (Test-Path -LiteralPath $configPath) {
+        @(Get-Content -LiteralPath $configPath | Where-Object { -not $_.StartsWith("root`t") })
+    }
+    else {
+        @()
+    }
+    (@("root`t$encodedRoot") + $existingLines) | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+    Write-Host "Ruta de inicio guardada: $resolvedRoot" -ForegroundColor Green
 }
 
 Set-Alias -Name dev -Value Invoke-DevNavigator -Scope Global
-Export-ModuleMember -Function Invoke-DevNavigator, Update-DevNavigator, Get-DevRoot -Alias dev
+Export-ModuleMember -Function Invoke-DevNavigator, Update-DevNavigator, Get-DevRoot, Set-DevRoot -Alias dev

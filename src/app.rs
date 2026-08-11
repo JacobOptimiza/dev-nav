@@ -15,6 +15,7 @@ enum Mode {
     Path,
     Alias { target: PathBuf },
     Command { target: PathBuf },
+    ConfirmRoot { target: PathBuf },
 }
 
 pub struct App {
@@ -199,12 +200,31 @@ impl App {
                     _ => Ok(None),
                 }
             }
+            Mode::ConfirmRoot { target } => {
+                let target = target.clone();
+                match key {
+                    Key::Enter => {
+                        self.config.set_root(target.clone());
+                        self.config.save(&self.config_path)?;
+                        self.home = target.clone();
+                        self.mode = Mode::Normal;
+                        self.message = format!("Ruta de inicio guardada: {}", target.display());
+                    }
+                    Key::Escape | Key::Char('q') => {
+                        self.mode = Mode::Normal;
+                        self.message = "Cambio de ruta cancelado".into();
+                    }
+                    _ => {}
+                }
+                Ok(None)
+            }
         }
     }
 
     fn handle_normal(&mut self, key: Key) -> io::Result<Option<Option<ShellResult>>> {
         match key {
             Key::Char('q') | Key::Escape => return Ok(Some(None)),
+            Key::CtrlS => self.begin_root_confirmation(),
             Key::Up | Key::Char('k') => self.move_selection(-1),
             Key::Down | Key::Char('j') => self.move_selection(1),
             Key::Left | Key::Char('h') | Key::Backspace => self.go_parent()?,
@@ -397,6 +417,14 @@ impl App {
         self.mode = Mode::Command { target };
     }
 
+    fn begin_root_confirmation(&mut self) {
+        let target = self
+            .selected_entry()
+            .map(|entry| entry.path.clone())
+            .unwrap_or_else(|| self.current.clone());
+        self.mode = Mode::ConfirmRoot { target };
+    }
+
     fn toggle_help(&mut self) {
         if matches!(self.mode, Mode::Help) {
             self.close_help();
@@ -498,6 +526,9 @@ impl App {
             Mode::Path => format!("ruta › {}_", self.input),
             Mode::Alias { .. } => format!("alias › {}_", self.input),
             Mode::Command { .. } => format!("comando › {}_", self.input),
+            Mode::ConfirmRoot { ref target } => {
+                format!("¿Guardar como inicio?  {}", target.display())
+            }
         };
         rows.push(format!(
             "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
@@ -528,6 +559,7 @@ const HELP_LINES: &[HelpLine] = &[
     HelpLine::Shortcut(".", "Seleccionar la carpeta mostrada"),
     HelpLine::Shortcut("g", "Volver a la raíz de proyectos"),
     HelpLine::Shortcut("p", "Abrir cualquier ruta o unidad"),
+    HelpLine::Shortcut("Ctrl+S", "Guardar la carpeta resaltada como inicio"),
     HelpLine::Blank,
     HelpLine::Section("BÚSQUEDA Y ORGANIZACIÓN"),
     HelpLine::Shortcut("/", "Filtrar carpetas mientras escribes"),
@@ -642,13 +674,14 @@ fn shortcut_count() -> usize {
 fn footer_help(mode: &Mode) -> &'static str {
     match mode {
         Mode::Normal => {
-            "↑↓ Navegar  Enter Seleccionar  → Abrir  / Buscar  F1 Ayuda y shortcuts  q Salir"
+            "↑↓ Navegar  Enter Seleccionar  → Abrir  Ctrl+S Guardar inicio  F1 Shortcuts  q Salir"
         }
         Mode::Help => "↑↓ Desplazar  F1 / Esc Cerrar ayuda",
         Mode::Filter => "Escribe para buscar  ↑↓ Navegar  Enter Aplicar  Esc Cancelar",
         Mode::Path => "Escribe una ruta  Enter Abrir  Esc Cancelar",
         Mode::Alias { .. } => "Escribe un alias  Enter Guardar  Esc Cancelar",
         Mode::Command { .. } => "Escribe un comando  Enter Ejecutar  Esc Cancelar",
+        Mode::ConfirmRoot { .. } => "Enter Confirmar nueva ruta de inicio  Esc Cancelar",
     }
 }
 
@@ -705,7 +738,7 @@ mod tests {
     };
 
     use super::{App, Mode, agent_command, footer_help, fuzzy_score, is_command_shortcut};
-    use crate::{config::Config, render::fit};
+    use crate::{config::Config, input::Key, render::fit};
 
     #[test]
     fn contiguous_matches_rank_higher() {
@@ -743,7 +776,8 @@ mod tests {
     fn normal_footer_keeps_help_discoverable_without_overloading_it() {
         let footer = footer_help(&Mode::Normal);
 
-        assert!(footer.contains("F1 Ayuda y shortcuts"));
+        assert!(footer.contains("Ctrl+S Guardar inicio"));
+        assert!(footer.contains("F1 Shortcuts"));
         assert!(footer.contains("Enter Seleccionar"));
         assert!(footer.chars().count() < 90);
     }
@@ -779,6 +813,42 @@ mod tests {
             app.entries
                 .iter()
                 .any(|entry| entry.path == external && entry.favorite)
+        );
+        fs::remove_dir_all(sandbox).expect("clean test sandbox");
+    }
+
+    #[test]
+    fn control_s_requires_confirmation_before_saving_the_highlighted_root() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let sandbox = std::env::temp_dir().join(format!("devnav-root-test-{unique}"));
+        let initial_root = sandbox.join("home");
+        let selected_root = initial_root.join("repositorios");
+        let config_path = sandbox.join("config.tsv");
+        fs::create_dir_all(&selected_root).expect("create selected root");
+        let mut app =
+            App::new(initial_root, Config::default(), config_path.clone()).expect("create app");
+
+        app.handle_key(Key::CtrlS).expect("open confirmation");
+        assert!(matches!(
+            &app.mode,
+            Mode::ConfirmRoot { target } if target == &selected_root
+        ));
+        assert!(
+            Config::load(&config_path)
+                .expect("load unsaved config")
+                .root()
+                .is_none()
+        );
+
+        app.handle_key(Key::Enter).expect("confirm root");
+        assert_eq!(
+            Config::load(&config_path)
+                .expect("load saved config")
+                .root(),
+            Some(selected_root.as_path())
         );
         fs::remove_dir_all(sandbox).expect("clean test sandbox");
     }

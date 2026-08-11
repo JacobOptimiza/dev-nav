@@ -3,6 +3,20 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.6.0] - 2026-08-11
+
+### Added
+
+- Add `Ctrl+S` to save the highlighted directory as the startup root after an explicit confirmation.
+- Add `Set-DevRoot` as the automation-friendly equivalent for terminals, scripts, and coding agents.
+- Persist the startup root alongside favorites and aliases in the local DevNav configuration.
+
+### Changed
+
+- Make visual startup-root selection the primary onboarding path.
+- Fall back to the user profile on first launch when `$HOME\programacion` does not exist.
+- Keep `DEV_HOME` as a backwards-compatible fallback when no startup root has been saved.
+
 ## [0.5.0] - 2026-08-11
 
 ### Added

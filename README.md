@@ -5,7 +5,7 @@ DevNav es un navegador TUI nativo para moverse entre proyectos desde PowerShell
 guardar favoritos globales, asignar alias y abrir Codex, Claude Code, OpenCode o
 Kimi en el repositorio activo.
 
-**Documentación:** [Instalación](#1-configurar-la-carpeta-de-proyectos) · [Shortcuts](#shortcuts) · [FAQ](#faq) · [Troubleshooting](TROUBLESHOOTING.md) · [Seguridad](SECURITY.md)
+**Documentación:** [Instalación](#1-instalar-devnav) · [Primer inicio](#2-elegir-la-ruta-de-inicio) · [Shortcuts](#shortcuts) · [FAQ](#faq) · [Troubleshooting](TROUBLESHOOTING.md) · [Seguridad](SECURITY.md)
 
 ## Requisitos
 
@@ -17,45 +17,7 @@ Kimi en el repositorio activo.
 Los binarios publicados no requieren Rust ni Visual Studio. Windows PowerShell
 5.1, Windows de 32 bits, Linux y macOS no están soportados.
 
-## 1. Configurar la carpeta de proyectos
-
-Haz esto **antes de instalar**. DevNav necesita saber en qué carpeta debe arrancar.
-
-### Opción A: usar la ruta predeterminada
-
-La ruta predeterminada es `$HOME\programacion`. Créala si no existe:
-
-```powershell
-New-Item -ItemType Directory -Path (Join-Path $HOME 'programacion') -Force
-```
-
-No necesitas configurar ninguna variable de entorno.
-
-### Opción B: utilizar otra ruta
-
-Sustituye `D:\Proyectos` por tu carpeta real:
-
-```powershell
-$projectRoot = 'D:\Proyectos'
-New-Item -ItemType Directory -Path $projectRoot -Force
-
-# La guarda permanentemente para tu usuario.
-[Environment]::SetEnvironmentVariable('DEV_HOME', $projectRoot, 'User')
-
-# También la activa en la PowerShell que tienes abierta ahora.
-$env:DEV_HOME = $projectRoot
-```
-
-Comprueba la configuración:
-
-```powershell
-Test-Path $env:DEV_HOME
-```
-
-Debe devolver `True`. Para cambiarla en el futuro, repite los comandos con la
-nueva ruta y abre una PowerShell 7 nueva.
-
-## 2. Instalar DevNav
+## 1. Instalar DevNav
 
 El repositorio puede clonarse en cualquier ubicación; no tiene que estar dentro
 de la carpeta de proyectos:
@@ -78,12 +40,48 @@ Cierra y vuelve a abrir PowerShell 7. Comprueba que quedó instalado:
 
 ```powershell
 Get-Command dev
-Get-DevRoot
-dev
 ```
 
-`Get-Command dev` debe mostrar un alias y `Get-DevRoot` debe mostrar la carpeta
-configurada en el paso 1.
+`Get-Command dev` debe mostrar el alias de DevNav.
+
+## 2. Elegir la ruta de inicio
+
+La **ruta de inicio** es la carpeta que contiene tus repositorios o aquella que
+quieres ver cada vez que ejecutas `dev`. La forma recomendada de configurarla no
+requiere comandos ni editar archivos:
+
+1. Ejecuta `dev`. En el primer inicio se abrirá `$HOME\programacion` si existe;
+   de lo contrario, se abrirá tu carpeta de usuario.
+2. Navega con `↑`, `↓` y `→`. Para ir directamente a otra ruta o unidad, pulsa
+   `p`, escribe por ejemplo `D:\Proyectos` y confirma con `Enter`.
+3. Resalta la carpeta que quieres utilizar como inicio.
+4. Pulsa `Ctrl+S` (**guardar como ruta de inicio**).
+5. Revisa la ruta mostrada y pulsa `Enter` para confirmar o `Esc` para cancelar.
+
+El siguiente `dev` arrancará directamente en esa carpeta. Puedes repetir estos
+pasos en cualquier momento para cambiarla. `Ctrl+S` utiliza una combinación
+deliberada y una confirmación adicional para evitar cambios accidentales.
+
+### Alternativa para terminales, scripts o agentes
+
+Después de instalar, Codex, Cursor o cualquier script puede configurar la misma
+ruta sin abrir la TUI:
+
+```powershell
+Set-DevRoot 'D:\Proyectos'
+Get-DevRoot
+```
+
+`Set-DevRoot` valida que la carpeta exista y guarda exactamente la misma
+configuración local que `Ctrl+S`.
+
+Para compatibilidad con configuraciones anteriores, `DEV_HOME` continúa
+funcionando cuando todavía no existe una ruta guardada. La ruta elegida mediante
+`Ctrl+S` o `Set-DevRoot` tiene prioridad:
+
+```powershell
+$env:DEV_HOME = 'D:\Proyectos'
+```
 
 ### Actualizar
 
@@ -117,7 +115,7 @@ Solo para desarrollo; requiere Rust stable y MSVC Build Tools:
 Los favoritos no están limitados a la carpeta principal. Siempre aparecen al
 principio de la lista, aunque estés navegando por otra ubicación.
 
-Para añadir una carpeta de otro disco o de fuera de `DEV_HOME`:
+Para añadir una carpeta de otro disco o de fuera de la ruta de inicio:
 
 1. Ejecuta `dev`.
 2. Pulsa `p`.
@@ -130,7 +128,7 @@ Desde ese momento aparecerá arriba en cualquier ubicación. Resáltala y vuelve
 pulsar `f` para eliminarla de favoritos. `a` permite mostrarla como
 `alias - nombre-de-carpeta`.
 
-Los favoritos y alias son locales y se guardan fuera del repositorio en
+La ruta de inicio, los favoritos y los alias son locales y se guardan fuera del repositorio en
 `%LOCALAPPDATA%\DevNav\config.tsv`.
 
 ## Shortcuts
@@ -149,6 +147,7 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 | `.` | seleccionar el directorio mostrado |
 | `g` | volver a la raíz configurada |
 | `p` | ir a cualquier ruta absoluta, incluso de otro disco |
+| `Ctrl+S` | guardar la carpeta resaltada como nueva ruta de inicio; requiere confirmación |
 | `F1` | abrir el panel de ayuda con todos los shortcuts y su explicación |
 
 ### Agentes
@@ -245,8 +244,8 @@ al `PATH`. Reinicia PowerShell 7 y comprueba el perfil si no aparece.
 
 ### ¿Cómo corrijo la carpeta principal de proyectos?
 
-Actualiza `DEV_HOME` para el usuario y para la sesión actual; la carpeta debe
-existir. [Ver comandos](TROUBLESHOOTING.md#corregir-dev_home).
+Resalta la carpeta correcta en la TUI y pulsa `Ctrl+S`, o ejecuta
+`Set-DevRoot 'D:\Proyectos'`. [Ver comandos](TROUBLESHOOTING.md#corregir-la-ruta-de-inicio).
 
 ### ¿Por qué no se abre Codex, Claude, OpenCode o Kimi?
 

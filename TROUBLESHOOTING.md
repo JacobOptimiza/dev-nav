@@ -103,7 +103,7 @@ host](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/ab
 Ejecuta el instalador desde el mismo PowerShell 7 en el que quieras usar `dev`.
 No añadas `dev.exe` directamente al `PATH`: omitiría el wrapper necesario.
 
-### Corregir `DEV_HOME`
+### Corregir la ruta de inicio
 
 Consulta la ruta efectiva y comprueba que exista:
 
@@ -112,26 +112,23 @@ Get-DevRoot
 Test-Path -LiteralPath (Get-DevRoot)
 ```
 
-Para guardar una raíz distinta y aplicarla también a la sesión actual:
+La forma recomendada es abrir `dev`, resaltar la carpeta correcta, pulsar
+`Ctrl+S` y confirmar con `Enter`. Desde PowerShell puedes guardar la misma
+configuración con:
 
 ```powershell
-$newRoot = (Resolve-Path -LiteralPath 'D:\Proyectos').Path
-[Environment]::SetEnvironmentVariable('DEV_HOME', $newRoot, 'User')
-$env:DEV_HOME = $newRoot
+Set-DevRoot 'D:\Proyectos'
 Get-DevRoot
 ```
 
-La carpeta debe existir antes de usar `Resolve-Path`. Para volver a
-`$HOME\programacion`:
+La carpeta debe existir. Para volver a `$HOME\programacion`:
 
 ```powershell
-[Environment]::SetEnvironmentVariable('DEV_HOME', '', 'User')
-Remove-Item Env:DEV_HOME -ErrorAction SilentlyContinue
+Set-DevRoot (Join-Path $HOME 'programacion')
 ```
 
-El alcance `User` persiste para futuras terminales; `$env:DEV_HOME` solo cambia
-el proceso actual. Consulta los [alcances de las variables de
-entorno](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_environment_variables).
+`DEV_HOME` se mantiene como fallback de compatibilidad cuando todavía no existe
+una ruta guardada. `Ctrl+S` y `Set-DevRoot` tienen prioridad sobre esa variable.
 
 ### CLI de agente no encontrado
 
