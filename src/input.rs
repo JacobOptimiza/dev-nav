@@ -8,6 +8,7 @@ use windows_sys::Win32::System::Console::{
 const VK_BACK: u16 = 0x08;
 const VK_RETURN: u16 = 0x0D;
 const VK_ESCAPE: u16 = 0x1B;
+const VK_F1: u16 = 0x70;
 const VK_LEFT: u16 = 0x25;
 const VK_UP: u16 = 0x26;
 const VK_RIGHT: u16 = 0x27;
@@ -22,6 +23,7 @@ pub enum Key {
     Enter,
     Backspace,
     Escape,
+    F1,
     CtrlC,
     Resize,
     Char(char),
@@ -74,6 +76,7 @@ fn map_key(event: windows_sys::Win32::System::Console::KEY_EVENT_RECORD) -> Key 
         VK_RETURN => Key::Enter,
         VK_BACK => Key::Backspace,
         VK_ESCAPE => Key::Escape,
+        VK_F1 => Key::F1,
         _ => {
             let unicode = unsafe { event.uChar.UnicodeChar };
             char::from_u32(u32::from(unicode))
@@ -86,7 +89,7 @@ fn map_key(event: windows_sys::Win32::System::Console::KEY_EVENT_RECORD) -> Key 
 
 #[cfg(test)]
 mod tests {
-    use super::{Key, VK_DOWN, VK_ESCAPE, VK_UP, map_key};
+    use super::{Key, VK_DOWN, VK_ESCAPE, VK_F1, VK_UP, map_key};
     use windows_sys::Win32::System::Console::KEY_EVENT_RECORD;
 
     fn key_event(virtual_key: u16) -> KEY_EVENT_RECORD {
@@ -103,5 +106,6 @@ mod tests {
         assert_eq!(map_key(key_event(VK_UP)), Key::Up);
         assert_eq!(map_key(key_event(VK_DOWN)), Key::Down);
         assert_eq!(map_key(key_event(VK_ESCAPE)), Key::Escape);
+        assert_eq!(map_key(key_event(VK_F1)), Key::F1);
     }
 }

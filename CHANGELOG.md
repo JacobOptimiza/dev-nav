@@ -3,6 +3,18 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.4.0] - 2026-08-11
+
+### Added
+
+- Add an `F1` help panel with every shortcut grouped by workflow and clear descriptions.
+- Support scrolling the help panel in shorter terminal windows.
+
+### Changed
+
+- Replace the overloaded bottom legend with concise, context-aware guidance.
+- Make `F1` available from every application mode and restore the previous mode when help closes.
+
 ## [0.3.1] - 2026-08-11
 
 ### Documentation

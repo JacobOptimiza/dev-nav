@@ -10,6 +10,7 @@ use crate::{
 
 enum Mode {
     Normal,
+    Help,
     Filter,
     Path,
     Alias { target: PathBuf },
@@ -23,8 +24,10 @@ pub struct App {
     visible: Vec<usize>,
     selected: usize,
     scroll: usize,
+    help_scroll: usize,
     input: String,
     mode: Mode,
+    help_return_mode: Option<Mode>,
     message: String,
     config: Config,
     config_path: PathBuf,
@@ -40,8 +43,10 @@ impl App {
             visible: Vec::new(),
             selected: 0,
             scroll: 0,
+            help_scroll: 0,
             input: String::new(),
             mode: Mode::Normal,
+            help_return_mode: None,
             message: String::new(),
             config,
             config_path,
@@ -65,8 +70,30 @@ impl App {
         if matches!(key, Key::CtrlC) {
             return Ok(Some(None));
         }
+        if matches!(key, Key::F1) {
+            self.toggle_help();
+            return Ok(None);
+        }
         match &self.mode {
             Mode::Normal => self.handle_normal(key),
+            Mode::Help => {
+                match key {
+                    Key::Escape | Key::Enter | Key::Char('q') => {
+                        self.close_help();
+                    }
+                    Key::Up | Key::Char('k') => {
+                        self.help_scroll = self.help_scroll.saturating_sub(1);
+                    }
+                    Key::Down | Key::Char('j') => {
+                        self.help_scroll = self
+                            .help_scroll
+                            .saturating_add(1)
+                            .min(HELP_LINES.len().saturating_sub(1));
+                    }
+                    _ => {}
+                }
+                Ok(None)
+            }
             Mode::Filter => {
                 match key {
                     Key::Escape => {
@@ -271,6 +298,7 @@ impl App {
         self.entries = entries;
         self.input.clear();
         self.mode = Mode::Normal;
+        self.help_return_mode = None;
         self.rebuild_visible();
         Ok(())
     }
@@ -368,6 +396,20 @@ impl App {
         self.mode = Mode::Command { target };
     }
 
+    fn toggle_help(&mut self) {
+        if matches!(self.mode, Mode::Help) {
+            self.close_help();
+        } else {
+            let previous = std::mem::replace(&mut self.mode, Mode::Help);
+            self.help_return_mode = Some(previous);
+            self.help_scroll = 0;
+        }
+    }
+
+    fn close_help(&mut self) {
+        self.mode = self.help_return_mode.take().unwrap_or(Mode::Normal);
+    }
+
     fn execute_selected(&self, command: &str) -> Option<Option<ShellResult>> {
         self.selected_entry().map(|entry| {
             Some(ShellResult::Execute {
@@ -405,27 +447,33 @@ impl App {
             "─".repeat(width.saturating_sub(2))
         ));
 
+        let help_layout = matches!(self.mode, Mode::Help)
+            .then(|| HelpLayout::new(inner, list_height, &mut self.help_scroll));
         for row_index in 0..list_height {
-            let visible_index = self.scroll + row_index;
-            let content = if let Some(entry_index) = self.visible.get(visible_index) {
-                let entry = &self.entries[*entry_index];
-                let marker = if entry.favorite { "★" } else { " " };
-                let prefix = if visible_index == self.selected {
-                    "›"
-                } else {
-                    " "
-                };
-                let label = format!("{prefix} {marker}  {}", entry.label());
-                if visible_index == self.selected {
-                    format!(
-                        "\x1b[48;2;32;43;65m\x1b[38;2;232;238;252m{}\x1b[0m",
-                        fit(&label, inner)
-                    )
-                } else {
-                    fit(&label, inner)
-                }
+            let content = if let Some(layout) = &help_layout {
+                layout.render_row(row_index, inner)
             } else {
-                " ".repeat(inner)
+                let visible_index = self.scroll + row_index;
+                if let Some(entry_index) = self.visible.get(visible_index) {
+                    let entry = &self.entries[*entry_index];
+                    let marker = if entry.favorite { "★" } else { " " };
+                    let prefix = if visible_index == self.selected {
+                        "›"
+                    } else {
+                        " "
+                    };
+                    let label = format!("{prefix} {marker}  {}", entry.label());
+                    if visible_index == self.selected {
+                        format!(
+                            "\x1b[48;2;32;43;65m\x1b[38;2;232;238;252m{}\x1b[0m",
+                            fit(&label, inner)
+                        )
+                    } else {
+                        fit(&label, inner)
+                    }
+                } else {
+                    " ".repeat(inner)
+                }
             };
             rows.push(format!(
                 "\x1b[38;2;90;100;120m│\x1b[0m {content} \x1b[38;2;90;100;120m│\x1b[0m"
@@ -444,6 +492,7 @@ impl App {
                     self.message.clone()
                 }
             }
+            Mode::Help => format!("Shortcuts · {} acciones disponibles", shortcut_count()),
             Mode::Filter => format!("/{}", self.input),
             Mode::Path => format!("ruta › {}_", self.input),
             Mode::Alias { .. } => format!("alias › {}_", self.input),
@@ -453,12 +502,151 @@ impl App {
             "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
             fit(&prompt, inner)
         ));
-        let help = "↑↓ mover  Enter cd  → entrar  e comando  / filtrar  c Codex  r última sesión Codex del repo  d/o/i agentes  Mayús reanuda  f favorito  a alias  q salir";
+        let help = footer_help(&self.mode);
         rows.push(format!(
             "\x1b[38;2;90;100;120m╰─{}─╯\x1b[0m",
             fit(help, width.saturating_sub(4))
         ));
         self.renderer.draw(rows)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum HelpLine {
+    Section(&'static str),
+    Shortcut(&'static str, &'static str),
+    Blank,
+}
+
+const HELP_LINES: &[HelpLine] = &[
+    HelpLine::Section("NAVEGACIÓN"),
+    HelpLine::Shortcut("↑ / ↓ · j / k", "Navegar por las carpetas"),
+    HelpLine::Shortcut("→ / l", "Entrar en la carpeta resaltada"),
+    HelpLine::Shortcut("← / h / Retroceso", "Volver a la carpeta padre"),
+    HelpLine::Shortcut("Enter", "Seleccionar carpeta y volver a PowerShell"),
+    HelpLine::Shortcut(".", "Seleccionar la carpeta mostrada"),
+    HelpLine::Shortcut("g", "Volver a la raíz de proyectos"),
+    HelpLine::Shortcut("p", "Abrir cualquier ruta o unidad"),
+    HelpLine::Blank,
+    HelpLine::Section("BÚSQUEDA Y ORGANIZACIÓN"),
+    HelpLine::Shortcut("/", "Filtrar carpetas mientras escribes"),
+    HelpLine::Shortcut("f", "Añadir o quitar un favorito global"),
+    HelpLine::Shortcut("a", "Crear o editar el alias de la carpeta"),
+    HelpLine::Shortcut("u", "Actualizar el directorio actual"),
+    HelpLine::Blank,
+    HelpLine::Section("AGENTES EN EL REPOSITORIO"),
+    HelpLine::Shortcut("c", "Abrir una sesión nueva de Codex"),
+    HelpLine::Shortcut("r", "Reanudar la última sesión Codex del repo"),
+    HelpLine::Shortcut("d / Mayús+D", "Claude Code: sesión nueva / última sesión"),
+    HelpLine::Shortcut("o / Mayús+O", "OpenCode: sesión nueva / última sesión"),
+    HelpLine::Shortcut("i / Mayús+I", "Kimi: sesión nueva / última sesión"),
+    HelpLine::Blank,
+    HelpLine::Section("ACCIONES"),
+    HelpLine::Shortcut("e / :", "Ejecutar un comando en la carpeta resaltada"),
+    HelpLine::Shortcut("F1", "Abrir o cerrar este panel de ayuda"),
+    HelpLine::Shortcut("q / Esc", "Salir de DevNav o cancelar"),
+];
+
+struct HelpLayout {
+    width: usize,
+    height: usize,
+    top: usize,
+    start: usize,
+}
+
+impl HelpLayout {
+    fn new(inner: usize, list_height: usize, scroll: &mut usize) -> Self {
+        let width = inner.min(104);
+        let height = list_height.min(HELP_LINES.len().saturating_add(2));
+        let capacity = height.saturating_sub(2);
+        let max_scroll = HELP_LINES.len().saturating_sub(capacity);
+        *scroll = (*scroll).min(max_scroll);
+        Self {
+            width,
+            height,
+            top: list_height.saturating_sub(height) / 2,
+            start: *scroll,
+        }
+    }
+
+    fn render_row(&self, row: usize, outer_width: usize) -> String {
+        if row < self.top || row >= self.top + self.height || self.height < 2 {
+            return " ".repeat(outer_width);
+        }
+        let local = row - self.top;
+        let panel = if local == 0 {
+            panel_border(self.width, "SHORTCUTS", true)
+        } else if local + 1 == self.height {
+            panel_border(self.width, "↑↓ DESPLAZAR  ·  F1 / ESC CERRAR", false)
+        } else {
+            render_help_line(
+                HELP_LINES
+                    .get(self.start + local - 1)
+                    .copied()
+                    .unwrap_or(HelpLine::Blank),
+                self.width,
+            )
+        };
+        let left = outer_width.saturating_sub(self.width) / 2;
+        let right = outer_width.saturating_sub(self.width + left);
+        format!("{}{}{}", " ".repeat(left), panel, " ".repeat(right))
+    }
+}
+
+fn render_help_line(line: HelpLine, width: usize) -> String {
+    let content_width = width.saturating_sub(2);
+    match line {
+        HelpLine::Section(title) => format!(
+            "\x1b[38;2;90;100;120m│\x1b[0m\x1b[38;2;116;199;236m{}\x1b[0m\x1b[38;2;90;100;120m│\x1b[0m",
+            fit(&format!("  {title}"), content_width)
+        ),
+        HelpLine::Shortcut(keys, description) => {
+            let key_width = 18.min(content_width.saturating_sub(12)).max(1);
+            let description_width = content_width.saturating_sub(key_width + 3);
+            format!(
+                "\x1b[38;2;90;100;120m│\x1b[0m  \x1b[38;2;255;203;107m{}\x1b[0m {}\x1b[38;2;90;100;120m│\x1b[0m",
+                fit(keys, key_width),
+                fit(description, description_width)
+            )
+        }
+        HelpLine::Blank => format!(
+            "\x1b[38;2;90;100;120m│\x1b[0m{}\x1b[38;2;90;100;120m│\x1b[0m",
+            " ".repeat(content_width)
+        ),
+    }
+}
+
+fn panel_border(width: usize, label: &str, top: bool) -> String {
+    let (left, right) = if top { ('╭', '╮') } else { ('╰', '╯') };
+    let label = label
+        .chars()
+        .take(width.saturating_sub(5))
+        .collect::<String>();
+    let prefix = format!("{left}─ {label} ");
+    let fill = width.saturating_sub(prefix.chars().count() + 1);
+    format!(
+        "\x1b[38;2;116;199;236m{prefix}{}{right}\x1b[0m",
+        "─".repeat(fill)
+    )
+}
+
+fn shortcut_count() -> usize {
+    HELP_LINES
+        .iter()
+        .filter(|line| matches!(line, HelpLine::Shortcut(_, _)))
+        .count()
+}
+
+fn footer_help(mode: &Mode) -> &'static str {
+    match mode {
+        Mode::Normal => {
+            "↑↓ Navegar  Enter Seleccionar  → Abrir  / Buscar  F1 Ayuda y shortcuts  q Salir"
+        }
+        Mode::Help => "↑↓ Desplazar  F1 / Esc Cerrar ayuda",
+        Mode::Filter => "Escribe para buscar  ↑↓ Navegar  Enter Aplicar  Esc Cancelar",
+        Mode::Path => "Escribe una ruta  Enter Abrir  Esc Cancelar",
+        Mode::Alias { .. } => "Escribe un alias  Enter Guardar  Esc Cancelar",
+        Mode::Command { .. } => "Escribe un comando  Enter Ejecutar  Esc Cancelar",
     }
 }
 
@@ -514,7 +702,7 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::{App, agent_command, fuzzy_score, is_command_shortcut};
+    use super::{App, Mode, agent_command, footer_help, fuzzy_score, is_command_shortcut};
     use crate::{config::Config, render::fit};
 
     #[test]
@@ -547,6 +735,15 @@ mod tests {
         assert!(is_command_shortcut('e'));
         assert!(is_command_shortcut(':'));
         assert!(!is_command_shortcut('x'));
+    }
+
+    #[test]
+    fn normal_footer_keeps_help_discoverable_without_overloading_it() {
+        let footer = footer_help(&Mode::Normal);
+
+        assert!(footer.contains("F1 Ayuda y shortcuts"));
+        assert!(footer.contains("Enter Seleccionar"));
+        assert!(footer.chars().count() < 90);
     }
 
     #[test]

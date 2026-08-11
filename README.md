@@ -130,6 +130,7 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 | `.` | seleccionar el directorio mostrado |
 | `g` | volver a la raíz configurada |
 | `p` | ir a cualquier ruta absoluta, incluso de otro disco |
+| `F1` | abrir el panel de ayuda con todos los shortcuts y su explicación |
 
 ### Agentes
 
@@ -154,6 +155,10 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 | `e` | escribir y ejecutar un comando en la carpeta resaltada |
 | `u` | refrescar el directorio mostrado |
 | `q` / `Esc` | cancelar y volver a PowerShell |
+
+La barra inferior muestra sólo las acciones esenciales para no saturar la
+interfaz. Pulsa `F1` en cualquier momento para consultar el panel completo;
+puedes desplazarte con `↑` / `↓` y cerrarlo con `F1`, `Esc` o `Enter`.
 
 `:` se conserva como alias compatible de `e` para quienes prefieran el estilo de
 comandos de Vim.
