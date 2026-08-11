@@ -5,6 +5,8 @@ DevNav es un navegador TUI nativo para moverse entre proyectos desde PowerShell
 guardar favoritos globales, asignar alias y abrir Codex, Claude Code, OpenCode o
 Kimi en el repositorio activo.
 
+**Documentación:** [Instalación](#1-configurar-la-carpeta-de-proyectos) · [Shortcuts](#shortcuts) · [FAQ](#faq) · [Troubleshooting](TROUBLESHOOTING.md) · [Seguridad](SECURITY.md)
+
 ## Requisitos
 
 - Windows 10 u 11, x64 o ARM64.
