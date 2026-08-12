@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 
 $script:DevNavRepository = 'JacobOptimiza/dev-nav'
+$script:DevNavRestartRequired = $false
 
 function Get-DevConfigPath {
     return (Join-Path $env:LOCALAPPDATA 'DevNav\config.tsv')
@@ -164,6 +165,7 @@ function Update-DevNavigator {
     $installedModule = Join-Path $installRoot 'DevNav.psm1'
     $stagedExecutable = $null
     $stagedModule = $null
+    $moduleChanged = $false
     New-Item -ItemType Directory -Path $temporaryRoot, $installRoot -Force | Out-Null
 
     try {
@@ -184,14 +186,23 @@ function Update-DevNavigator {
             }
         }
 
+        $currentModuleHash = if (Test-Path -LiteralPath $installedModule -PathType Leaf) {
+            (Get-FileHash -LiteralPath $installedModule -Algorithm SHA256).Hash
+        }
+        $downloadedModuleHash = (Get-FileHash -LiteralPath (Join-Path $temporaryRoot 'DevNav.psm1') -Algorithm SHA256).Hash
+        $moduleChanged = $currentModuleHash -ne $downloadedModuleHash
+
         $stagedExecutable = Join-Path $installRoot ("dev-{0}.new" -f [guid]::NewGuid().ToString('N'))
         $stagedModule = Join-Path $installRoot ("DevNav-{0}.new" -f [guid]::NewGuid().ToString('N'))
         Copy-Item -LiteralPath (Join-Path $temporaryRoot $executableAsset) -Destination $stagedExecutable
         Copy-Item -LiteralPath (Join-Path $temporaryRoot 'DevNav.psm1') -Destination $stagedModule
         Move-Item -LiteralPath $stagedExecutable -Destination $installedExecutable -Force
         Move-Item -LiteralPath $stagedModule -Destination $installedModule -Force
-        Import-Module $installedModule -Force
         Write-Host "DevNav actualizado correctamente: v$currentText → v$latestText." -ForegroundColor Green
+        if ($moduleChanged) {
+            $script:DevNavRestartRequired = $true
+            Write-Warning 'DevNav.psm1 también cambió. Reinicia PowerShell para cargar el módulo actualizado.'
+        }
     }
     finally {
         Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -212,6 +223,10 @@ function Invoke-DevNavigator {
         return
     }
     Invoke-DevStartupUpdateCheck
+    if ($script:DevNavRestartRequired) {
+        Write-Warning 'DevNav se ha actualizado. Reinicia PowerShell para cargar el módulo actualizado.'
+        return
+    }
     $executable = Get-DevExecutable
 
     $resultFile = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.result" -f [guid]::NewGuid().ToString('N'))

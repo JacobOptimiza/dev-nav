@@ -3,6 +3,14 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.9.4] - 2026-08-12
+
+### Fixed
+
+- Prevent the updater from reloading `DevNav.psm1` while that module is still
+  executing, avoiding broken private-command resolution in the current session.
+- Detect module changes and request a PowerShell restart before continuing.
+
 ## [0.9.3] - 2026-08-12
 
 ### Fixed

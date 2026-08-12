@@ -30,4 +30,10 @@ Describe 'DevNav PowerShell module' {
         $configLines = @(Get-Content -LiteralPath $configPath)
         ($configLines | Where-Object { $_ -match '^root\t' }) | Should -Not -BeNullOrEmpty
     }
+
+    It 'does not reload its own module during an update' {
+        $source = Get-Content -LiteralPath $modulePath -Raw
+        $source | Should -Not -Match 'Import-Module\s+\$installedModule'
+        $source | Should -Match '\$script:DevNavRestartRequired'
+    }
 }
