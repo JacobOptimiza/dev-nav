@@ -3,6 +3,13 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.9.3] - 2026-08-12
+
+### Fixed
+
+- Upload only files when creating a GitHub release; generated manifest folders
+  remain available for validation without being passed as release assets.
+
 ## [0.9.2] - 2026-08-12
 
 ### Fixed
