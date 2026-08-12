@@ -202,27 +202,30 @@ function Update-DevNavigator {
         Copy-Item -LiteralPath (Join-Path $temporaryRoot 'DevNav.psm1') -Destination $stagedModule
         try {
             if (Test-Path -LiteralPath $installedExecutable -PathType Leaf) {
-                Move-Item -LiteralPath $installedExecutable -Destination $backupExecutable -Force
+                Copy-Item -LiteralPath $installedExecutable -Destination $backupExecutable -Force
             }
             if (Test-Path -LiteralPath $installedModule -PathType Leaf) {
-                Move-Item -LiteralPath $installedModule -Destination $backupModule -Force
+                Copy-Item -LiteralPath $installedModule -Destination $backupModule -Force
             }
+            Remove-Item -LiteralPath $installedExecutable, $installedModule -Force -ErrorAction SilentlyContinue
             Move-Item -LiteralPath $stagedExecutable -Destination $installedExecutable -Force
             Move-Item -LiteralPath $stagedModule -Destination $installedModule -Force
             $versionOutput = (& $installedExecutable --version | Out-String).Trim()
-            if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^dev-nav\s+\d+\.\d+\.\d+$') {
-                throw 'El ejecutable actualizado no supera la validación de versión.'
+            $expectedVersionOutput = "dev-nav $latestText"
+            if ($LASTEXITCODE -ne 0 -or $versionOutput -ne $expectedVersionOutput) {
+                throw "El ejecutable actualizado no corresponde a v$latestText."
             }
             $replacementCommitted = $true
         }
         catch {
             Remove-Item -LiteralPath $installedExecutable, $installedModule -Force -ErrorAction SilentlyContinue
             if (Test-Path -LiteralPath $backupExecutable -PathType Leaf) {
-                Move-Item -LiteralPath $backupExecutable -Destination $installedExecutable -Force
+                Copy-Item -LiteralPath $backupExecutable -Destination $installedExecutable -Force
             }
             if (Test-Path -LiteralPath $backupModule -PathType Leaf) {
-                Move-Item -LiteralPath $backupModule -Destination $installedModule -Force
+                Copy-Item -LiteralPath $backupModule -Destination $installedModule -Force
             }
+            Remove-Item -LiteralPath $backupExecutable, $backupModule -Force -ErrorAction SilentlyContinue
             throw
         }
         Write-Host "DevNav actualizado correctamente: v$currentText → v$latestText." -ForegroundColor Green
