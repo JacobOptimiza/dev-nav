@@ -44,10 +44,12 @@ Run this in PowerShell 7:
 irm https://raw.githubusercontent.com/JacobOptimiza/dev-nav/main/install.ps1 | iex
 ```
 
-WinGet distribution is being prepared as a separate, silent per-user installer.
-Until `JacobOptimiza.DevNav` is accepted in the community source, use the
-PowerShell installer above; `winget install JacobOptimiza.DevNav` is not yet
-available.
+The latest release also includes silent per-user installers for x64 and ARM64.
+Download them from the [v0.9.3 release](https://github.com/JacobOptimiza/dev-nav/releases/tag/v0.9.3).
+The `JacobOptimiza.DevNav` WinGet submission is prepared and validated, but the
+command becomes available only after Microsoft accepts the manifest in the
+community source. Until then, use the PowerShell installer above or the release
+installer directly.
 
 The installer detects the architecture, downloads `dev.exe` and its PowerShell
 module from the latest GitHub release, verifies both SHA-256 checksums, installs

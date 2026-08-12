@@ -14,9 +14,9 @@ Goal: support a reliable, silent, per-user installation with:
 - [x] Install `dev.exe` and `DevNav.psm1`.
 - [x] Add a marker-based PowerShell profile integration that can be removed safely.
 - [x] Support silent install, upgrade, repair and clean uninstall.
-- [ ] Preserve `%LOCALAPPDATA%\DevNav\config.tsv` during upgrades and uninstall.
+- [x] Preserve `%LOCALAPPDATA%\DevNav\config.tsv` during upgrades and uninstall.
 - [ ] Test fresh install, upgrade and uninstall in Windows Sandbox.
-- [ ] Generate and validate WinGet manifests with pinned version URLs and SHA-256.
+- [x] Generate and validate WinGet manifests with pinned version URLs and SHA-256.
 - [ ] Submit `JacobOptimiza.DevNav` to `microsoft/winget-pkgs`.
 - [ ] Automate future WinGet update submissions from GitHub Actions.
 

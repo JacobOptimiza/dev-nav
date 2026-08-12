@@ -5,7 +5,7 @@ the x64 and ARM64 Inno Setup installers have been built and checksummed. Downloa
 the generated `winget-manifests-<version>.zip` release asset and validate it with:
 
 ```powershell
-winget validate .\manifests
+winget validate .\manifests\JacobOptimiza\DevNav\<version>
 ```
 
 The first submission must be opened against `microsoft/winget-pkgs`. Future
