@@ -1,5 +1,40 @@
 /target/
+
+# Local editor and IDE state
+.vscode/
+.idea/
+.vs/
+*.code-workspace
+*.user
+*.suo
+
+# Test, coverage and generated reports
+coverage/
+coverage.lcov
+TestResults/
+*.trx
+*.opencover.xml
+*.sarif
+
+# Build, packaging and local tool caches
+artifacts/
+dist/
+out/
+bin/
+obj/
+.cargo-home/
+.nuget/
+.DS_Store
+Thumbs.db
+
+# DevNav runtime and installer artifacts
 *.result
+devnav-*.result
+devnav-*.exe
+devnav-*.psm1
+devnav-*.sha256
+
+# Secrets and local configuration
 .env
 .env.*
 !.env.example
