@@ -20,7 +20,9 @@ DefaultDirName={localappdata}\Programs\DevNav
 DefaultGroupName=DevNav
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-OutputDir=release-assets
+; The script is compiled from the repository root. Keep generated installers in
+; the root release-assets directory so the release workflow can upload them.
+OutputDir=..\release-assets
 OutputBaseFilename=DevNavSetup-{#Architecture}
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -36,9 +38,9 @@ VersionInfoProductVersion={#MyAppVersion}
 VersionInfoCopyright=Copyright (C) 2026 Jacob Optimiza
 
 [Files]
-Source: "release-assets\dev.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "powershell\DevNav.psm1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "installer\ProfileIntegration.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\release-assets\dev.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\powershell\DevNav.psm1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "ProfileIntegration.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Run]
 Filename: "pwsh.exe"; Parameters: "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\ProfileIntegration.ps1"" -Install -ModulePath ""{app}\DevNav.psm1"""; Flags: runhidden waituntilterminated; StatusMsg: "Integrating DevNav with PowerShell 7..."

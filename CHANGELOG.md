@@ -3,6 +3,13 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.9.2] - 2026-08-12
+
+### Fixed
+
+- Resolve installer sources relative to the Inno Setup script so release builds
+  produce the x64 and ARM64 setup executables reliably.
+
 ## [0.9.1] - 2026-08-12
 
 ### Fixed
