@@ -39,22 +39,21 @@ jobs:
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "${{ matrix.asset }}"
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "release-assets/dev.exe"
           Copy-Item "powershell/DevNav.psm1" "release-assets/DevNav.psm1"
-          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
           $expectedInnoSha256 = '4D11E8050B6185E0D49BD9E8CC661A7A59F44959A621D31D11033124C4E8A7B0'
-          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
-            $innoInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.1.exe'
-            Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_1/innosetup-6.7.1.exe' -OutFile $innoInstaller
-            $actualInnoSha256 = (Get-FileHash $innoInstaller -Algorithm SHA256).Hash
-            if ($actualInnoSha256 -ne $expectedInnoSha256) { throw 'Inno Setup checksum mismatch.' }
-            Start-Process -FilePath $innoInstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -NoNewWindow
-          }
+          $innoInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.1.exe'
+          $innoRoot = Join-Path $env:RUNNER_TEMP 'InnoSetup-6.7.1'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_1/innosetup-6.7.1.exe' -OutFile $innoInstaller
+          $actualInnoSha256 = (Get-FileHash $innoInstaller -Algorithm SHA256).Hash
+          if ($actualInnoSha256 -ne $expectedInnoSha256) { throw 'Inno Setup checksum mismatch.' }
+          Start-Process -FilePath $innoInstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$innoRoot" -Wait -NoNewWindow
+          $iscc = Join-Path $innoRoot 'ISCC.exe'
           $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
           git fetch origin main --quiet
           git merge-base --is-ancestor $env:GITHUB_SHA origin/main
           if ($LASTEXITCODE -ne 0) { throw 'Release tags must point to a commit contained in main.' }
           $cargoVersion = (Get-Content Cargo.toml | Select-String '^version = "([0-9.]+)"$').Matches.Groups[1].Value
           if ($cargoVersion -ne $version) { throw "Tag version $version does not match Cargo.toml version $cargoVersion." }
-          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw 'Inno Setup compiler was not found.' }
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw 'Verified Inno Setup compiler was not found.' }
           & $iscc "/Qp" "/DMyAppVersion=$version" "/DArchitecture=${{ matrix.architecture }}" "installer\DevNav.iss"
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
           Copy-Item "release-assets/DevNavSetup-${{ matrix.architecture }}.exe" "DevNavSetup-${{ matrix.architecture }}.exe"
