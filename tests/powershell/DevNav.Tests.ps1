@@ -35,5 +35,8 @@ Describe 'DevNav PowerShell module' {
         $source = Get-Content -LiteralPath $modulePath -Raw
         $source | Should -Not -Match 'Import-Module\s+\$installedModule'
         $source | Should -Match '\$script:DevNavRestartRequired'
+        $source | Should -Match '\$script:DevNavUpdateCompleted'
+        $source | Should -Match '\$backupExecutable'
+        $source | Should -Match 'El ejecutable actualizado no supera la validación de versión'
     }
 }

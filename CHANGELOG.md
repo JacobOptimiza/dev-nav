@@ -3,6 +3,13 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.9.5] - 2026-08-12
+
+### Fixed
+
+- End the current `dev` invocation after a successful update.
+- Roll back both installed files if replacement or executable validation fails.
+
 ## [0.9.4] - 2026-08-12
 
 ### Fixed

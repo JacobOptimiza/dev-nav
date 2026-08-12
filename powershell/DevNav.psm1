@@ -2,6 +2,7 @@ Set-StrictMode -Version Latest
 
 $script:DevNavRepository = 'JacobOptimiza/dev-nav'
 $script:DevNavRestartRequired = $false
+$script:DevNavUpdateCompleted = $false
 
 function Get-DevConfigPath {
     return (Join-Path $env:LOCALAPPDATA 'DevNav\config.tsv')
@@ -166,6 +167,9 @@ function Update-DevNavigator {
     $stagedExecutable = $null
     $stagedModule = $null
     $moduleChanged = $false
+    $backupExecutable = Join-Path $installRoot ("dev-{0}.bak" -f [guid]::NewGuid().ToString('N'))
+    $backupModule = Join-Path $installRoot ("DevNav-{0}.bak" -f [guid]::NewGuid().ToString('N'))
+    $replacementCommitted = $false
     New-Item -ItemType Directory -Path $temporaryRoot, $installRoot -Force | Out-Null
 
     try {
@@ -196,18 +200,48 @@ function Update-DevNavigator {
         $stagedModule = Join-Path $installRoot ("DevNav-{0}.new" -f [guid]::NewGuid().ToString('N'))
         Copy-Item -LiteralPath (Join-Path $temporaryRoot $executableAsset) -Destination $stagedExecutable
         Copy-Item -LiteralPath (Join-Path $temporaryRoot 'DevNav.psm1') -Destination $stagedModule
-        Move-Item -LiteralPath $stagedExecutable -Destination $installedExecutable -Force
-        Move-Item -LiteralPath $stagedModule -Destination $installedModule -Force
+        try {
+            if (Test-Path -LiteralPath $installedExecutable -PathType Leaf) {
+                Move-Item -LiteralPath $installedExecutable -Destination $backupExecutable -Force
+            }
+            if (Test-Path -LiteralPath $installedModule -PathType Leaf) {
+                Move-Item -LiteralPath $installedModule -Destination $backupModule -Force
+            }
+            Move-Item -LiteralPath $stagedExecutable -Destination $installedExecutable -Force
+            Move-Item -LiteralPath $stagedModule -Destination $installedModule -Force
+            $versionOutput = (& $installedExecutable --version | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^dev-nav\s+\d+\.\d+\.\d+$') {
+                throw 'El ejecutable actualizado no supera la validación de versión.'
+            }
+            $replacementCommitted = $true
+        }
+        catch {
+            Remove-Item -LiteralPath $installedExecutable, $installedModule -Force -ErrorAction SilentlyContinue
+            if (Test-Path -LiteralPath $backupExecutable -PathType Leaf) {
+                Move-Item -LiteralPath $backupExecutable -Destination $installedExecutable -Force
+            }
+            if (Test-Path -LiteralPath $backupModule -PathType Leaf) {
+                Move-Item -LiteralPath $backupModule -Destination $installedModule -Force
+            }
+            throw
+        }
         Write-Host "DevNav actualizado correctamente: v$currentText → v$latestText." -ForegroundColor Green
         if ($moduleChanged) {
             $script:DevNavRestartRequired = $true
             Write-Warning 'DevNav.psm1 también cambió. Reinicia PowerShell para cargar el módulo actualizado.'
         }
+        else {
+            Write-Host 'Ejecuta dev de nuevo para continuar.' -ForegroundColor Cyan
+        }
+        $script:DevNavUpdateCompleted = $true
     }
     finally {
         Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
         if ($stagedExecutable) { Remove-Item -LiteralPath $stagedExecutable -Force -ErrorAction SilentlyContinue }
         if ($stagedModule) { Remove-Item -LiteralPath $stagedModule -Force -ErrorAction SilentlyContinue }
+        if ($replacementCommitted) {
+            Remove-Item -LiteralPath $backupExecutable, $backupModule -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -219,10 +253,15 @@ function Invoke-DevNavigator {
     )
 
     if ($Command.Count -eq 1 -and $Command[0] -eq 'update') {
+        $script:DevNavUpdateCompleted = $false
         Update-DevNavigator
         return
     }
+    $script:DevNavUpdateCompleted = $false
     Invoke-DevStartupUpdateCheck
+    if ($script:DevNavUpdateCompleted) {
+        return
+    }
     if ($script:DevNavRestartRequired) {
         Write-Warning 'DevNav se ha actualizado. Reinicia PowerShell para cargar el módulo actualizado.'
         return
