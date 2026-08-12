@@ -5,7 +5,7 @@ the x64 and ARM64 Inno Setup installers have been built and checksummed. Downloa
 the generated `winget-manifests-<version>.zip` release asset and validate it with:
 
 ```powershell
-winget validate .\manifests\JacobOptimiza\DevNav\<version>
+winget validate .\manifests\j\JacobOptimiza\DevNav\<version>
 ```
 
 The current `0.9.3` manifests are also committed in this directory so they can
