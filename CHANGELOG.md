@@ -3,6 +3,13 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.9.1] - 2026-08-12
+
+### Fixed
+
+- Build the ARM64 installer on runners without the App Installer `winget`
+  command by using the versioned Inno Setup compiler fallback.
+
 ## [0.9.0] - 2026-08-12
 
 ### Added

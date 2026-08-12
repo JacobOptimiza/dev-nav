@@ -37,9 +37,14 @@ jobs:
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "${{ matrix.asset }}"
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "release-assets/dev.exe"
           Copy-Item "powershell/DevNav.psm1" "release-assets/DevNav.psm1"
-          winget install --id JRSoftware.InnoSetup --exact --silent --accept-package-agreements --accept-source-agreements
-          $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+            $innoInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.1.exe'
+            Invoke-WebRequest -Uri 'https://files.jrsoftware.org/ispack/6.7.1/innosetup-6.7.1.exe' -OutFile $innoInstaller
+            Start-Process -FilePath $innoInstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -NoNewWindow
+          }
+          $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw 'Inno Setup compiler was not found.' }
           & $iscc "/Qp" "/DMyAppVersion=$version" "/DArchitecture=${{ matrix.architecture }}" "installer\DevNav.iss"
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
           Copy-Item "release-assets/DevNavSetup-${{ matrix.architecture }}.exe" "DevNavSetup-${{ matrix.architecture }}.exe"
