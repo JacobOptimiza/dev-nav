@@ -42,7 +42,19 @@ jobs:
           $expectedInnoSha256 = '4D11E8050B6185E0D49BD9E8CC661A7A59F44959A621D31D11033124C4E8A7B0'
           $innoInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.1.exe'
           $innoRoot = Join-Path $env:RUNNER_TEMP 'InnoSetup-6.7.1'
-          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_1/innosetup-6.7.1.exe' -OutFile $innoInstaller
+          $downloadedInno = $false
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
+            try {
+              Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_1/innosetup-6.7.1.exe' -OutFile $innoInstaller -ErrorAction Stop
+              $downloadedInno = $true
+              break
+            }
+            catch {
+              if ($attempt -eq 5) { throw }
+              Start-Sleep -Seconds ([Math]::Min($attempt * 2, 10))
+            }
+          }
+          if (-not $downloadedInno) { throw 'Inno Setup download did not complete.' }
           $actualInnoSha256 = (Get-FileHash $innoInstaller -Algorithm SHA256).Hash
           if ($actualInnoSha256 -ne $expectedInnoSha256) { throw 'Inno Setup checksum mismatch.' }
           Start-Process -FilePath $innoInstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$innoRoot" -Wait -NoNewWindow

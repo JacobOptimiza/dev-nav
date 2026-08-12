@@ -3,6 +3,13 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.9.7] - 2026-08-12
+
+### Fixed
+
+- Retry transient failures while downloading the verified Inno Setup compiler in
+  the release workflow.
+
 ## [0.9.6] - 2026-08-12
 
 ### Fixed
