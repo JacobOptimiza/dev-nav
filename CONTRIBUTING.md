@@ -1,11 +1,11 @@
-# Repository policy
+# Contributing
 
-DevNav is published as a read-only source and binary distribution repository.
-Only repository administrators maintain the protected `main` branch. External
-Issues and Pull Requests are not accepted.
+Issues and focused Pull Requests are welcome. CI is required for every change;
+submission does not guarantee merge. The `main` branch is protected and changes
+must go through a Pull Request.
 
 You may inspect, clone, download, and fork the project under the terms of the MIT
-license. A fork is independent and does not grant write access to this repository.
+license. Please keep changes small, focused, and documented.
 
 Before proposing changes in a fork, run the same quality gates as CI:
 

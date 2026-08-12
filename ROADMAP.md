@@ -17,7 +17,8 @@ Goal: support a reliable, silent, per-user installation with:
 - [x] Preserve `%LOCALAPPDATA%\DevNav\config.tsv` during upgrades and uninstall.
 - [ ] Test fresh install, upgrade and uninstall in Windows Sandbox.
 - [x] Generate and validate WinGet manifests with pinned version URLs and SHA-256.
-- [ ] Submit `JacobOptimiza.DevNav` to `microsoft/winget-pkgs`.
+- [x] Submit `JacobOptimiza.DevNav` to `microsoft/winget-pkgs`.
+- [ ] Microsoft acceptance and catalog propagation.
 - [ ] Automate future WinGet update submissions from GitHub Actions.
 
 The release pipeline now builds the x64 and ARM64 installers and generates the
