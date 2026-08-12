@@ -69,8 +69,10 @@ dev
 The startup directory is the folder containing your repositories, or any folder
 you want DevNav to show on launch.
 
-1. Run `dev`. A fresh installation opens at `$HOME`.
-2. Navigate with `↑`, `↓`, and `→`. Press `p` to enter any absolute path or drive.
+1. Run `dev`. On the first interactive launch only, choose whether DevNav may
+   silently check for new releases at startup; this never installs without asking.
+2. A fresh installation opens at `$HOME`. Navigate with `↑`, `↓`, and `→`.
+   Press `p` to enter any absolute path or drive.
 3. Highlight the directory you want to use as your startup directory.
 4. Press `Ctrl+S`.
 5. Verify the full path and press `Enter`; press `Esc` to cancel.
@@ -126,6 +128,7 @@ Press `F1` at any time for the complete, scrollable help panel.
 | `i` / `Shift+I` | Kimi: new / last session |
 | `e` | Enter and run a command in the highlighted directory |
 | `u` | Refresh the current directory |
+| `Ctrl+U` | Enable or disable update checks at startup |
 | `Shift+U` | Check for and install a DevNav update |
 | `F1` | Open or close the shortcuts panel |
 | `q` / `Esc` | Exit or cancel |
@@ -145,6 +148,17 @@ version with the latest release, downloads only when needed, verifies checksums,
 and reports the result. The updater replaces only application files and preserves
 the separate local configuration.
 
+On the first interactive launch, DevNav asks once whether it may check GitHub for
+new releases at startup. This check never downloads or installs anything without
+an explicit confirmation. It stays silent when DevNav is current or the network
+is unavailable, and it is skipped in non-interactive sessions. Change the saved
+preference with `Ctrl+U` or from PowerShell:
+
+```powershell
+Set-DevUpdateCheck $true   # enable
+Set-DevUpdateCheck $false  # disable
+```
+
 ## Architecture
 
 - Rust 2024 with direct Win32 integration through `windows-sys`.
@@ -156,7 +170,7 @@ the separate local configuration.
 
 ## Security and privacy
 
-- No telemetry and no network access during normal navigation.
+- No telemetry. Network access is limited to the optional, consented release check and explicit updates.
 - Release binaries and the PowerShell module are verified with SHA-256.
 - Local configuration is excluded from the repository and preserved on updates.
 - GitHub Actions use minimal permissions and commit-pinned actions.

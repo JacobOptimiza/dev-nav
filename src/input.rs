@@ -26,6 +26,7 @@ pub enum Key {
     F1,
     CtrlC,
     CtrlS,
+    CtrlU,
     Resize,
     Char(char),
     Unknown,
@@ -70,6 +71,9 @@ fn map_key(event: windows_sys::Win32::System::Console::KEY_EVENT_RECORD) -> Key 
     }
     if control && event.wVirtualKeyCode == b'S' as u16 {
         return Key::CtrlS;
+    }
+    if control && event.wVirtualKeyCode == b'U' as u16 {
+        return Key::CtrlU;
     }
 
     match event.wVirtualKeyCode {
@@ -120,5 +124,13 @@ mod tests {
         event.dwControlKeyState = LEFT_CTRL_PRESSED;
 
         assert_eq!(map_key(event), Key::CtrlS);
+    }
+
+    #[test]
+    fn control_u_has_a_dedicated_shortcut() {
+        let mut event = key_event(b'U' as u16);
+        event.dwControlKeyState = LEFT_CTRL_PRESSED;
+
+        assert_eq!(map_key(event), Key::CtrlU);
     }
 }

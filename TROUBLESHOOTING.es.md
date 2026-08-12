@@ -185,6 +185,19 @@ Get-DevRoot
 
 ## Mantenimiento
 
+### Cambiar la comprobación al iniciar
+
+Pulsa `Ctrl+U` dentro de la TUI o establece la preferencia desde PowerShell:
+
+```powershell
+Set-DevUpdateCheck $true   # activar
+Set-DevUpdateCheck $false  # desactivar
+```
+
+DevNav sólo pregunta una vez cuando todavía no existe una preferencia. No muestra
+nada si la versión instalada ya es la última o falla la red, y nunca instala una
+actualización sin confirmación explícita.
+
 ### Actualización
 
 La instalación publicada se actualiza directamente con:

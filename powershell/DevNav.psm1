@@ -2,6 +2,103 @@ Set-StrictMode -Version Latest
 
 $script:DevNavRepository = 'JacobOptimiza/dev-nav'
 
+function Get-DevConfigPath {
+    return (Join-Path $env:LOCALAPPDATA 'DevNav\config.tsv')
+}
+
+function Get-DevConfigValue {
+    param([Parameter(Mandatory)][string] $Name)
+
+    $configPath = Get-DevConfigPath
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) { return $null }
+    $prefix = "$Name`t"
+    $line = Get-Content -LiteralPath $configPath | Where-Object { $_.StartsWith($prefix) } | Select-Object -First 1
+    if (-not $line) { return $null }
+    return $line.Substring($prefix.Length)
+}
+
+function Set-DevConfigValue {
+    param(
+        [Parameter(Mandatory)][string] $Name,
+        [Parameter(Mandatory)][string] $Value
+    )
+
+    $configPath = Get-DevConfigPath
+    $configDirectory = Split-Path -Parent $configPath
+    New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+    $prefix = "$Name`t"
+    $existingLines = if (Test-Path -LiteralPath $configPath) {
+        @(Get-Content -LiteralPath $configPath | Where-Object { -not $_.StartsWith($prefix) })
+    }
+    else {
+        @()
+    }
+    (@("$prefix$Value") + $existingLines) | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+}
+
+function Set-DevUpdateCheck {
+    [CmdletBinding()]
+    param([Parameter(Mandatory, Position = 0)][bool] $Enabled)
+
+    Set-DevConfigValue -Name 'check_updates' -Value $Enabled.ToString().ToLowerInvariant()
+    $state = if ($Enabled) { 'activada' } else { 'desactivada' }
+    Write-Host "Comprobación de actualizaciones al iniciar: $state." -ForegroundColor Green
+}
+
+function Get-DevInstalledVersion {
+    $versionOutput = (& (Get-DevExecutable) --version | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^dev-nav\s+(?<Version>\d+\.\d+\.\d+)$') {
+        throw 'No se pudo determinar la versión instalada de DevNav.'
+    }
+    return [version]$Matches.Version
+}
+
+function Get-DevLatestRelease {
+    param([ValidateRange(1, 120)][int] $TimeoutSeconds = 30)
+
+    return Invoke-RestMethod -Uri "https://api.github.com/repos/$script:DevNavRepository/releases/latest" -TimeoutSec $TimeoutSeconds -Headers @{
+        Accept       = 'application/vnd.github+json'
+        'User-Agent' = 'DevNav-Updater'
+    }
+}
+
+function Initialize-DevUpdateCheckPreference {
+    $saved = Get-DevConfigValue -Name 'check_updates'
+    if ($null -ne $saved) { return $saved -eq 'true' }
+    if ([Console]::IsInputRedirected) { return $false }
+
+    Write-Host 'DevNav puede comprobar en GitHub si existe una versión nueva al iniciar.' -ForegroundColor Cyan
+    Write-Host 'Sólo comprueba: nunca descarga ni instala sin tu confirmación explícita.'
+    $answer = (Read-Host '¿Mantener esta comprobación activada? [S/n]').Trim()
+    $enabled = $answer -notmatch '^(?i:n|no)$'
+    Set-DevConfigValue -Name 'check_updates' -Value $enabled.ToString().ToLowerInvariant()
+    return $enabled
+}
+
+function Invoke-DevStartupUpdateCheck {
+    if ([Console]::IsInputRedirected) { return }
+    if (-not (Initialize-DevUpdateCheckPreference)) { return }
+
+    try {
+        $installedVersion = Get-DevInstalledVersion
+        $release = Get-DevLatestRelease -TimeoutSeconds 5
+        $latestText = ([string]$release.tag_name).TrimStart('v')
+        $latestVersion = [version]$latestText
+    }
+    catch {
+        # The optional startup check must never block normal navigation.
+        return
+    }
+
+    if ($latestVersion -le $installedVersion) { return }
+    Write-Host "Nueva versión disponible: v$installedVersion → v$latestVersion" -ForegroundColor Yellow
+    $answer = (Read-Host '¿Quieres actualizar ahora? [s/N]').Trim()
+    if ($answer -match '^(?i:s|si|sí|y|yes)$') {
+        # An explicitly requested update reports failures instead of hiding them.
+        Update-DevNavigator
+    }
+}
+
 function Get-DevExecutable {
     $installedExecutable = Join-Path $PSScriptRoot 'dev.exe'
     $developmentExecutable = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\target\release\dev.exe'))
@@ -22,22 +119,12 @@ function Update-DevNavigator {
     param()
 
     $ErrorActionPreference = 'Stop'
-    $executable = Get-DevExecutable
-    $versionOutput = (& $executable --version | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^dev-nav\s+(?<Version>\d+\.\d+\.\d+)$') {
-        throw 'No se pudo determinar la versión instalada de DevNav.'
-    }
-
-    $currentText = $Matches.Version
-    $releaseUri = "https://api.github.com/repos/$script:DevNavRepository/releases/latest"
+    $currentVersion = Get-DevInstalledVersion
+    $currentText = $currentVersion.ToString()
     Write-Host "Versión instalada: v$currentText"
     Write-Host 'Comprobando la última versión publicada...'
-    $release = Invoke-RestMethod -Uri $releaseUri -Headers @{
-        Accept       = 'application/vnd.github+json'
-        'User-Agent' = 'DevNav-Updater'
-    }
+    $release = Get-DevLatestRelease
     $latestText = ([string]$release.tag_name).TrimStart('v')
-    $currentVersion = [version]$currentText
     $latestVersion = [version]$latestText
     Write-Host "Última publicada: v$latestText"
 
@@ -119,6 +206,7 @@ function Invoke-DevNavigator {
         Update-DevNavigator
         return
     }
+    Invoke-DevStartupUpdateCheck
     $executable = Get-DevExecutable
 
     $resultFile = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.result" -f [guid]::NewGuid().ToString('N'))
@@ -149,13 +237,9 @@ function Invoke-DevNavigator {
 }
 
 function Get-DevRoot {
-    $configPath = Join-Path $env:LOCALAPPDATA 'DevNav\config.tsv'
-    if (Test-Path -LiteralPath $configPath -PathType Leaf) {
-        $rootLine = Get-Content -LiteralPath $configPath | Where-Object { $_.StartsWith("root`t") } | Select-Object -First 1
-        if ($rootLine) {
-            $encodedRoot = $rootLine.Substring(5)
-            return $encodedRoot.Replace('%0A', "`n").Replace('%09', "`t").Replace('%25', '%')
-        }
+    $encodedRoot = Get-DevConfigValue -Name 'root'
+    if ($null -ne $encodedRoot) {
+        return $encodedRoot.Replace('%0A', "`n").Replace('%09', "`t").Replace('%25', '%')
     }
     if ($env:DEV_HOME) { return $env:DEV_HOME }
     return $HOME
@@ -173,18 +257,9 @@ function Set-DevRoot {
         throw "La ruta no es una carpeta: $resolvedRoot"
     }
     $encodedRoot = $resolvedRoot.Replace('%', '%25').Replace("`t", '%09').Replace("`n", '%0A')
-    $configPath = Join-Path $env:LOCALAPPDATA 'DevNav\config.tsv'
-    $configDirectory = Split-Path -Parent $configPath
-    New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
-    $existingLines = if (Test-Path -LiteralPath $configPath) {
-        @(Get-Content -LiteralPath $configPath | Where-Object { -not $_.StartsWith("root`t") })
-    }
-    else {
-        @()
-    }
-    (@("root`t$encodedRoot") + $existingLines) | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+    Set-DevConfigValue -Name 'root' -Value $encodedRoot
     Write-Host "Ruta de inicio guardada: $resolvedRoot" -ForegroundColor Green
 }
 
 Set-Alias -Name dev -Value Invoke-DevNavigator -Scope Global
-Export-ModuleMember -Function Invoke-DevNavigator, Update-DevNavigator, Get-DevRoot, Set-DevRoot -Alias dev
+Export-ModuleMember -Function Invoke-DevNavigator, Update-DevNavigator, Get-DevRoot, Set-DevRoot, Set-DevUpdateCheck -Alias dev

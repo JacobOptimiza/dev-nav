@@ -67,9 +67,12 @@ La **ruta de inicio** es la carpeta que contiene tus repositorios o aquella que
 quieres ver cada vez que ejecutas `dev`. La forma recomendada de configurarla no
 requiere comandos ni editar archivos:
 
-1. Ejecuta `dev`. En el primer inicio se abrirá `$HOME`.
-2. Navega con `↑`, `↓` y `→`. Para ir directamente a otra ruta o unidad, pulsa
-   `p`, escribe la ruta deseada y confirma con `Enter`.
+1. Ejecuta `dev`. Sólo en el primer inicio interactivo, elige si DevNav puede
+   comprobar silenciosamente si hay nuevas versiones al arrancar; nunca instala
+   nada sin preguntarte.
+2. Una instalación nueva se abre en `$HOME`. Navega con `↑`, `↓` y `→`. Para ir
+   directamente a otra ruta o unidad, pulsa `p`, escribe la ruta deseada y
+   confirma con `Enter`.
 3. Resalta la carpeta que quieres utilizar como inicio.
 4. Pulsa `Ctrl+S` (**guardar como ruta de inicio**).
 5. Revisa la ruta mostrada y pulsa `Enter` para confirmar o `Esc` para cancelar.
@@ -120,6 +123,17 @@ verifica ambos con SHA-256, los instala y confirma la versión actualizada.
 La actualización sólo sustituye `dev.exe` y `DevNav.psm1`: nunca elimina ni
 sobrescribe `%LOCALAPPDATA%\DevNav\config.tsv`, donde se conservan la ruta de
 inicio, los favoritos y los alias.
+
+En el primer inicio interactivo, DevNav pregunta una sola vez si puede comprobar
+en GitHub si hay nuevas versiones al arrancar. Esta comprobación nunca descarga
+ni instala nada sin una confirmación explícita. No muestra nada si ya tienes la
+última versión o falla la red, y se omite en sesiones no interactivas. Puedes
+cambiar la preferencia guardada con `Ctrl+U` o desde PowerShell:
+
+```powershell
+Set-DevUpdateCheck $true   # activar
+Set-DevUpdateCheck $false  # desactivar
+```
 
 ### Compilar desde el código fuente
 
@@ -199,6 +213,7 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 | `a` | editar el alias de la carpeta resaltada |
 | `e` | escribir y ejecutar un comando en la carpeta resaltada |
 | `u` | refrescar el directorio mostrado |
+| `Ctrl+U` | activar o desactivar la comprobación de actualizaciones al iniciar |
 | `Shift+U` | comprobar y actualizar DevNav a la última versión publicada |
 | `q` / `Esc` | cancelar y volver a PowerShell |
 
@@ -231,7 +246,7 @@ quieras abrir.
 
 ## Seguridad y privacidad
 
-- Sin telemetría ni red durante la ejecución normal.
+- Sin telemetría. La red sólo se usa para la comprobación opcional consentida y las actualizaciones explícitas.
 - Sin credenciales, secretos o configuración personal en el repositorio.
 - La configuración local está separada de los archivos reemplazados al actualizar.
 - Binarios de release con checksum SHA-256.
@@ -302,6 +317,13 @@ Ejecuta `dev update` desde PowerShell o pulsa `Shift+U` dentro de la TUI. Ambas
 opciones comprueban la release más reciente y solo descargan e instalan archivos
 si existe una versión nueva.
 [Ver pasos](TROUBLESHOOTING.es.md#actualización).
+
+### ¿Cómo desactivo o vuelvo a activar la comprobación al iniciar?
+
+Pulsa `Ctrl+U` dentro de la TUI. También puedes usar
+`Set-DevUpdateCheck $false` o `Set-DevUpdateCheck $true` desde PowerShell. Esta
+preferencia se conserva al actualizar.
+[Ver detalles](TROUBLESHOOTING.es.md#cambiar-la-comprobación-al-iniciar).
 
 ## Licencia
 

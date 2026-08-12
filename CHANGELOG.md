@@ -3,6 +3,19 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.8.0] - 2026-08-12
+
+### Added
+
+- Ask once, on the first interactive launch, whether DevNav may check GitHub for new releases at startup.
+- Add `Ctrl+U` and `Set-DevUpdateCheck` to enable or disable startup checks at any time.
+
+### Changed
+
+- Keep startup checks silent when DevNav is current or the network is unavailable.
+- Always require explicit confirmation before downloading or installing an update.
+- Skip the startup prompt and network check in non-interactive sessions.
+
 ## [0.7.0] - 2026-08-12
 
 ### Added

@@ -248,6 +248,7 @@ impl App {
                 self.message = "Directorio actualizado".into();
             }
             Key::Char('U') => return Ok(Some(Some(ShellResult::Update))),
+            Key::CtrlU => self.toggle_update_checks()?,
             Key::Char('/') => {
                 self.input.clear();
                 self.mode = Mode::Filter;
@@ -412,6 +413,18 @@ impl App {
             "Favoritos globales visibles"
         } else {
             "Favoritos globales ocultos"
+        }
+        .into();
+        Ok(())
+    }
+
+    fn toggle_update_checks(&mut self) -> io::Result<()> {
+        let enabled = self.config.toggle_update_checks();
+        self.config.save(&self.config_path)?;
+        self.message = if enabled {
+            "Comprobación de actualizaciones al iniciar: activada"
+        } else {
+            "Comprobación de actualizaciones al iniciar: desactivada"
         }
         .into();
         Ok(())
@@ -590,6 +603,7 @@ const HELP_LINES: &[HelpLine] = &[
     HelpLine::Shortcut("Mayús+F", "Mostrar u ocultar los favoritos globales"),
     HelpLine::Shortcut("a", "Crear o editar el alias de la carpeta"),
     HelpLine::Shortcut("u", "Actualizar el directorio actual"),
+    HelpLine::Shortcut("Ctrl+U", "Activar o desactivar comprobación al iniciar"),
     HelpLine::Shortcut("Mayús+U", "Actualizar DevNav a la última versión"),
     HelpLine::Blank,
     HelpLine::Section("AGENTES EN EL REPOSITORIO"),

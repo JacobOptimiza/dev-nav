@@ -161,6 +161,21 @@ Get-DevRoot
 
 ## Updates
 
+### Change the startup-check preference
+
+Press `Ctrl+U` inside the TUI, or set it explicitly from PowerShell:
+
+```powershell
+Set-DevUpdateCheck $true   # enable
+Set-DevUpdateCheck $false  # disable
+```
+
+DevNav asks only once when no preference exists. The check is silent when the
+installed version is current or the network is unavailable, and no update is
+installed without explicit confirmation.
+
+### Install an update manually
+
 Run:
 
 ```powershell

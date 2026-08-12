@@ -8,6 +8,7 @@ use std::{
 pub struct Config {
     root: Option<PathBuf>,
     show_favorites: bool,
+    check_updates: Option<bool>,
     favorites: HashSet<PathBuf>,
     aliases: HashMap<PathBuf, String>,
 }
@@ -35,6 +36,9 @@ impl Config {
                 }
                 (Some("show_favorites"), Some(value), _) => {
                     config.show_favorites = value != "false";
+                }
+                (Some("check_updates"), Some(value), _) => {
+                    config.check_updates = Some(value == "true");
                 }
                 (Some("favorite"), Some(path), _) => {
                     config.favorites.insert(PathBuf::from(decode(path)));
@@ -68,6 +72,11 @@ impl Config {
         output.push_str("show_favorites\t");
         output.push_str(if self.show_favorites { "true" } else { "false" });
         output.push('\n');
+        if let Some(check_updates) = self.check_updates {
+            output.push_str("check_updates\t");
+            output.push_str(if check_updates { "true" } else { "false" });
+            output.push('\n');
+        }
         for favorite in favorites {
             output.push_str("favorite\t");
             output.push_str(&encode(&favorite.to_string_lossy()));
@@ -104,6 +113,17 @@ impl Config {
         self.show_favorites
     }
 
+    #[cfg(test)]
+    pub fn check_updates(&self) -> Option<bool> {
+        self.check_updates
+    }
+
+    pub fn toggle_update_checks(&mut self) -> bool {
+        let enabled = !self.check_updates.unwrap_or(true);
+        self.check_updates = Some(enabled);
+        enabled
+    }
+
     pub fn favorite_paths(&self) -> impl Iterator<Item = &Path> {
         self.favorites.iter().map(PathBuf::as_path)
     }
@@ -135,6 +155,7 @@ impl Default for Config {
         Self {
             root: None,
             show_favorites: true,
+            check_updates: None,
             favorites: HashSet::new(),
             aliases: HashMap::new(),
         }
@@ -205,6 +226,28 @@ mod tests {
             !Config::load(&config_path)
                 .expect("load config")
                 .show_favorites()
+        );
+        fs::remove_file(config_path).expect("remove config");
+    }
+
+    #[test]
+    fn update_check_consent_is_unset_until_answered_and_then_persists() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let config_path = std::env::temp_dir().join(format!("devnav-consent-{unique}.tsv"));
+        let mut config = Config::default();
+        assert_eq!(config.check_updates(), None);
+
+        assert!(!config.toggle_update_checks());
+        config.save(&config_path).expect("save config");
+
+        assert_eq!(
+            Config::load(&config_path)
+                .expect("load config")
+                .check_updates(),
+            Some(false)
         );
         fs::remove_file(config_path).expect("remove config");
     }
