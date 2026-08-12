@@ -278,6 +278,9 @@ licencias, advisories, registros y versiones duplicadas de dependencias se
 comprueban con `cargo-deny` mediante [deny.toml](deny.toml). CI ejecuta todos
 estos controles.
 
+Consulta el [roadmap público](ROADMAP.md) para conocer el trabajo de distribución
+planificado.
+
 ## FAQ
 
 Las respuestas rápidas están aquí. Los comandos de diagnóstico y los pasos

@@ -206,12 +206,7 @@ gates use the native parser, PSScriptAnalyzer 1.25.0 and Pester 6.1.0. Dependenc
 licenses, advisories, registries and duplicate versions are checked by
 `cargo-deny` using [deny.toml](deny.toml). CI runs all of these checks.
 
-## Distribution roadmap
-
-A WinGet package is planned. WinGet supports portable packages, but DevNav also
-requires its PowerShell module and profile integration, so the first submission
-will follow after a non-interactive installer package can be validated in Windows
-Sandbox without reducing the current installation guarantees.
+See the public [roadmap](ROADMAP.md) for planned distribution work.
 
 ## License
 
