@@ -45,7 +45,9 @@ Describe 'DevNav PowerShell module' {
 Describe 'DevNav updater lifecycle' {
     BeforeAll {
         $sourceRoot = Join-Path $testLocalAppData 'update-source'
+        $fixtureRoot = Join-Path $testLocalAppData 'update-fixture'
         New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
+        New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
         cargo build --quiet --manifest-path (Join-Path $repositoryRoot 'Cargo.toml')
         $sourceBinary = Join-Path $repositoryRoot 'target\debug\dev.exe'
         Copy-Item -LiteralPath $sourceBinary -Destination (Join-Path $sourceRoot 'dev-windows-x86_64.exe') -Force
@@ -53,6 +55,7 @@ Describe 'DevNav updater lifecycle' {
         $binaryHash = (Get-FileHash (Join-Path $sourceRoot 'dev-windows-x86_64.exe') -Algorithm SHA256).Hash
         $moduleHash = (Get-FileHash (Join-Path $sourceRoot 'DevNav.psm1') -Algorithm SHA256).Hash
         "$binaryHash  dev-windows-x86_64.exe`n$moduleHash  DevNav.psm1" | Set-Content (Join-Path $sourceRoot 'SHA256SUMS.txt')
+        Copy-Item (Join-Path $sourceRoot '*') $fixtureRoot -Force
         $release = [pscustomobject]@{
             tag_name = 'v0.9.5'
             assets = @(
@@ -66,6 +69,9 @@ Describe 'DevNav updater lifecycle' {
     }
 
     BeforeEach {
+        Remove-Item -LiteralPath $sourceRoot -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
+        Copy-Item (Join-Path $fixtureRoot '*') $sourceRoot -Force
         $installRoot = Join-Path $testLocalAppData 'Programs\DevNav'
         Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
         New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
