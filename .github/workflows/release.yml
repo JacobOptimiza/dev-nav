@@ -28,6 +28,7 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - run: cargo build --release --target ${{ matrix.target }}
+      - run: cargo test --target ${{ matrix.target }}
       - shell: pwsh
         run: Copy-Item "target/${{ matrix.target }}/release/dev.exe" "${{ matrix.asset }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

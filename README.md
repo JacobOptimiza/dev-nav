@@ -192,11 +192,19 @@ Set-Location dev-nav
 Development checks:
 
 ```powershell
-cargo fmt -- --check
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo build --release
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo deny check
+./scripts/validate-powershell.ps1
+Invoke-Pester -Path ./tests/powershell
 ```
+
+The repository pins Rust 1.97.1 with `rustfmt` and `clippy`. PowerShell quality
+gates use the native parser, PSScriptAnalyzer 1.25.0 and Pester 6.1.0. Dependency
+licenses, advisories, registries and duplicate versions are checked by
+`cargo-deny` using [deny.toml](deny.toml). CI runs all of these checks.
 
 ## Distribution roadmap
 

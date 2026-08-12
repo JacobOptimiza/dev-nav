@@ -6,9 +6,7 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new() -> Self {
-        Self {
-            previous: Vec::new(),
-        }
+        Self { previous: Vec::new() }
     }
 
     pub fn draw(&mut self, rows: Vec<String>) -> io::Result<()> {

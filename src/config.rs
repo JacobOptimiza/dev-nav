@@ -15,11 +15,9 @@ pub struct Config {
 
 impl Config {
     pub fn default_path() -> io::Result<PathBuf> {
-        let base = env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .ok_or_else(|| {
-                io::Error::new(io::ErrorKind::NotFound, "LOCALAPPDATA no está definido")
-            })?;
+        let base = env::var_os("LOCALAPPDATA").map(PathBuf::from).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "LOCALAPPDATA no está definido")
+        })?;
         Ok(base.join("DevNav").join("config.tsv"))
     }
 
@@ -44,9 +42,7 @@ impl Config {
                     config.favorites.insert(PathBuf::from(decode(path)));
                 }
                 (Some("alias"), Some(path), Some(alias)) => {
-                    config
-                        .aliases
-                        .insert(PathBuf::from(decode(path)), decode(alias));
+                    config.aliases.insert(PathBuf::from(decode(path)), decode(alias));
                 }
                 _ => {}
             }
@@ -163,17 +159,11 @@ impl Default for Config {
 }
 
 fn encode(value: &str) -> String {
-    value
-        .replace('%', "%25")
-        .replace('\t', "%09")
-        .replace('\n', "%0A")
+    value.replace('%', "%25").replace('\t', "%09").replace('\n', "%0A")
 }
 
 fn decode(value: &str) -> String {
-    value
-        .replace("%0A", "\n")
-        .replace("%09", "\t")
-        .replace("%25", "%")
+    value.replace("%0A", "\n").replace("%09", "\t").replace("%25", "%")
 }
 
 #[cfg(test)]
@@ -193,10 +183,7 @@ mod tests {
 
     #[test]
     fn startup_root_is_persisted_with_the_rest_of_the_config() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos();
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
         let config_path = std::env::temp_dir().join(format!("devnav-config-{unique}.tsv"));
         let root = std::env::temp_dir().join("repositorios");
         let mut config = Config::default();
@@ -211,10 +198,7 @@ mod tests {
 
     #[test]
     fn favorites_are_visible_by_default_and_the_preference_persists() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos();
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
         let config_path = std::env::temp_dir().join(format!("devnav-visibility-{unique}.tsv"));
         let mut config = Config::default();
         assert!(config.show_favorites());
@@ -222,20 +206,13 @@ mod tests {
         assert!(!config.toggle_favorites_visibility());
         config.save(&config_path).expect("save config");
 
-        assert!(
-            !Config::load(&config_path)
-                .expect("load config")
-                .show_favorites()
-        );
+        assert!(!Config::load(&config_path).expect("load config").show_favorites());
         fs::remove_file(config_path).expect("remove config");
     }
 
     #[test]
     fn update_check_consent_is_unset_until_answered_and_then_persists() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos();
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
         let config_path = std::env::temp_dir().join(format!("devnav-consent-{unique}.tsv"));
         let mut config = Config::default();
         assert_eq!(config.check_updates(), None);
@@ -243,12 +220,7 @@ mod tests {
         assert!(!config.toggle_update_checks());
         config.save(&config_path).expect("save config");
 
-        assert_eq!(
-            Config::load(&config_path)
-                .expect("load config")
-                .check_updates(),
-            Some(false)
-        );
+        assert_eq!(Config::load(&config_path).expect("load config").check_updates(), Some(false));
         fs::remove_file(config_path).expect("remove config");
     }
 }

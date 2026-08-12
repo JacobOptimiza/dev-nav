@@ -50,12 +50,7 @@ impl Terminal {
 
             print!("\x1b[?1049h\x1b[?25l\x1b[2J");
             io::stdout().flush()?;
-            Ok(Self {
-                input,
-                output,
-                original_input_mode,
-                original_output_mode,
-            })
+            Ok(Self { input, output, original_input_mode, original_output_mode })
         }
     }
 
@@ -93,9 +88,5 @@ fn validate_handle(handle: HANDLE) -> io::Result<()> {
 }
 
 fn win32(success: i32) -> io::Result<()> {
-    if success == 0 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
+    if success == 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
 }

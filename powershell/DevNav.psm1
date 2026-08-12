@@ -18,12 +18,14 @@ function Get-DevConfigValue {
 }
 
 function Set-DevConfigValue {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string] $Name,
         [Parameter(Mandatory)][string] $Value
     )
 
     $configPath = Get-DevConfigPath
+    if (-not $PSCmdlet.ShouldProcess($configPath, "Set configuration value '$Name'")) { return }
     $configDirectory = Split-Path -Parent $configPath
     New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
     $prefix = "$Name`t"
@@ -37,9 +39,11 @@ function Set-DevConfigValue {
 }
 
 function Set-DevUpdateCheck {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([void])]
     param([Parameter(Mandatory, Position = 0)][bool] $Enabled)
 
+    if (-not $PSCmdlet.ShouldProcess('DevNav local configuration', 'Change startup update checks')) { return }
     Set-DevConfigValue -Name 'check_updates' -Value $Enabled.ToString().ToLowerInvariant()
     $state = if ($Enabled) { 'activada' } else { 'desactivada' }
     Write-Host "Comprobación de actualizaciones al iniciar: $state." -ForegroundColor Green
@@ -115,10 +119,11 @@ function Get-DevExecutable {
 }
 
 function Update-DevNavigator {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param()
 
     $ErrorActionPreference = 'Stop'
+    if (-not $PSCmdlet.ShouldProcess('DevNav installation', 'Download and install the selected release')) { return }
     $currentVersion = Get-DevInstalledVersion
     $currentText = $currentVersion.ToString()
     Write-Host "Versión instalada: v$currentText"
@@ -246,7 +251,7 @@ function Get-DevRoot {
 }
 
 function Set-DevRoot {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory, Position = 0)]
         [string] $Path
@@ -256,6 +261,7 @@ function Set-DevRoot {
     if (-not (Test-Path -LiteralPath $resolvedRoot -PathType Container)) {
         throw "La ruta no es una carpeta: $resolvedRoot"
     }
+    if (-not $PSCmdlet.ShouldProcess($resolvedRoot, 'Save as DevNav startup directory')) { return }
     $encodedRoot = $resolvedRoot.Replace('%', '%25').Replace("`t", '%09').Replace("`n", '%0A')
     Set-DevConfigValue -Name 'root' -Value $encodedRoot
     Write-Host "Ruta de inicio guardada: $resolvedRoot" -ForegroundColor Green

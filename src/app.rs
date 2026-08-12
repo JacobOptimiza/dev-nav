@@ -184,10 +184,7 @@ impl App {
                     }
                     Key::Enter if !self.input.trim().is_empty() => {
                         let command = self.input.trim().to_owned();
-                        Ok(Some(Some(ShellResult::Execute {
-                            directory: target,
-                            command,
-                        })))
+                        Ok(Some(Some(ShellResult::Execute { directory: target, command })))
                     }
                     Key::Backspace => {
                         self.input.pop();
@@ -235,9 +232,7 @@ impl App {
                 }
             }
             Key::Char('.') => {
-                return Ok(Some(Some(ShellResult::ChangeDirectory(
-                    self.current.clone(),
-                ))));
+                return Ok(Some(Some(ShellResult::ChangeDirectory(self.current.clone()))));
             }
             Key::Char('g') => {
                 self.current = self.home.clone();
@@ -314,11 +309,10 @@ impl App {
             }
         }
         entries.sort_by(|left, right| {
-            right.favorite.cmp(&left.favorite).then_with(|| {
-                left.label()
-                    .to_lowercase()
-                    .cmp(&right.label().to_lowercase())
-            })
+            right
+                .favorite
+                .cmp(&left.favorite)
+                .then_with(|| left.label().to_lowercase().cmp(&right.label().to_lowercase()))
         });
         self.entries = entries;
         self.input.clear();
@@ -341,9 +335,7 @@ impl App {
         if !query.is_empty() {
             scored.sort_by(|(left_index, left_score), (right_index, right_score)| {
                 right_score.cmp(left_score).then_with(|| {
-                    self.entries[*left_index]
-                        .label()
-                        .cmp(&self.entries[*right_index].label())
+                    self.entries[*left_index].label().cmp(&self.entries[*right_index].label())
                 })
             });
         }
@@ -353,19 +345,14 @@ impl App {
     }
 
     fn selected_entry(&self) -> Option<&DirectoryEntry> {
-        self.visible
-            .get(self.selected)
-            .and_then(|index| self.entries.get(*index))
+        self.visible.get(self.selected).and_then(|index| self.entries.get(*index))
     }
 
     fn move_selection(&mut self, delta: isize) {
         if self.visible.is_empty() {
             return;
         }
-        self.selected = self
-            .selected
-            .saturating_add_signed(delta)
-            .min(self.visible.len() - 1);
+        self.selected = self.selected.saturating_add_signed(delta).min(self.visible.len() - 1);
     }
 
     fn open_selected(&mut self) -> io::Result<()> {
@@ -393,12 +380,8 @@ impl App {
             let enabled = self.config.toggle_favorite(&path);
             self.config.save(&self.config_path)?;
             self.refresh()?;
-            self.message = if enabled {
-                "Añadido a favoritos"
-            } else {
-                "Eliminado de favoritos"
-            }
-            .into();
+            self.message =
+                if enabled { "Añadido a favoritos" } else { "Eliminado de favoritos" }.into();
         }
         Ok(())
     }
@@ -409,12 +392,9 @@ impl App {
         self.selected = 0;
         self.scroll = 0;
         self.refresh()?;
-        self.message = if visible {
-            "Favoritos globales visibles"
-        } else {
-            "Favoritos globales ocultos"
-        }
-        .into();
+        self.message =
+            if visible { "Favoritos globales visibles" } else { "Favoritos globales ocultos" }
+                .into();
         Ok(())
     }
 
@@ -507,10 +487,7 @@ impl App {
             "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
             fit(list_header, inner)
         ));
-        rows.push(format!(
-            "\x1b[38;2;90;100;120m├{}┤\x1b[0m",
-            "─".repeat(width.saturating_sub(2))
-        ));
+        rows.push(format!("\x1b[38;2;90;100;120m├{}┤\x1b[0m", "─".repeat(width.saturating_sub(2))));
 
         let help_layout = matches!(self.mode, Mode::Help)
             .then(|| HelpLayout::new(inner, list_height, &mut self.help_scroll));
@@ -522,11 +499,7 @@ impl App {
                 if let Some(entry_index) = self.visible.get(visible_index) {
                     let entry = &self.entries[*entry_index];
                     let marker = if entry.favorite { "★" } else { " " };
-                    let prefix = if visible_index == self.selected {
-                        "›"
-                    } else {
-                        " "
-                    };
+                    let prefix = if visible_index == self.selected { "›" } else { " " };
                     let label = format!("{prefix} {marker}  {}", entry.label());
                     if visible_index == self.selected {
                         format!(
@@ -545,10 +518,7 @@ impl App {
             ));
         }
 
-        rows.push(format!(
-            "\x1b[38;2;90;100;120m├{}┤\x1b[0m",
-            "─".repeat(width.saturating_sub(2))
-        ));
+        rows.push(format!("\x1b[38;2;90;100;120m├{}┤\x1b[0m", "─".repeat(width.saturating_sub(2))));
         let prompt = match self.mode {
             Mode::Normal => {
                 if self.message.is_empty() {
@@ -633,12 +603,7 @@ impl HelpLayout {
         let capacity = height.saturating_sub(2);
         let max_scroll = HELP_LINES.len().saturating_sub(capacity);
         *scroll = (*scroll).min(max_scroll);
-        Self {
-            width,
-            height,
-            top: list_height.saturating_sub(height) / 2,
-            start: *scroll,
-        }
+        Self { width, height, top: list_height.saturating_sub(height) / 2, start: *scroll }
     }
 
     fn render_row(&self, row: usize, outer_width: usize) -> String {
@@ -652,10 +617,7 @@ impl HelpLayout {
             panel_border(self.width, "↑↓ DESPLAZAR  ·  F1 / ESC CERRAR", false)
         } else {
             render_help_line(
-                HELP_LINES
-                    .get(self.start + local - 1)
-                    .copied()
-                    .unwrap_or(HelpLine::Blank),
+                HELP_LINES.get(self.start + local - 1).copied().unwrap_or(HelpLine::Blank),
                 self.width,
             )
         };
@@ -690,23 +652,14 @@ fn render_help_line(line: HelpLine, width: usize) -> String {
 
 fn panel_border(width: usize, label: &str, top: bool) -> String {
     let (left, right) = if top { ('╭', '╮') } else { ('╰', '╯') };
-    let label = label
-        .chars()
-        .take(width.saturating_sub(5))
-        .collect::<String>();
+    let label = label.chars().take(width.saturating_sub(5)).collect::<String>();
     let prefix = format!("{left}─ {label} ");
     let fill = width.saturating_sub(prefix.chars().count() + 1);
-    format!(
-        "\x1b[38;2;116;199;236m{prefix}{}{right}\x1b[0m",
-        "─".repeat(fill)
-    )
+    format!("\x1b[38;2;116;199;236m{prefix}{}{right}\x1b[0m", "─".repeat(fill))
 }
 
 fn shortcut_count() -> usize {
-    HELP_LINES
-        .iter()
-        .filter(|line| matches!(line, HelpLine::Shortcut(_, _)))
-        .count()
+    HELP_LINES.iter().filter(|line| matches!(line, HelpLine::Shortcut(_, _))).count()
 }
 
 fn footer_help(mode: &Mode) -> &'static str {
@@ -750,9 +703,8 @@ fn fuzzy_score(candidate: &str, query: &str) -> Option<i32> {
     let mut cursor = 0;
     let mut previous = None;
     for wanted in query.chars() {
-        let found = candidate[cursor..]
-            .char_indices()
-            .find(|(_, character)| *character == wanted)?;
+        let found =
+            candidate[cursor..].char_indices().find(|(_, character)| *character == wanted)?;
         let absolute = cursor + found.0;
         score += 20;
         if previous == Some(absolute.saturating_sub(1)) {
@@ -824,20 +776,14 @@ mod tests {
     #[test]
     fn top_border_uses_the_full_terminal_width() {
         let width = 120_usize;
-        let border = format!(
-            "╭─ DEV {}─╮",
-            fit("C:\\Users\\Example", width.saturating_sub(9))
-        );
+        let border = format!("╭─ DEV {}─╮", fit("C:\\Users\\Example", width.saturating_sub(9)));
 
         assert_eq!(border.chars().count(), width);
     }
 
     #[test]
     fn every_global_favorite_is_injected_including_the_current_directory() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos();
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
         let sandbox = std::env::temp_dir().join(format!("devnav-test-{unique}"));
         let root = sandbox.join("root");
         let external_one = sandbox.join("external-one");
@@ -867,10 +813,7 @@ mod tests {
 
     #[test]
     fn hidden_global_favorites_do_not_remove_real_child_directories() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos();
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
         let sandbox = std::env::temp_dir().join(format!("devnav-hidden-test-{unique}"));
         let root = sandbox.join("root");
         let child = root.join("favorite-child");
@@ -891,10 +834,7 @@ mod tests {
 
     #[test]
     fn control_s_requires_confirmation_before_saving_the_highlighted_root() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos();
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
         let sandbox = std::env::temp_dir().join(format!("devnav-root-test-{unique}"));
         let initial_root = sandbox.join("home");
         let selected_root = initial_root.join("repositorios");
@@ -908,18 +848,11 @@ mod tests {
             &app.mode,
             Mode::ConfirmRoot { target } if target == &selected_root
         ));
-        assert!(
-            Config::load(&config_path)
-                .expect("load unsaved config")
-                .root()
-                .is_none()
-        );
+        assert!(Config::load(&config_path).expect("load unsaved config").root().is_none());
 
         app.handle_key(Key::Enter).expect("confirm root");
         assert_eq!(
-            Config::load(&config_path)
-                .expect("load saved config")
-                .root(),
+            Config::load(&config_path).expect("load saved config").root(),
             Some(selected_root.as_path())
         );
         fs::remove_dir_all(sandbox).expect("clean test sandbox");

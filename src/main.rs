@@ -58,9 +58,7 @@ fn run() -> io::Result<()> {
 }
 
 fn argument_value(args: &[String], name: &str) -> Option<String> {
-    args.windows(2)
-        .find(|pair| pair[0] == name)
-        .map(|pair| pair[1].clone())
+    args.windows(2).find(|pair| pair[0] == name).map(|pair| pair[1].clone())
 }
 
 fn default_root() -> Option<PathBuf> {

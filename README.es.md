@@ -263,11 +263,20 @@ repositorio.
 ## Desarrollo
 
 ```powershell
-cargo fmt -- --check
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo build --release
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo deny check
+./scripts/validate-powershell.ps1
+Invoke-Pester -Path ./tests/powershell
 ```
+
+El repositorio fija Rust 1.97.1 con `rustfmt` y `clippy`. Los controles de
+PowerShell usan el parser nativo, PSScriptAnalyzer 1.25.0 y Pester 6.1.0. Las
+licencias, advisories, registros y versiones duplicadas de dependencias se
+comprueban con `cargo-deny` mediante [deny.toml](deny.toml). CI ejecuta todos
+estos controles.
 
 ## FAQ
 

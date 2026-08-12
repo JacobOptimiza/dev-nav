@@ -3,6 +3,21 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.8.1] - 2026-08-12
+
+### Added
+
+- Pin the supported Rust toolchain to 1.97.1 and enforce workspace format, check,
+  test and Clippy quality gates.
+- Add PowerShell parser validation, PSScriptAnalyzer 1.25.0 and Pester 6.1.0
+  checks to CI.
+- Add `cargo-deny` policy checks for advisories, licenses, sources and bans.
+
+### Changed
+
+- Add `-WhatIf` and `-Confirm` support to state-changing PowerShell commands.
+- Document the complete local quality-gate commands for contributors.
+
 ## [0.8.0] - 2026-08-12
 
 ### Added
