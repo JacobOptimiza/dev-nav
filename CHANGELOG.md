@@ -3,6 +3,20 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.9.0] - 2026-08-12
+
+### Added
+
+- Build per-user `DevNavSetup-x64.exe` and `DevNavSetup-arm64.exe` installers
+  with silent install, upgrade and uninstall support.
+- Add marker-based PowerShell profile integration that can be removed without
+  touching unrelated profile content.
+- Generate version-pinned WinGet manifests with release SHA-256 values.
+
+### Changed
+
+- Preserve `%LOCALAPPDATA%\DevNav\config.tsv` when uninstalling application files.
+
 ## [0.8.1] - 2026-08-12
 
 ### Added

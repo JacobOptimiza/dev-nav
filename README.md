@@ -44,6 +44,11 @@ Run this in PowerShell 7:
 irm https://raw.githubusercontent.com/JacobOptimiza/dev-nav/main/install.ps1 | iex
 ```
 
+WinGet distribution is being prepared as a separate, silent per-user installer.
+Until `JacobOptimiza.DevNav` is accepted in the community source, use the
+PowerShell installer above; `winget install JacobOptimiza.DevNav` is not yet
+available.
+
 The installer detects the architecture, downloads `dev.exe` and its PowerShell
 module from the latest GitHub release, verifies both SHA-256 checksums, installs
 them under `%LOCALAPPDATA%\Programs\DevNav`, and adds the module import to the

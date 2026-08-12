@@ -31,6 +31,11 @@ Ejecuta una sola orden en PowerShell 7:
 irm https://raw.githubusercontent.com/JacobOptimiza/dev-nav/main/install.ps1 | iex
 ```
 
+La distribución mediante WinGet se está preparando con un instalador silencioso
+por usuario. Hasta que `JacobOptimiza.DevNav` sea aceptado en el origen
+comunitario, utiliza el instalador de PowerShell anterior; `winget install
+JacobOptimiza.DevNav` todavía no está disponible.
+
 El instalador detecta la arquitectura, descarga el ejecutable y el módulo desde
 la última release, verifica ambos checksums SHA-256 y configura el perfil.
 

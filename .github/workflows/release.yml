@@ -16,9 +16,11 @@ jobs:
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             asset: dev-windows-x86_64.exe
+            architecture: x64
           - runner: windows-11-arm
             target: aarch64-pc-windows-msvc
             asset: dev-windows-aarch64.exe
+            architecture: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -30,11 +32,23 @@ jobs:
       - run: cargo build --release --target ${{ matrix.target }}
       - run: cargo test --target ${{ matrix.target }}
       - shell: pwsh
-        run: Copy-Item "target/${{ matrix.target }}/release/dev.exe" "${{ matrix.asset }}"
+        run: |
+          New-Item -ItemType Directory -Path release-assets -Force | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/dev.exe" "${{ matrix.asset }}"
+          Copy-Item "target/${{ matrix.target }}/release/dev.exe" "release-assets/dev.exe"
+          Copy-Item "powershell/DevNav.psm1" "release-assets/DevNav.psm1"
+          winget install --id JRSoftware.InnoSetup --exact --silent --accept-package-agreements --accept-source-agreements
+          $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc "/Qp" "/DMyAppVersion=$version" "/DArchitecture=${{ matrix.architecture }}" "installer\DevNav.iss"
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
+          Copy-Item "release-assets/DevNavSetup-${{ matrix.architecture }}.exe" "DevNavSetup-${{ matrix.architecture }}.exe"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.asset }}
-          path: ${{ matrix.asset }}
+          path: |
+            ${{ matrix.asset }}
+            DevNavSetup-${{ matrix.architecture }}.exe
 
   publish:
     needs: build
@@ -52,6 +66,53 @@ jobs:
       - run: cp powershell/DevNav.psm1 artifacts/DevNav.psm1
       - working-directory: artifacts
         run: sha256sum *.exe DevNav.psm1 > SHA256SUMS.txt
+      - name: Generate immutable WinGet manifests
+        working-directory: artifacts
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p manifests/JacobOptimiza/DevNav/"$version"
+          x64_sha=$(sha256sum DevNavSetup-x64.exe | cut -d' ' -f1)
+          arm64_sha=$(sha256sum DevNavSetup-arm64.exe | cut -d' ' -f1)
+          cat > manifests/JacobOptimiza/DevNav/"$version"/JacobOptimiza.DevNav.installer.yaml <<EOF
+          # yaml-language-server: \$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+          PackageIdentifier: JacobOptimiza.DevNav
+          PackageVersion: $version
+          InstallerType: inno
+          Scope: user
+          Installers:
+            - Architecture: x64
+              InstallerUrl: https://github.com/JacobOptimiza/dev-nav/releases/download/v$version/DevNavSetup-x64.exe
+              InstallerSha256: $x64_sha
+            - Architecture: arm64
+              InstallerUrl: https://github.com/JacobOptimiza/dev-nav/releases/download/v$version/DevNavSetup-arm64.exe
+              InstallerSha256: $arm64_sha
+          ManifestType: installer
+          ManifestVersion: 1.12.0
+          EOF
+          cat > manifests/JacobOptimiza/DevNav/"$version"/JacobOptimiza.DevNav.locale.en-US.yaml <<EOF
+          # yaml-language-server: \$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+          PackageIdentifier: JacobOptimiza.DevNav
+          PackageVersion: $version
+          PackageLocale: en-US
+          Publisher: Jacob Optimiza
+          PackageName: DevNav
+          License: MIT
+          ShortDescription: Native high-performance workspace navigator for PowerShell 7 on Windows.
+          PackageUrl: https://github.com/JacobOptimiza/dev-nav
+          LicenseUrl: https://github.com/JacobOptimiza/dev-nav/blob/main/LICENSE
+          ManifestType: defaultLocale
+          ManifestVersion: 1.12.0
+          EOF
+          cat > manifests/JacobOptimiza/DevNav/"$version"/JacobOptimiza.DevNav.yaml <<EOF
+          # yaml-language-server: \$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
+          PackageIdentifier: JacobOptimiza.DevNav
+          PackageVersion: $version
+          DefaultLocale: en-US
+          ManifestType: version
+          ManifestVersion: 1.12.0
+          EOF
+          tar -a -c -f "winget-manifests-$version.zip" manifests
       - env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${GITHUB_REF_NAME}" artifacts/* --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag

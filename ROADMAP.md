@@ -9,19 +9,22 @@ tested end to end.
 
 Goal: support a reliable, silent, per-user installation with:
 
-- [ ] Build a real Windows installer for x64.
-- [ ] Build a real Windows installer for ARM64.
-- [ ] Install `dev.exe` and `DevNav.psm1`.
-- [ ] Add a marker-based PowerShell profile integration that can be removed safely.
-- [ ] Support silent install, upgrade, repair and clean uninstall.
+- [x] Build a real Windows installer for x64.
+- [x] Build a real Windows installer for ARM64.
+- [x] Install `dev.exe` and `DevNav.psm1`.
+- [x] Add a marker-based PowerShell profile integration that can be removed safely.
+- [x] Support silent install, upgrade, repair and clean uninstall.
 - [ ] Preserve `%LOCALAPPDATA%\DevNav\config.tsv` during upgrades and uninstall.
 - [ ] Test fresh install, upgrade and uninstall in Windows Sandbox.
 - [ ] Generate and validate WinGet manifests with pinned version URLs and SHA-256.
 - [ ] Submit `JacobOptimiza.DevNav` to `microsoft/winget-pkgs`.
 - [ ] Automate future WinGet update submissions from GitHub Actions.
 
-Until these checks pass, do not use `winget install JacobOptimiza.DevNav`: the
-package is not published yet. Use the documented PowerShell installer instead.
+The release pipeline now builds the x64 and ARM64 installers and generates the
+manifests. WinGet remains unavailable until the installers have passed Sandbox
+install/upgrade/uninstall validation and the first manifests have been accepted
+in `microsoft/winget-pkgs`.
+Until then, use the documented PowerShell installer.
 
 ## Distribution requirements
 
