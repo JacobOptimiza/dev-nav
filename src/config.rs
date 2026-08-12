@@ -4,9 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Config {
     root: Option<PathBuf>,
+    show_favorites: bool,
     favorites: HashSet<PathBuf>,
     aliases: HashMap<PathBuf, String>,
 }
@@ -31,6 +32,9 @@ impl Config {
             match (fields.next(), fields.next(), fields.next()) {
                 (Some("root"), Some(path), _) => {
                     config.root = Some(PathBuf::from(decode(path)));
+                }
+                (Some("show_favorites"), Some(value), _) => {
+                    config.show_favorites = value != "false";
                 }
                 (Some("favorite"), Some(path), _) => {
                     config.favorites.insert(PathBuf::from(decode(path)));
@@ -61,6 +65,9 @@ impl Config {
             output.push_str(&encode(&root.to_string_lossy()));
             output.push('\n');
         }
+        output.push_str("show_favorites\t");
+        output.push_str(if self.show_favorites { "true" } else { "false" });
+        output.push('\n');
         for favorite in favorites {
             output.push_str("favorite\t");
             output.push_str(&encode(&favorite.to_string_lossy()));
@@ -88,6 +95,15 @@ impl Config {
         self.root = Some(path);
     }
 
+    pub fn show_favorites(&self) -> bool {
+        self.show_favorites
+    }
+
+    pub fn toggle_favorites_visibility(&mut self) -> bool {
+        self.show_favorites = !self.show_favorites;
+        self.show_favorites
+    }
+
     pub fn favorite_paths(&self) -> impl Iterator<Item = &Path> {
         self.favorites.iter().map(PathBuf::as_path)
     }
@@ -110,6 +126,17 @@ impl Config {
             self.aliases.remove(&path);
         } else {
             self.aliases.insert(path, alias.trim().to_owned());
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            root: None,
+            show_favorites: true,
+            favorites: HashSet::new(),
+            aliases: HashMap::new(),
         }
     }
 }
@@ -158,6 +185,27 @@ mod tests {
         let loaded = Config::load(&config_path).expect("load config");
 
         assert_eq!(loaded.root(), Some(root.as_path()));
+        fs::remove_file(config_path).expect("remove config");
+    }
+
+    #[test]
+    fn favorites_are_visible_by_default_and_the_preference_persists() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let config_path = std::env::temp_dir().join(format!("devnav-visibility-{unique}.tsv"));
+        let mut config = Config::default();
+        assert!(config.show_favorites());
+
+        assert!(!config.toggle_favorites_visibility());
+        config.save(&config_path).expect("save config");
+
+        assert!(
+            !Config::load(&config_path)
+                .expect("load config")
+                .show_favorites()
+        );
         fs::remove_file(config_path).expect("remove config");
     }
 }

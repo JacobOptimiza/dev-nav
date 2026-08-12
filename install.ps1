@@ -15,7 +15,7 @@ $projectRoot = $PSScriptRoot
 $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\DevNav'
 $installedExecutable = Join-Path $installRoot 'dev.exe'
 $installedModule = Join-Path $installRoot 'DevNav.psm1'
-$sourceModule = Join-Path $projectRoot 'powershell\DevNav.psm1'
+$sourceModule = $null
 $temporaryDownload = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.exe" -f [guid]::NewGuid().ToString('N'))
 $temporaryModule = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.psm1" -f [guid]::NewGuid().ToString('N'))
 $temporaryChecksums = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.sha256" -f [guid]::NewGuid().ToString('N'))
@@ -24,6 +24,10 @@ New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 
 try {
     if ($BuildFromSource) {
+        if ([string]::IsNullOrWhiteSpace($projectRoot)) {
+            throw '-BuildFromSource requiere ejecutar install.ps1 desde un clon local del repositorio.'
+        }
+        $sourceModule = Join-Path $projectRoot 'powershell\DevNav.psm1'
         $cargoCommand = Get-Command cargo -ErrorAction SilentlyContinue
         $cargoExecutable = if ($cargoCommand) {
             $cargoCommand.Source

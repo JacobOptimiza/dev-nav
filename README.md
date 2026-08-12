@@ -1,226 +1,181 @@
 # DevNav
 
-DevNav es un navegador TUI nativo para moverse entre repositorios desde PowerShell
-7 en Windows. Permite seleccionar una carpeta, cambiar la ubicación del shell,
-guardar favoritos globales, asignar alias y abrir Codex, Claude Code, OpenCode o
-Kimi en el repositorio activo.
+**A fast, native workspace navigator for PowerShell 7 on Windows.**
 
-**Documentación:** [Instalación](#1-instalar-devnav) · [Primer inicio](#2-elegir-la-ruta-de-inicio) · [Shortcuts](#shortcuts) · [FAQ](#faq) · [Troubleshooting](TROUBLESHOOTING.md) · [Seguridad](SECURITY.md)
+Built in Rust · keyboard-first · no TUI framework · no telemetry.
 
-## Requisitos
+[![CI](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml/badge.svg)](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/JacobOptimiza/dev-nav)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Windows](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-0078D4)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
 
-- Windows 10 u 11, x64 o ARM64.
-- PowerShell 7 o posterior (`pwsh`).
-- Git, únicamente para clonar el repositorio durante la instalación.
-- Windows Terminal recomendado.
+**English** | [Español](README.es.md)
 
-Los binarios publicados no requieren Rust ni Visual Studio. Windows PowerShell
-5.1, Windows de 32 bits, Linux y macOS no están soportados.
+![DevNav terminal interface](assets/devnav-preview.svg)
 
-## 1. Instalar DevNav
+Open `dev`, find a repository, and launch Codex, Claude Code, OpenCode, Kimi, or
+any command in that directory. DevNav also provides persistent aliases, global
+favorites, fuzzy filtering, and a visual way to choose your startup directory.
 
-El repositorio puede clonarse en cualquier ubicación; no tiene que estar dentro
-de la carpeta que contiene tus repositorios:
+## Why DevNav?
+
+- Starts directly in your chosen workspace.
+- Keeps every favorite available while you navigate across drives.
+- Opens coding agents in the highlighted repository with one key.
+- Returns directory changes to the current PowerShell session correctly.
+- Runs as a native, event-driven Windows executable with differential VT rendering.
+- Stores configuration locally and never sends telemetry.
+
+## Requirements
+
+- Windows 10 or 11, x64 or ARM64.
+- PowerShell 7 or newer (`pwsh`).
+- Windows Terminal recommended.
+
+Published binaries do not require Rust or Visual Studio.
+
+## Install
+
+### Quick install
+
+Run this in PowerShell 7:
+
+```powershell
+irm https://raw.githubusercontent.com/JacobOptimiza/dev-nav/main/install.ps1 | iex
+```
+
+The installer detects the architecture, downloads `dev.exe` and its PowerShell
+module from the latest GitHub release, verifies both SHA-256 checksums, installs
+them under `%LOCALAPPDATA%\Programs\DevNav`, and adds the module import to the
+PowerShell 7 profile.
+
+If you prefer to inspect the installer before running it:
 
 ```powershell
 git clone https://github.com/JacobOptimiza/dev-nav.git
 Set-Location dev-nav
+Get-Content .\install.ps1
 .\install.ps1
 ```
 
-El instalador:
-
-1. Detecta si Windows es x64 o ARM64.
-2. Descarga el binario desde GitHub Releases.
-3. Verifica los checksums SHA-256 del ejecutable y del módulo antes de instalarlos.
-4. Copia DevNav a `%LOCALAPPDATA%\Programs\DevNav`.
-5. Añade el módulo al perfil de PowerShell 7 sin modificar el `PATH` global.
-
-Cierra y vuelve a abrir PowerShell 7. Comprueba que quedó instalado:
+Open a new PowerShell 7 window and run:
 
 ```powershell
-Get-Command dev
+dev
 ```
 
-`Get-Command dev` debe mostrar el alias de DevNav.
+## First run: choose your startup directory
 
-## 2. Elegir la ruta de inicio
+The startup directory is the folder containing your repositories, or any folder
+you want DevNav to show on launch.
 
-La **ruta de inicio** es la carpeta que contiene tus repositorios o aquella que
-quieres ver cada vez que ejecutas `dev`. La forma recomendada de configurarla no
-requiere comandos ni editar archivos:
+1. Run `dev`. A fresh installation opens at `$HOME`.
+2. Navigate with `↑`, `↓`, and `→`. Press `p` to enter any absolute path or drive.
+3. Highlight the directory you want to use as your startup directory.
+4. Press `Ctrl+S`.
+5. Verify the full path and press `Enter`; press `Esc` to cancel.
 
-1. Ejecuta `dev`. En el primer inicio se abrirá `$HOME`.
-2. Navega con `↑`, `↓` y `→`. Para ir directamente a otra ruta o unidad, pulsa
-   `p`, escribe la ruta deseada y confirma con `Enter`.
-3. Resalta la carpeta que quieres utilizar como inicio.
-4. Pulsa `Ctrl+S` (**guardar como ruta de inicio**).
-5. Revisa la ruta mostrada y pulsa `Enter` para confirmar o `Esc` para cancelar.
-
-El siguiente `dev` arrancará directamente en esa carpeta. Puedes repetir estos
-pasos en cualquier momento para cambiarla. `Ctrl+S` utiliza una combinación
-deliberada y una confirmación adicional para evitar cambios accidentales.
-
-### Alternativa para terminales, scripts o agentes
-
-Después de instalar, Codex, Cursor o cualquier script puede configurar la misma
-ruta sin abrir la TUI:
+For scripts and coding agents, the equivalent command is:
 
 ```powershell
 Set-DevRoot $HOME
 Get-DevRoot
 ```
 
-`Set-DevRoot` valida que la carpeta exista y guarda exactamente la misma
-configuración local que `Ctrl+S`.
+## Global favorites
 
-Para compatibilidad con configuraciones anteriores, `DEV_HOME` continúa
-funcionando cuando todavía no existe una ruta guardada. La ruta elegida mediante
-`Ctrl+S` o `Set-DevRoot` tiene prioridad:
+Press `f` on a directory to add or remove it from global favorites. Every saved
+favorite stays at the top while you navigate, including the favorite matching
+the current directory.
 
-```powershell
-$env:DEV_HOME = $HOME
-```
+Global favorite shortcuts are visible by default. Press `Shift+F` to hide or
+show them. DevNav persists this preference between sessions; hiding shortcuts
+does not delete favorites or hide real child directories.
 
-### Actualizar
+Favorites, aliases, startup directory, and UI preferences live outside the
+repository in `%LOCALAPPDATA%\DevNav\config.tsv`. Updates do not overwrite it.
 
-No necesitas volver a clonar el repositorio. Puedes actualizar de cualquiera de
-estas dos formas:
+## Shortcuts
 
-- Desde PowerShell, ejecuta:
+Press `F1` at any time for the complete, scrollable help panel.
+
+### Navigation and organization
+
+| Shortcut | Action |
+|---|---|
+| `↑` / `↓` or `j` / `k` | Move the selection |
+| `Enter` | Select the directory and return to PowerShell |
+| `→` / `l` | Enter the highlighted directory |
+| `←` / `h` / `Backspace` | Go to the parent directory |
+| `/` | Start incremental fuzzy filtering |
+| `p` | Open any absolute path or drive |
+| `g` | Return to the startup directory |
+| `Ctrl+S` | Save the highlighted directory as startup directory, with confirmation |
+| `f` | Add or remove a global favorite |
+| `Shift+F` | Show or hide global favorite shortcuts |
+| `a` | Create or edit an alias |
+
+### Coding agents and commands
+
+| Shortcut | Action |
+|---|---|
+| `c` | Codex: new session in the highlighted repository |
+| `r` | Codex: resume the repository's last session |
+| `d` / `Shift+D` | Claude Code: new / last session |
+| `o` / `Shift+O` | OpenCode: new / last session |
+| `i` / `Shift+I` | Kimi: new / last session |
+| `e` | Enter and run a command in the highlighted directory |
+| `u` | Refresh the current directory |
+| `Shift+U` | Check for and install a DevNav update |
+| `F1` | Open or close the shortcuts panel |
+| `q` / `Esc` | Exit or cancel |
+
+`:` remains available as a Vim-style alias for `e`.
+
+## Update
+
+From PowerShell:
 
 ```powershell
 dev update
 ```
 
-- Desde la TUI de DevNav, pulsa `Shift+U` (`Mayús+U`). Puedes consultar este y
-  el resto de shortcuts en cualquier momento pulsando `F1`.
+Or press `Shift+U` inside the TUI. DevNav compares the installed semantic
+version with the latest release, downloads only when needed, verifies checksums,
+and reports the result. The updater replaces only application files and preserves
+the separate local configuration.
 
-DevNav compara la versión instalada con la última release publicada. Si ya
-tienes la última, no modifica ningún archivo. Si existe una versión nueva,
-descarga el ejecutable adecuado para tu arquitectura y el módulo de PowerShell,
-verifica ambos con SHA-256, los instala y confirma la versión actualizada.
-La actualización sólo sustituye `dev.exe` y `DevNav.psm1`: nunca elimina ni
-sobrescribe `%LOCALAPPDATA%\DevNav\config.tsv`, donde se conservan la ruta de
-inicio, los favoritos y los alias.
+## Architecture
 
-### Compilar desde el código fuente
+- Rust 2024 with direct Win32 integration through `windows-sys`.
+- Native keyboard input through `ReadConsoleInputW`.
+- Custom VT renderer with row buffering and differential updates.
+- Event-driven loop with no polling or idle rendering.
+- Separate result channel so PowerShell can persist directory changes.
+- One direct dependency and no TUI framework.
 
-Solo para desarrollo; requiere Rust stable y MSVC Build Tools:
+## Security and privacy
+
+- No telemetry and no network access during normal navigation.
+- Release binaries and the PowerShell module are verified with SHA-256.
+- Local configuration is excluded from the repository and preserved on updates.
+- GitHub Actions use minimal permissions and commit-pinned actions.
+- The public repository is read-only for external contributors.
+
+See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the
+[troubleshooting guide](TROUBLESHOOTING.md).
+
+## Build from source
+
+Requires stable Rust and the MSVC Build Tools:
 
 ```powershell
+git clone https://github.com/JacobOptimiza/dev-nav.git
+Set-Location dev-nav
 .\install.ps1 -BuildFromSource
 ```
 
-## Favoritos globales, incluso fuera de la raíz
-
-Los favoritos no están limitados a la carpeta principal. Siempre aparecen al
-principio de la lista, aunque estés navegando por otra ubicación.
-
-Para añadir una carpeta de otro disco o de fuera de la ruta de inicio:
-
-1. Ejecuta `dev`.
-2. Pulsa `p`.
-3. Escribe una ruta absoluta, por ejemplo `D:\Clientes` o `C:\Trabajo\Repo`.
-4. Pulsa `Enter` para ir a esa ubicación.
-5. Navega con las flechas y `→` hasta resaltar la carpeta deseada.
-6. Pulsa `f` para guardarla como favorita.
-
-Desde ese momento aparecerá arriba en cualquier ubicación. Resáltala y vuelve a
-pulsar `f` para eliminarla de favoritos. `a` permite mostrarla como
-`alias - nombre-de-carpeta`.
-
-La ruta de inicio, los favoritos y los alias son locales y se guardan fuera del repositorio en
-`%LOCALAPPDATA%\DevNav\config.tsv`.
-
-## Shortcuts
-
-Los shortcuts están agrupados por flujo de trabajo. Las acciones más frecuentes
-aparecen primero para que sean fáciles de descubrir y recordar.
-
-### Navegación y selección
-
-| Shortcut | Acción |
-|---|---|
-| `↑` / `↓` o `j` / `k` | mover la selección |
-| `Enter` | seleccionar la carpeta y volver a PowerShell |
-| `→` / `l` | entrar en la carpeta resaltada |
-| `←` / `h` | subir al directorio padre |
-| `.` | seleccionar el directorio mostrado |
-| `g` | volver a la raíz configurada |
-| `p` | ir a cualquier ruta absoluta, incluso de otro disco |
-| `Ctrl+S` | guardar la carpeta resaltada como nueva ruta de inicio; requiere confirmación |
-| `F1` | abrir el panel de ayuda con todos los shortcuts y su explicación |
-
-### Agentes
-
-| Shortcut | Acción |
-|---|---|
-| `c` | Codex: abrir una sesión nueva (`codex`) en la carpeta resaltada |
-| `r` | Codex: reanudar la última sesión del repositorio (`codex resume --last`) |
-| `d` | abrir Claude Code (`claude`) en la carpeta resaltada |
-| `Shift+D` | reanudar la última sesión de Claude Code del repositorio (`claude --continue`) |
-| `o` | abrir OpenCode (`opencode`) en la carpeta resaltada |
-| `Shift+O` | reanudar la última sesión de OpenCode del repositorio (`opencode --continue`) |
-| `i` | abrir Kimi Code (`kimi`) en la carpeta resaltada |
-| `Shift+I` | reanudar la última sesión de Kimi Code del repositorio (`kimi --continue`) |
-
-### Organización, búsqueda y acciones
-
-| Shortcut | Acción |
-|---|---|
-| `/` | activar el filtro fuzzy incremental |
-| `f` | añadir o quitar un favorito global |
-| `a` | editar el alias de la carpeta resaltada |
-| `e` | escribir y ejecutar un comando en la carpeta resaltada |
-| `u` | refrescar el directorio mostrado |
-| `Shift+U` | comprobar y actualizar DevNav a la última versión publicada |
-| `q` / `Esc` | cancelar y volver a PowerShell |
-
-La barra inferior muestra sólo las acciones esenciales para no saturar la
-interfaz. Pulsa `F1` en cualquier momento para consultar el panel completo;
-puedes desplazarte con `↑` / `↓` y cerrarlo con `F1`, `Esc` o `Enter`.
-
-`:` se conserva como alias compatible de `e` para quienes prefieran el estilo de
-comandos de Vim.
-
-También puedes elegir primero el repositorio y pasar un comando desde el shell:
-
-```powershell
-dev codex
-dev "git status"
-```
-
-Los accesos de agentes son opcionales: DevNav devuelve el comando a PowerShell,
-por lo que únicamente necesitas tener instalado y disponible en `PATH` el CLI que
-quieras abrir.
-
-## Arquitectura
-
-- Rust 2024 y Win32 mediante `windows-sys`.
-- Renderer VT propio con buffer de filas y repintado diferencial.
-- Entrada raw mediante `ReadConsoleInputW`.
-- Event loop sin polling ni renders cuando no hay eventos.
-- Protocolo de resultados separado del stdout utilizado por la TUI.
-- Sin frameworks TUI y con una sola dependencia directa.
-
-## Seguridad y privacidad
-
-- Sin telemetría ni red durante la ejecución normal.
-- Sin credenciales, secretos o configuración personal en el repositorio.
-- La configuración local está separada de los archivos reemplazados al actualizar.
-- Binarios de release con checksum SHA-256.
-- Workflows con permisos mínimos y acciones fijadas a commits concretos.
-- Dependabot revisa Cargo y GitHub Actions.
-- `main` está protegida y únicamente los administradores pueden actualizarla.
-- El repositorio público es de solo lectura: permite consultar, clonar y descargar,
-  pero no acepta Issues ni Pull Requests externos.
-
-Consulta [SECURITY.md](SECURITY.md) para informar vulnerabilidades de forma
-privada y [CONTRIBUTING.md](CONTRIBUTING.md) para conocer la política del
-repositorio.
-
-## Desarrollo
+Development checks:
 
 ```powershell
 cargo fmt -- --check
@@ -229,55 +184,13 @@ cargo clippy --all-targets -- -D warnings
 cargo build --release
 ```
 
-## FAQ
+## Distribution roadmap
 
-Las respuestas rápidas están aquí. Los comandos de diagnóstico y los pasos
-completos se encuentran en la [guía de troubleshooting](TROUBLESHOOTING.md).
+A WinGet package is planned. WinGet supports portable packages, but DevNav also
+requires its PowerShell module and profile integration, so the first submission
+will follow after a non-interactive installer package can be validated in Windows
+Sandbox without reducing the current installation guarantees.
 
-### ¿La instalación normal necesita Rust o Visual Studio?
+## License
 
-No. El instalador descarga y verifica el binario publicado. Rust y MSVC solo son
-necesarios con `-BuildFromSource`. [Ver detalles](TROUBLESHOOTING.md#rust-o-cargo-no-disponibles-al-compilar).
-
-### ¿Por qué no se reconoce `dev` después de instalar?
-
-`dev` es un alias cargado por el módulo de PowerShell, no un ejecutable añadido
-al `PATH`. Reinicia PowerShell 7 y comprueba el perfil si no aparece.
-[Ver solución](TROUBLESHOOTING.md#el-alias-dev-no-está-disponible).
-
-### ¿Cómo corrijo la ruta de inicio?
-
-Resalta la carpeta correcta en la TUI y pulsa `Ctrl+S`, o ejecuta
-`Set-DevRoot $HOME`. [Ver comandos](TROUBLESHOOTING.md#corregir-la-ruta-de-inicio).
-
-### ¿Por qué no se abre Codex, Claude, OpenCode o Kimi?
-
-Cada CLI es opcional y debe estar instalado y disponible en el `PATH` de
-PowerShell. [Ver diagnóstico](TROUBLESHOOTING.md#cli-de-agente-no-encontrado).
-
-### ¿Qué hago si PowerShell bloquea `install.ps1`?
-
-Revisa el script y desbloquea únicamente ese archivo si confías en su origen. No
-desactives globalmente las políticas de ejecución.
-[Ver procedimiento](TROUBLESHOOTING.md#installps1-bloqueado-por-powershell).
-
-### ¿Qué hago si falla la descarga o el checksum?
-
-Revisa la conexión, el proxy o el firewall y vuelve a intentarlo. No omitas la
-verificación SHA-256. [Ver explicación](TROUBLESHOOTING.md#fallo-de-descarga-o-checksum).
-
-### ¿Qué hago si la TUI se cierra o las teclas no responden?
-
-Usa `dev` desde PowerShell 7 en Windows Terminal, cierra instancias anteriores
-y actualiza DevNav. [Ver diagnóstico](TROUBLESHOOTING.md#cierre-inesperado-o-entrada-de-teclado-incorrecta).
-
-### ¿Cómo actualizo DevNav?
-
-Ejecuta `dev update` desde PowerShell o pulsa `Shift+U` dentro de la TUI. Ambas
-opciones comprueban la release más reciente y solo descargan e instalan archivos
-si existe una versión nueva.
-[Ver pasos](TROUBLESHOOTING.md#actualización).
-
-## Licencia
-
-MIT. Consulta [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

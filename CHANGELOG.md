@@ -3,6 +3,21 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.7.0] - 2026-08-12
+
+### Added
+
+- Add `Shift+F` to show or hide global favorite shortcuts and persist the preference between sessions.
+- Show the favorites visibility state directly in the directory-list header.
+
+### Fixed
+
+- Keep every favorite visible while navigating, including the favorite that matches the current directory.
+
+### Changed
+
+- Show global favorites by default when no explicit preference has been saved.
+
 ## [0.6.1] - 2026-08-11
 
 ### Changed

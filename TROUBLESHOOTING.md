@@ -1,179 +1,157 @@
 # Troubleshooting
 
-Utiliza esta guía cuando la instalación o la ejecución de DevNav muestre un
-error. Las respuestas breves y conceptuales están en la sección
-[FAQ del README](README.md#faq); aquí se documentan únicamente el diagnóstico y
-los procedimientos de resolución.
+**English** | [Español](TROUBLESHOOTING.es.md)
 
-## Diagnóstico rápido
+This guide contains diagnostic procedures. Start with the installation and
+shortcut documentation in the [README](README.md).
 
-Ejecuta estas comprobaciones desde PowerShell 7:
+## Quick diagnostics
+
+Run in PowerShell 7:
 
 ```powershell
 $PSVersionTable.PSVersion
 Get-Command dev -ErrorAction SilentlyContinue
-Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\DevNav\DevNav.psm1')
-```
-
-Si `dev` está disponible, comprueba también la raíz configurada:
-
-```powershell
 Get-DevRoot
 Test-Path -LiteralPath (Get-DevRoot)
 ```
 
-## Instalación
+DevNav requires PowerShell 7 or newer and an existing startup directory.
 
-### `install.ps1` bloqueado por PowerShell
+## Installation
 
-No desactives globalmente la [política de ejecución de
-PowerShell](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_execution_policies).
-Revisa el script y, si confías en esta copia del repositorio, desbloquea
-únicamente ese archivo:
+### `install.ps1` is blocked by PowerShell
+
+Inspect the downloaded script before allowing it:
 
 ```powershell
-Get-ExecutionPolicy -List
-Get-Content -LiteralPath .\install.ps1
-Unblock-File -LiteralPath .\install.ps1
+Get-Content .\install.ps1
+Unblock-File .\install.ps1
 .\install.ps1
 ```
 
-Si `MachinePolicy` o `UserPolicy` imponen el bloqueo, es una directiva de grupo.
-Consulta al administrador del equipo en lugar de intentar evitarla.
+Do not disable execution policy globally. If your organization enforces a
+policy, ask its administrator before bypassing it.
 
-### Rust o `cargo` no disponibles al compilar
+### Download or checksum failure
 
-Este error solo corresponde a `install.ps1 -BuildFromSource`. Para instalar el
-binario publicado, ejecuta el instalador sin ese switch:
+The installer intentionally stops if a release asset cannot be downloaded or
+its SHA-256 checksum differs.
 
 ```powershell
-.\install.ps1
+Test-NetConnection github.com -Port 443
+Invoke-WebRequest https://github.com -Method Head
 ```
 
-Si necesitas compilar, instala Rust mediante
-[rustup](https://rust-lang.org/tools/install/) y el workload **Desktop
-development with C++** de [Visual Studio Build
-Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/). Abre una
-PowerShell nueva y verifica el entorno antes de repetir la compilación:
+Check the proxy, firewall, TLS inspection, and GitHub availability. Retry the
+installer; never remove checksum verification.
+
+### Rust or Cargo is missing
+
+Normal installation downloads a published binary and does not need Rust or
+Visual Studio. Rust and the MSVC Build Tools are required only for:
+
+```powershell
+.\install.ps1 -BuildFromSource
+```
+
+Install Rust from [rustup](https://rustup.rs/) and the Microsoft C++ build tools,
+then verify:
 
 ```powershell
 rustc --version
 cargo --version
-.\install.ps1 -BuildFromSource
 ```
 
-### Fallo de descarga o checksum
+### The `dev` command is unavailable
 
-El instalador cancela la operación si no puede descargar la release o si el hash
-del ejecutable no coincide con `SHA256SUMS.txt`.
+`dev` is a PowerShell alias exported by the DevNav module; the installer does
+not add `dev.exe` directly to the global `PATH`.
 
-1. Comprueba el acceso a GitHub desde el navegador.
-2. Revisa el proxy o firewall corporativo.
-3. Vuelve a ejecutar `install.ps1`.
-4. Si el hash vuelve a fallar, no instales el binario ni omitas la verificación.
-
-Un checksum incorrecto puede indicar una descarga incompleta o manipulada.
-
-## Integración con PowerShell
-
-### El alias `dev` no está disponible
-
-DevNav debe cargarse mediante su módulo para poder cambiar la ubicación de la
-PowerShell actual. Cierra todas las ventanas de PowerShell 7 y abre una nueva.
-Si el alias sigue sin aparecer, ejecuta:
+Open a new PowerShell 7 window and run:
 
 ```powershell
-$module = Join-Path $env:LOCALAPPDATA 'Programs\DevNav\DevNav.psm1'
-Test-Path -LiteralPath $module
-Import-Module $module -Force
-Get-Command dev
-```
-
-- Si `Test-Path` devuelve `False`, vuelve a ejecutar `install.ps1`.
-- Si la importación manual funciona, verifica el perfil del host actual:
-
-```powershell
-$PSVersionTable.PSVersion
 $PROFILE
-Test-Path -LiteralPath $PROFILE
+Get-Content -LiteralPath $PROFILE
+Get-Module -ListAvailable
+Get-Command dev -ErrorAction SilentlyContinue
 ```
 
-PowerShell mantiene [perfiles diferentes según el usuario y el
-host](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_profiles).
-Ejecuta el instalador desde el mismo PowerShell 7 en el que quieras usar `dev`.
-No añadas `dev.exe` directamente al `PATH`: omitiría el wrapper necesario.
+The profile should import:
 
-### Corregir la ruta de inicio
+```text
+%LOCALAPPDATA%\Programs\DevNav\DevNav.psm1
+```
 
-Consulta la ruta efectiva y comprueba que exista:
+To repair the import, rerun `install.ps1`. Do not place `dev.exe` alone on
+`PATH`, because that bypasses the wrapper required to change the current shell
+directory and run commands.
+
+## Configuration
+
+### Correct the startup directory
+
+The recommended flow is visual:
+
+1. Run `dev`.
+2. Highlight the correct directory.
+3. Press `Ctrl+S`.
+4. Verify the full path and press `Enter`.
+
+The automation-friendly equivalent is:
 
 ```powershell
+Set-DevRoot $HOME
 Get-DevRoot
 Test-Path -LiteralPath (Get-DevRoot)
 ```
 
-La forma recomendada es abrir `dev`, resaltar la carpeta correcta, pulsar
-`Ctrl+S` y confirmar con `Enter`. Desde PowerShell puedes guardar la misma
-configuración con:
+`DEV_HOME` remains a compatibility fallback only when no startup directory has
+been saved.
+
+### Favorites are missing
+
+Press `Shift+F` inside DevNav. The list header indicates whether global favorite
+shortcuts are visible or hidden. This preference persists between sessions.
+
+Hiding global shortcuts does not delete favorites. Verify the local file exists:
 
 ```powershell
-Set-DevRoot $HOME
-Get-DevRoot
+$config = Join-Path $env:LOCALAPPDATA 'DevNav\config.tsv'
+Test-Path -LiteralPath $config
+Select-String -LiteralPath $config -Pattern '^favorite\t'
 ```
 
-La carpeta debe existir. Para volver a la carpeta de usuario:
+Do not publish this file: it contains local paths and aliases.
 
-```powershell
-Set-DevRoot $HOME
-```
+### A coding agent does not open
 
-`DEV_HOME` se mantiene como fallback de compatibilidad cuando todavía no existe
-una ruta guardada. `Ctrl+S` y `Set-DevRoot` tienen prioridad sobre esa variable.
-
-### CLI de agente no encontrado
-
-Comprueba qué agentes están disponibles en la PowerShell actual:
+Check which optional CLIs are available:
 
 ```powershell
 'codex', 'claude', 'opencode', 'kimi' | ForEach-Object {
     $command = Get-Command $_ -ErrorAction SilentlyContinue
     [pscustomobject]@{
-        CLI        = $_
-        Disponible = [bool] $command
-        Ruta       = $command.Source
+        CLI       = $_
+        Available = [bool] $command
+        Path      = $command.Source
     }
 }
 ```
 
-Utiliza preferentemente el instalador oficial de cada CLI. Si el ejecutable ya
-existe, añade al `PATH` la carpeta que lo contiene, no el archivo `.exe`:
+Install the missing CLI through its official installer and open a new terminal.
 
-```powershell
-$toolDirectory = 'C:\ruta\al\directorio\bin'
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-$entries = @($userPath -split ';' | Where-Object { $_ })
+## TUI behavior
 
-if ($entries -notcontains $toolDirectory) {
-    $updatedPath = (@($entries) + $toolDirectory) -join ';'
-    [Environment]::SetEnvironmentVariable('Path', $updatedPath, 'User')
-}
+### Unexpected exit or incorrect keyboard input
 
-$env:Path = "$env:Path;$toolDirectory"
-```
+1. Use PowerShell 7 inside Windows Terminal.
+2. Run `dev`, not the internal `dev.exe` directly.
+3. Close older DevNav instances.
+4. Run `dev update` and open a new terminal.
 
-Repite `Get-Command <nombre>` antes de abrir el agente desde DevNav.
-
-## Ejecución de la TUI
-
-### Cierre inesperado o entrada de teclado incorrecta
-
-1. Utiliza PowerShell 7 dentro de Windows Terminal.
-2. Ejecuta `dev`, no el `dev.exe` interno.
-3. Cierra cualquier instancia anterior.
-4. Actualiza DevNav y abre una terminal nueva.
-
-Si el problema persiste, conserva el mensaje mostrado al volver al prompt y la
-salida de:
+If the problem continues, record the error shown after returning to the prompt
+and include:
 
 ```powershell
 $PSVersionTable.PSVersion
@@ -181,28 +159,22 @@ Get-Command dev
 Get-DevRoot
 ```
 
-## Mantenimiento
+## Updates
 
-### Actualización
-
-La instalación publicada se actualiza directamente con:
+Run:
 
 ```powershell
 dev update
 ```
 
-El comando informa de la versión instalada y la última publicada, evita una
-descarga innecesaria si coinciden y verifica los checksums antes de sustituir
-archivos. La ruta de inicio, los favoritos y los alias permanecen en el archivo
-de configuración separado y no se sobrescriben. Si `dev update` todavía no
-existe porque utilizas una versión anterior
-a la 0.5.0, actualiza una vez desde el clon:
+Or press `Shift+U` inside the TUI. The updater compares versions, verifies the
+downloaded executable and module, and replaces only application files. It does
+not overwrite `%LOCALAPPDATA%\DevNav\config.tsv`, so the startup directory,
+favorites, aliases, and UI preferences remain intact.
+
+Users upgrading from a version older than `0.5.0` must update once from a clone:
 
 ```powershell
-Set-Location C:\ruta\al\clon\dev-nav
 git pull --ff-only
 .\install.ps1
 ```
-
-El instalador puede ejecutarse varias veces: sustituye el binario y el módulo,
-verifica nuevamente el checksum y evita duplicar la importación en el perfil.

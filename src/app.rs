@@ -257,6 +257,7 @@ impl App {
                 self.mode = Mode::Path;
             }
             Key::Char('f') => self.toggle_favorite()?,
+            Key::Char('F') => self.toggle_favorites_visibility()?,
             Key::Char('a') => self.begin_alias(),
             Key::Char(character) if is_command_shortcut(character) => self.begin_command(),
             Key::Char(character) => {
@@ -294,20 +295,22 @@ impl App {
                 name,
             });
         }
-        for path in self.config.favorite_paths() {
-            if path == self.current || seen.contains(path) || !path.is_dir() {
-                continue;
+        if self.config.show_favorites() {
+            for path in self.config.favorite_paths() {
+                if seen.contains(path) || !path.is_dir() {
+                    continue;
+                }
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                entries.push(DirectoryEntry {
+                    alias: self.config.alias(path).map(str::to_owned),
+                    favorite: true,
+                    path: path.to_path_buf(),
+                    name,
+                });
             }
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.display().to_string());
-            entries.push(DirectoryEntry {
-                alias: self.config.alias(path).map(str::to_owned),
-                favorite: true,
-                path: path.to_path_buf(),
-                name,
-            });
         }
         entries.sort_by(|left, right| {
             right.favorite.cmp(&left.favorite).then_with(|| {
@@ -399,6 +402,21 @@ impl App {
         Ok(())
     }
 
+    fn toggle_favorites_visibility(&mut self) -> io::Result<()> {
+        let visible = self.config.toggle_favorites_visibility();
+        self.config.save(&self.config_path)?;
+        self.selected = 0;
+        self.scroll = 0;
+        self.refresh()?;
+        self.message = if visible {
+            "Favoritos globales visibles"
+        } else {
+            "Favoritos globales ocultos"
+        }
+        .into();
+        Ok(())
+    }
+
     fn begin_alias(&mut self) {
         if let Some(entry) = self.selected_entry() {
             let target = entry.path.clone();
@@ -467,9 +485,14 @@ impl App {
             fit(&self.current.display().to_string(), width.saturating_sub(9)),
             "─"
         ));
+        let list_header = if self.config.show_favorites() {
+            "★  FAVORITOS VISIBLES · ALIAS / DIRECTORIO"
+        } else {
+            "☆  FAVORITOS OCULTOS · Mayús+F para mostrar"
+        };
         rows.push(format!(
             "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
-            fit("★  ALIAS / DIRECTORIO", inner)
+            fit(list_header, inner)
         ));
         rows.push(format!(
             "\x1b[38;2;90;100;120m├{}┤\x1b[0m",
@@ -564,6 +587,7 @@ const HELP_LINES: &[HelpLine] = &[
     HelpLine::Section("BÚSQUEDA Y ORGANIZACIÓN"),
     HelpLine::Shortcut("/", "Filtrar carpetas mientras escribes"),
     HelpLine::Shortcut("f", "Añadir o quitar un favorito global"),
+    HelpLine::Shortcut("Mayús+F", "Mostrar u ocultar los favoritos globales"),
     HelpLine::Shortcut("a", "Crear o editar el alias de la carpeta"),
     HelpLine::Shortcut("u", "Actualizar el directorio actual"),
     HelpLine::Shortcut("Mayús+U", "Actualizar DevNav a la última versión"),
@@ -733,6 +757,7 @@ fn fuzzy_score(candidate: &str, query: &str) -> Option<i32> {
 #[cfg(test)]
 mod tests {
     use std::{
+        collections::HashSet,
         fs,
         time::{SystemTime, UNIX_EPOCH},
     };
@@ -794,26 +819,59 @@ mod tests {
     }
 
     #[test]
-    fn favorites_outside_root_are_always_injected() {
+    fn every_global_favorite_is_injected_including_the_current_directory() {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
         let sandbox = std::env::temp_dir().join(format!("devnav-test-{unique}"));
         let root = sandbox.join("root");
-        let external = sandbox.join("external-repo");
+        let external_one = sandbox.join("external-one");
+        let external_two = sandbox.join("external-two");
         fs::create_dir_all(&root).expect("create root");
-        fs::create_dir_all(&external).expect("create external favorite");
+        fs::create_dir_all(&external_one).expect("create first external favorite");
+        fs::create_dir_all(&external_two).expect("create second external favorite");
 
         let mut config = Config::default();
-        config.toggle_favorite(&external);
+        config.toggle_favorite(&root);
+        config.toggle_favorite(&external_one);
+        config.toggle_favorite(&external_two);
         let app = App::new(root, config, sandbox.join("config.tsv")).expect("create app");
 
-        assert!(
-            app.entries
-                .iter()
-                .any(|entry| entry.path == external && entry.favorite)
-        );
+        let favorite_paths: HashSet<_> = app
+            .entries
+            .iter()
+            .filter(|entry| entry.favorite)
+            .map(|entry| entry.path.clone())
+            .collect();
+        assert_eq!(favorite_paths.len(), 3);
+        assert!(favorite_paths.contains(&app.current));
+        assert!(favorite_paths.contains(&external_one));
+        assert!(favorite_paths.contains(&external_two));
+        fs::remove_dir_all(sandbox).expect("clean test sandbox");
+    }
+
+    #[test]
+    fn hidden_global_favorites_do_not_remove_real_child_directories() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let sandbox = std::env::temp_dir().join(format!("devnav-hidden-test-{unique}"));
+        let root = sandbox.join("root");
+        let child = root.join("favorite-child");
+        let external = sandbox.join("external");
+        fs::create_dir_all(&child).expect("create child");
+        fs::create_dir_all(&external).expect("create external");
+        let mut config = Config::default();
+        config.toggle_favorite(&child);
+        config.toggle_favorite(&external);
+        config.toggle_favorites_visibility();
+
+        let app = App::new(root, config, sandbox.join("config.tsv")).expect("create app");
+
+        assert!(app.entries.iter().any(|entry| entry.path == child));
+        assert!(!app.entries.iter().any(|entry| entry.path == external));
         fs::remove_dir_all(sandbox).expect("clean test sandbox");
     }
 
