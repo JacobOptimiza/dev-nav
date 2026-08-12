@@ -3,6 +3,13 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [0.9.6] - 2026-08-12
+
+### Fixed
+
+- Retry interrupted release downloads and resume partial files before checksum
+  verification.
+
 ## [0.9.5] - 2026-08-12
 
 ### Fixed

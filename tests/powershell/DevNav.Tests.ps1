@@ -167,4 +167,43 @@ Describe 'DevNav updater lifecycle' {
         Get-ChildItem $installRoot -Filter '*.new' | Should -BeNullOrEmpty
         Get-ChildItem $installRoot -Filter '*.bak' | Should -BeNullOrEmpty
     }
+
+    It 'retries a transport failure and resumes a partial download' {
+        $downloadPath = Join-Path $sourceRoot 'retry.bin'
+        $global:DevNavDownloadPath = $downloadPath
+        $global:DevNavDownloadAttempts = 0
+        $global:DevNavResumeObserved = $false
+        $devModule.Invoke({
+            Mock Start-Sleep {}
+            Mock Invoke-WebRequest {
+                $global:DevNavDownloadAttempts++
+                if ($PSBoundParameters.ContainsKey('Resume')) { $global:DevNavResumeObserved = $true }
+                if ($global:DevNavDownloadAttempts -eq 1) {
+                    Set-Content -LiteralPath $OutFile -Value 'partial'
+                    throw [System.Net.WebException]::new('ResponseEnded')
+                }
+                Set-Content -LiteralPath $OutFile -Value 'complete'
+            }
+            Invoke-DevDownload -Uri 'https://example.test/retry.bin' -OutFile $global:DevNavDownloadPath -Attempts 3
+        })
+        $global:DevNavDownloadAttempts | Should -Be 2
+        Get-Content -LiteralPath $downloadPath | Should -Be 'complete'
+        (Get-Content -LiteralPath $modulePath -Raw) | Should -Match '\$parameters\.Resume = \$true'
+    }
+
+    It 'fails clearly after all download attempts fail' {
+        $downloadPath = Join-Path $sourceRoot 'failed.bin'
+        $global:DevNavDownloadPath = $downloadPath
+        $global:DevNavDownloadAttempts = 0
+        $devModule.Invoke({
+            Mock Start-Sleep {}
+            Mock Invoke-WebRequest {
+                $global:DevNavDownloadAttempts++
+                throw [System.Net.WebException]::new('ResponseEnded')
+            }
+            { Invoke-DevDownload -Uri 'https://example.test/failed.bin' -OutFile $global:DevNavDownloadPath -Attempts 3 } | Should -Throw '*tras 3 intentos*'
+        })
+        $global:DevNavDownloadAttempts | Should -Be 3
+        Test-Path -LiteralPath $downloadPath | Should -BeFalse
+    }
 }

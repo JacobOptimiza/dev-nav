@@ -68,6 +68,38 @@ function Get-DevLatestRelease {
     }
 }
 
+function Invoke-DevDownload {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string] $Uri,
+        [Parameter(Mandatory)][string] $OutFile,
+        [ValidateRange(1, 10)][int] $Attempts = 5
+    )
+
+    $lastError = $null
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        try {
+            $parameters = @{
+                Uri         = $Uri
+                OutFile     = $OutFile
+                ErrorAction = 'Stop'
+            }
+            if ($attempt -gt 1 -and (Test-Path -LiteralPath $OutFile -PathType Leaf)) {
+                $parameters.Resume = $true
+            }
+            Invoke-WebRequest @parameters
+            return
+        }
+        catch {
+            $lastError = $_
+            if ($attempt -lt $Attempts) {
+                Start-Sleep -Seconds ([Math]::Min($attempt * 2, 10))
+            }
+        }
+    }
+    throw "No se pudo descargar '$Uri' tras $Attempts intentos: $($lastError.Exception.Message)"
+}
+
 function Initialize-DevUpdateCheckPreference {
     $saved = Get-DevConfigValue -Name 'check_updates'
     if ($null -ne $saved) { return $saved -eq 'true' }
@@ -175,7 +207,7 @@ function Update-DevNavigator {
     try {
         Write-Host "Descargando DevNav v$latestText..."
         foreach ($assetName in $requiredAssets) {
-            Invoke-WebRequest -Uri $downloads[$assetName] -OutFile (Join-Path $temporaryRoot $assetName)
+            Invoke-DevDownload -Uri $downloads[$assetName] -OutFile (Join-Path $temporaryRoot $assetName)
         }
 
         $checksumLines = Get-Content -LiteralPath (Join-Path $temporaryRoot 'SHA256SUMS.txt')
