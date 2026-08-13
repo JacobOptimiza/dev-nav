@@ -99,7 +99,8 @@ scoop prefix devnav
 Get-Module -ListAvailable DevNav
 Get-Command dev -ErrorAction SilentlyContinue
 ```
-Si el alias sigue sin aparecer, ejecuta:
+Solo para una instalación clásica/bootstrap, si el alias sigue sin aparecer,
+comprueba e importa manualmente el módulo:
 
 ```powershell
 $module = Join-Path $env:LOCALAPPDATA 'Programs\DevNav\DevNav.psm1'
