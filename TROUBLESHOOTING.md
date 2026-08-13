@@ -68,8 +68,23 @@ cargo --version
 `dev` is a PowerShell alias exported by the DevNav module; the installer does
 not add `dev.exe` directly to the global `PATH`.
 
-This also applies after a successful Bun, npm, pnpm or Yarn bootstrap. Open a
-new PowerShell 7 session before diagnosing the installation.
+This also applies after a successful Bun, npm, pnpm, Yarn, PowerShell or GitHub
+installer bootstrap. Open a new PowerShell 7 session before diagnosing the
+installation.
+
+For classic/bootstrap installations, the module normally lives under:
+
+```text
+%LOCALAPPDATA%\Programs\DevNav
+```
+
+For Scoop-managed installations, diagnose the Scoop-owned copy instead:
+
+```powershell
+scoop prefix devnav
+Get-Module -ListAvailable DevNav
+Get-Command dev -ErrorAction SilentlyContinue
+```
 
 Open a new PowerShell 7 window and run:
 
@@ -80,15 +95,18 @@ Get-Module -ListAvailable
 Get-Command dev -ErrorAction SilentlyContinue
 ```
 
-The profile should import:
+Classic/bootstrap installations should import:
 
 ```text
 %LOCALAPPDATA%\Programs\DevNav\DevNav.psm1
 ```
 
-To repair the import, rerun `install.ps1`. Do not place `dev.exe` alone on
-`PATH`, because that bypasses the wrapper required to change the current shell
-directory and run commands.
+To repair a classic/bootstrap installation, rerun `install.ps1`. For Scoop,
+use `scoop update devnav`, or, if necessary, `scoop uninstall devnav` followed
+by `scoop install jacoboptimiza/devnav`. Do not place `dev.exe` alone on `PATH`,
+because that bypasses the wrapper required to change the current shell
+directory and run commands. Do not repair a Scoop installation by editing the
+PowerShell profile manually.
 
 ## Configuration
 
@@ -180,8 +198,10 @@ installed without explicit confirmation.
 
 ### Install an update manually
 
-Installs bootstrapped through Bun, npm, pnpm, Yarn, PowerShell or the GitHub
-installer use DevNav's own updater. Do not use the package runner to update it.
+Classic/bootstrap channels (Bun, npm, pnpm, Yarn, PowerShell and the GitHub
+installer) use DevNav's own updater. Scoop installations use `scoop update
+devnav`; do not use the package runner to update them. On Scoop, `dev update`
+only delegates to Scoop and does not self-update.
 
 Run:
 

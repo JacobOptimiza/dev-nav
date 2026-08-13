@@ -68,6 +68,29 @@ runtime.
 
 </details>
 
+### Scoop
+
+Añade el bucket oficial de DevNav:
+
+```powershell
+scoop bucket add jacoboptimiza https://github.com/JacobOptimiza/scoop-bucket
+```
+
+Instala DevNav:
+
+```powershell
+scoop install jacoboptimiza/devnav
+```
+
+Scoop instala la versión nativa portable y es el propietario de los archivos
+instalados; no utiliza el instalador Inno Setup.
+
+Actualiza las instalaciones gestionadas por Scoop con:
+
+```powershell
+scoop update devnav
+```
+
 ### PowerShell
 
 No requiere Node.js ni ningún gestor de paquetes. Ejecuta el instalador oficial
@@ -95,7 +118,7 @@ Los mismos instaladores por usuario para x64 y ARM64 están disponibles en la
 |---|---|
 | Instalador de GitHub | Disponible |
 | npm, Bun, pnpm y Yarn | Disponibles |
-| Scoop | Próximamente: los artefactos portables existen, pero el bucket público sigue en validación |
+| Scoop | Disponible — [bucket oficial JacobOptimiza/scoop-bucket](https://github.com/JacobOptimiza/scoop-bucket) |
 | WinGet | Pendiente de aprobación de Microsoft para `JacobOptimiza.DevNav` |
 
 ### Iniciar DevNav
@@ -290,6 +313,10 @@ verifica los archivos con SHA-256 y conserva la configuración local.
 Las instalaciones iniciadas mediante npm, Bun, pnpm, Yarn, PowerShell o el
 instalador de GitHub usan `dev update`; el canal de bootstrap no gestiona las
 actualizaciones posteriores.
+
+Las instalaciones gestionadas por Scoop usan `scoop update devnav`. El marcador
+`.devnav-managed-by-scoop` hace que `dev update` detecte que Scoop es el
+propietario, no se autoactualice y muestre el comando de Scoop.
 
 En el primer inicio interactivo, DevNav pregunta una sola vez si puede comprobar
 si hay nuevas versiones. Nunca descarga ni instala sin confirmación explícita.
