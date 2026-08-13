@@ -52,8 +52,8 @@ Set-Location dev-nav
 
 ### Próximos canales de gestores de paquetes
 
-No están disponibles en v0.9.7. Estos comandos estarán disponibles a partir de
-la primera release multicanal posterior a v0.9.7. Los mismos
+Todavía no están disponibles. Estos comandos están previstos para la primera
+release multicanal, v0.10.0. Los mismos
 bytes de la release también se distribuirán mediante npm y Scoop. DevNav nunca
 se recompila por canal: cada paquete deriva de la release canónica de GitHub y
 de su inventario `release-manifest.json`.

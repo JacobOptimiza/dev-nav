@@ -170,7 +170,7 @@ jobs:
               "64bit": { url: $url_x64, hash: $sha_x64 },
               "arm64": { url: $url_arm64, hash: $sha_arm64 }
             }' "$GITHUB_WORKSPACE/packaging/scoop/devnav.template.json" > devnav.scoop.json
-      # Every public release artifact is inventoried here; npm, Scoop and
+      # Release payload artifacts are inventoried here; npm, Scoop and
       # WinGet all derive from this single source of truth.
       - name: Generate the release manifest
         working-directory: artifacts
@@ -228,10 +228,8 @@ jobs:
   npm-package:
     needs: publish
     runs-on: windows-latest
-    environment: npm-production
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -327,9 +325,35 @@ jobs:
               Pop-Location
             }
           }
-      # Publishes to the npm staging area through OIDC trusted publishing; no
-      # NPM_TOKEN is stored anywhere. A maintainer with 2FA approves the staged
-      # version on npmjs.com to make it public.
-      - name: Stage publish to npm via OIDC trusted publishing
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: npm-package-${{ github.ref_name }}
+          path: npm-package/*.tgz
+          if-no-files-found: error
+
+  npm-publish:
+    needs: npm-package
+    if: ${{ vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: npm-production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Install a pinned npm CLI
+        run: npm install --global npm@12.0.2
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: npm-package-${{ github.ref_name }}
+          path: npm-package
+      - name: Stage the exact tested tarball via OIDC trusted publishing
         working-directory: npm-package
-        run: npm stage publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarball=(jacoboptimiza-devnav-*.tgz)
+          test "${#tarball[@]}" -eq 1
+          npm stage publish "./${tarball[0]}"
