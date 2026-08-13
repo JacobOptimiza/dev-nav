@@ -35,29 +35,17 @@ mismatch. npm versions are immutable once public, so treat them with the same
 care as tags.
 
 The npm and Scoop channels must never publish versions up to and including
-0.9.7 — those releases predate this packaging. The first multichannel release
-is the next normal version after this machinery lands; the release workflow
-enforces the floor.
+0.9.7 — those releases predate this packaging. v0.10.0 is the first
+multichannel release; the release workflow enforces the floor.
 
 ### npm trusted publishing
 
-Publishing uses OIDC trusted publishing with staged publishing; no `NPM_TOKEN`
-exists anywhere. One-time setup on npmjs.com:
-
-1. Enable 2FA on the npm account and verify ownership of the
-   `@jacoboptimiza` scope.
-2. Publish the very first version manually from a locally inspected tarball
-   (`npm pack`, then `npm publish --access public`). Staged publishing and
-   trusted publishing require the package to already exist.
-3. Configure the trusted publisher: repository `JacobOptimiza/dev-nav`,
-   workflow `release.yml`, environment `npm-production`, allowed action
-   `npm stage publish` only.
-4. In the package settings, require two-factor authentication and disallow
-   tokens.
-5. Protect the `npm-production` GitHub environment with required reviewers.
-
-After that, tagging a release stages the npm package automatically and a
-maintainer with 2FA approves it on npmjs.com.
+Future publishing uses OIDC trusted publishing with staged publishing; no
+`NPM_TOKEN` exists anywhere. The trusted publisher is restricted to repository
+`JacobOptimiza/dev-nav`, workflow `release.yml`, environment `npm-production`,
+and the `npm stage publish` action. The initial v0.10.0 package was published
+manually to establish the package; later releases stage the exact tested
+tarball for maintainer approval on npmjs.com.
 
 ### Scoop bucket
 

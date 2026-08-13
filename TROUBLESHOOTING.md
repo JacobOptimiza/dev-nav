@@ -68,6 +68,9 @@ cargo --version
 `dev` is a PowerShell alias exported by the DevNav module; the installer does
 not add `dev.exe` directly to the global `PATH`.
 
+This also applies after a successful Bun, npm, pnpm or Yarn bootstrap. Open a
+new PowerShell 7 session before diagnosing the installation.
+
 Open a new PowerShell 7 window and run:
 
 ```powershell
@@ -177,8 +180,8 @@ installed without explicit confirmation.
 
 ### Install an update manually
 
-Scoop-managed installs are updated by Scoop; use `scoop update devnav` rather
-than `dev update` or `Shift+U`.
+Installs bootstrapped through Bun, npm, pnpm, Yarn, PowerShell or the GitHub
+installer use DevNav's own updater. Do not use the package runner to update it.
 
 Run:
 

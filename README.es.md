@@ -1,106 +1,133 @@
 # DevNav
 
+**Navegación rápida y nativa entre proyectos para PowerShell 7 en Windows.**
+
+[![CI](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml/badge.svg)](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/JacobOptimiza/dev-nav)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
+[![npm](https://img.shields.io/npm/v/@jacoboptimiza/devnav?logo=npm)](https://www.npmjs.com/package/@jacoboptimiza/devnav)
+[![Windows](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-0078D4)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
+[![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](LICENSE)
+
 [English](README.md) | **Español**
 
 ![Interfaz de terminal de DevNav](assets/devnav-preview.svg)
 
-**DevNav es un navegador de espacios de trabajo nativo y de alto rendimiento para
-PowerShell 7 en Windows.** Permite seleccionar una carpeta, cambiar la ubicación del shell,
-guardar favoritos globales, asignar alias y abrir Codex, Claude Code, OpenCode o
-Kimi en el repositorio activo.
+Salta entre proyectos, filtra espacios de trabajo, guarda favoritos y alias, y
+abre agentes de programación o ejecuta comandos directamente en el repositorio
+seleccionado.
 
-**Documentación:** [Instalación](#1-instalar-devnav) · [Primer inicio](#2-elegir-la-ruta-de-inicio) · [Shortcuts](#shortcuts) · [FAQ](#faq) · [Troubleshooting](TROUBLESHOOTING.es.md) · [Seguridad](SECURITY.md)
+## Instalar DevNav
 
-## Requisitos
+Elige la herramienta que ya utilizas. Cada bootstrap instala la misma release
+nativa de DevNav para Windows x64 o ARM64.
 
-- Windows 10 u 11, x64 o ARM64.
-- PowerShell 7 o posterior (`pwsh`).
-- Windows Terminal recomendado.
+### Gestores de paquetes
 
-Los binarios publicados no requieren Rust ni Visual Studio. Windows PowerShell
-5.1, Windows de 32 bits, Linux y macOS no están soportados.
+#### Bun
 
-## 1. Instalar DevNav
+```powershell
+bunx --bun @jacoboptimiza/devnav install
+```
 
-### Instalación rápida
+#### npm
 
-Ejecuta una sola orden en PowerShell 7:
+```powershell
+npx --yes @jacoboptimiza/devnav install
+```
+
+#### pnpm
+
+```powershell
+pnx @jacoboptimiza/devnav install
+```
+
+#### Yarn
+
+```powershell
+yarn dlx -p @jacoboptimiza/devnav devnav install
+```
+
+Son canales de bootstrap verificados, no instalaciones JavaScript de DevNav.
+No tienen script `postinstall` ni dependencias en runtime: el bootstrap elige el
+instalador oficial x64 o ARM64, verifica su SHA-256 con
+`release-manifest.json`, lo instala y valida la versión final.
+
+Después, DevNav se actualiza con `dev update`, no con npm, Bun, pnpm o Yarn. El
+gestor sirve para descubrir e instalar la aplicación; no pasa a ser propietario
+de la instalación.
+
+<details>
+<summary>Cómo funciona la instalación mediante gestores</summary>
+
+El paquete npm contiene los instaladores de la release canónica de GitHub. Al
+ejecutar `install`, detecta Windows y la arquitectura, comprueba el instalador
+elegido contra el inventario de la release, ejecuta silenciosamente el
+instalador Inno Setup por usuario y confirma que `dev.exe --version` coincide
+con la versión del paquete. El gestor termina después y no es necesario en
+runtime.
+
+</details>
+
+### PowerShell
+
+No requiere Node.js ni ningún gestor de paquetes. Ejecuta el instalador oficial
+desde PowerShell 7:
 
 ```powershell
 irm https://raw.githubusercontent.com/JacobOptimiza/dev-nav/main/install.ps1 | iex
 ```
 
-La distribución mediante WinGet se está preparando con un instalador silencioso
-por usuario. Hasta que `JacobOptimiza.DevNav` sea aceptado en el origen
-comunitario, utiliza el instalador de PowerShell anterior; `winget install
-JacobOptimiza.DevNav` todavía no está disponible.
-
-El instalador detecta la arquitectura, descarga el ejecutable y el módulo desde
-la última release, verifica ambos checksums SHA-256 y configura el perfil.
-
-### Instalación desde un clon
-
-Git sólo es necesario para esta modalidad de instalación o para desarrollo.
-El repositorio puede clonarse en cualquier ubicación; no tiene que estar dentro
-de la carpeta que contiene tus repositorios:
+Si prefieres inspeccionar el script antes de ejecutarlo:
 
 ```powershell
-git clone https://github.com/JacobOptimiza/dev-nav.git
-Set-Location dev-nav
-.\install.ps1
+$installer = Join-Path $env:TEMP 'devnav-install.ps1'
+Invoke-WebRequest https://raw.githubusercontent.com/JacobOptimiza/dev-nav/main/install.ps1 -OutFile $installer
+Get-Content $installer
+& $installer
 ```
 
-### Próximos canales de gestores de paquetes
+Los mismos instaladores por usuario para x64 y ARM64 están disponibles en la
+[última release de GitHub](https://github.com/JacobOptimiza/dev-nav/releases/latest).
 
-Todavía no están disponibles. Estos comandos están previstos para la primera
-release multicanal, v0.10.0. Los mismos
-bytes de la release también se distribuirán mediante npm y Scoop. DevNav nunca
-se recompila por canal: cada paquete deriva de la release canónica de GitHub y
-de su inventario `release-manifest.json`.
+### Otros canales de distribución
 
-Con Bun, npm, pnpm o Yarn — un único paquete, `@jacoboptimiza/devnav`, actúa
-como bootstrap explícito (sin `postinstall` ni dependencias en runtime):
+| Canal | Estado |
+|---|---|
+| Instalador de GitHub | Disponible |
+| npm, Bun, pnpm y Yarn | Disponibles |
+| Scoop | Próximamente: los artefactos portables existen, pero el bucket público sigue en validación |
+| WinGet | Pendiente de aprobación de Microsoft para `JacobOptimiza.DevNav` |
 
-```sh
-bunx --bun @jacoboptimiza/devnav install            # Bun
-npx --yes @jacoboptimiza/devnav install             # npm
-pnx @jacoboptimiza/devnav install                   # pnpm
-yarn dlx -p @jacoboptimiza/devnav devnav install    # Yarn
-```
+### Iniciar DevNav
 
-El bootstrap verifica el SHA-256 del instalador incluido contra el manifiesto
-de la release, lo ejecuta silenciosamente y comprueba la versión instalada.
-DevNav sigue siendo una aplicación independiente con su propio actualizador, así
-que el paquete no necesita permanecer instalado.
-
-Con Scoop:
+Abre una sesión nueva de PowerShell 7:
 
 ```powershell
-scoop bucket add jacoboptimiza https://github.com/JacobOptimiza/scoop-bucket
-scoop install jacoboptimiza/devnav
+dev
 ```
 
-Scoop es el propietario de los archivos que instala, por lo que una instalación
-gestionada por Scoop omite su autoactualizador: actualízala con `scoop update
-devnav`.
+Continúa con [Primer inicio](#primer-inicio-elegir-la-ruta-de-inicio) para elegir
+la carpeta que DevNav mostrará al abrirse.
 
-El instalador:
+### Requisitos
 
-1. Detecta si Windows es x64 o ARM64.
-2. Descarga el binario desde GitHub Releases.
-3. Verifica los checksums SHA-256 del ejecutable y del módulo antes de instalarlos.
-4. Copia DevNav a `%LOCALAPPDATA%\Programs\DevNav`.
-5. Añade el módulo al perfil de PowerShell 7 sin modificar el `PATH` global.
+- Windows 10 u 11 en x64 o ARM64.
+- PowerShell 7 o posterior (`pwsh`).
+- Windows Terminal recomendado.
 
-Cierra y vuelve a abrir PowerShell 7. Comprueba que quedó instalado:
+Los binarios publicados no requieren Rust ni Visual Studio. Solo necesitas un
+gestor de paquetes si eliges su comando de bootstrap. Windows PowerShell 5.1,
+Windows de 32 bits, Linux y macOS no están soportados.
 
-```powershell
-Get-Command dev
-```
+## ¿Por qué DevNav?
 
-`Get-Command dev` debe mostrar el alias de DevNav.
+- Arranca directamente en el espacio de trabajo que elijas.
+- Mantiene disponibles todos tus favoritos mientras navegas entre unidades.
+- Abre agentes o ejecuta comandos en el repositorio resaltado.
+- Devuelve correctamente los cambios de directorio a la sesión actual.
+- Es una aplicación nativa para Windows, centrada en teclado y sin telemetría.
 
-## 2. Elegir la ruta de inicio
+## Primer inicio: elegir la ruta de inicio
 
 La **ruta de inicio** es la carpeta que contiene tus repositorios o aquella que
 quieres ver cada vez que ejecutas `dev`. La forma recomendada de configurarla no
@@ -139,50 +166,6 @@ funcionando cuando todavía no existe una ruta guardada. La ruta elegida mediant
 
 ```powershell
 $env:DEV_HOME = $HOME
-```
-
-### Actualizar
-
-No necesitas volver a clonar el repositorio. Puedes actualizar de cualquiera de
-estas dos formas:
-
-- Desde PowerShell, ejecuta:
-
-```powershell
-dev update
-```
-
-- Desde la TUI de DevNav, pulsa `Shift+U` (`Mayús+U`). Puedes consultar este y
-  el resto de shortcuts en cualquier momento pulsando `F1`.
-
-DevNav compara la versión instalada con la última release publicada. Si ya
-tienes la última, no modifica ningún archivo. Si existe una versión nueva,
-descarga el ejecutable adecuado para tu arquitectura y el módulo de PowerShell,
-verifica ambos con SHA-256, los instala y confirma la versión actualizada.
-La actualización sólo sustituye `dev.exe` y `DevNav.psm1`: nunca elimina ni
-sobrescribe `%LOCALAPPDATA%\DevNav\config.tsv`, donde se conservan la ruta de
-inicio, los favoritos y los alias.
-
-**Instalaciones gestionadas por Scoop:** utiliza `scoop update devnav` en lugar
-de `dev update` o `Mayús+U`.
-
-En el primer inicio interactivo, DevNav pregunta una sola vez si puede comprobar
-en GitHub si hay nuevas versiones al arrancar. Esta comprobación nunca descarga
-ni instala nada sin una confirmación explícita. No muestra nada si ya tienes la
-última versión o falla la red, y se omite en sesiones no interactivas. Puedes
-cambiar la preferencia guardada con `Ctrl+U` o desde PowerShell:
-
-```powershell
-Set-DevUpdateCheck $true   # activar
-Set-DevUpdateCheck $false  # desactivar
-```
-
-### Compilar desde el código fuente
-
-Solo para desarrollo; requiere Rust stable y MSVC Build Tools:
-
-```powershell
-.\install.ps1 -BuildFromSource
 ```
 
 ## Favoritos globales, incluso fuera de la raíz
@@ -292,6 +275,31 @@ Los accesos de agentes son opcionales: DevNav devuelve el comando a PowerShell,
 por lo que únicamente necesitas tener instalado y disponible en `PATH` el CLI que
 quieras abrir.
 
+## Actualizar
+
+Desde PowerShell:
+
+```powershell
+dev update
+```
+
+También puedes pulsar `Shift+U` (`Mayús+U`) dentro de la TUI. DevNav compara la
+versión instalada con la última release, descarga solo cuando hace falta,
+verifica los archivos con SHA-256 y conserva la configuración local.
+
+Las instalaciones iniciadas mediante npm, Bun, pnpm, Yarn, PowerShell o el
+instalador de GitHub usan `dev update`; el canal de bootstrap no gestiona las
+actualizaciones posteriores.
+
+En el primer inicio interactivo, DevNav pregunta una sola vez si puede comprobar
+si hay nuevas versiones. Nunca descarga ni instala sin confirmación explícita.
+Cambia esta preferencia con `Ctrl+U` o desde PowerShell:
+
+```powershell
+Set-DevUpdateCheck $true   # activar
+Set-DevUpdateCheck $false  # desactivar
+```
+
 ## Arquitectura
 
 - Rust 2024 y Win32 mediante `windows-sys`.
@@ -303,11 +311,14 @@ quieras abrir.
 
 ## Seguridad y privacidad
 
-- Sin telemetría. La red sólo se usa para la comprobación opcional consentida y las actualizaciones explícitas.
+- Sin telemetría. La red sólo se usa para instalar, para la comprobación
+  opcional consentida y para actualizaciones explícitas.
 - Sin credenciales, secretos o configuración personal en el repositorio.
 - La configuración local está separada de los archivos reemplazados al actualizar.
 - Binarios de release con checksum SHA-256.
 - Workflows con permisos mínimos y acciones fijadas a commits concretos.
+- Las futuras releases npm usan Trusted Publishing mediante OIDC; no se guarda
+  ningún `NPM_TOKEN`.
 - Dependabot revisa Cargo y GitHub Actions.
 - `main` está protegida y únicamente los administradores pueden actualizarla.
 - El repositorio público es de solo lectura: permite consultar, clonar y descargar,
@@ -382,9 +393,8 @@ y actualiza DevNav. [Ver diagnóstico](TROUBLESHOOTING.es.md#cierre-inesperado-o
 
 ### ¿Cómo actualizo DevNav?
 
-En instalaciones normales, ejecuta `dev update` desde PowerShell o pulsa
-`Shift+U` dentro de la TUI. Si DevNav está gestionado por Scoop, utiliza
-`scoop update devnav`.
+Ejecuta `dev update` desde PowerShell o pulsa `Shift+U` dentro de la TUI. Esto
+también se aplica a instalaciones iniciadas mediante npm, Bun, pnpm o Yarn.
 [Ver pasos](TROUBLESHOOTING.es.md#actualización).
 
 ### ¿Cómo desactivo o vuelvo a activar la comprobación al iniciar?
