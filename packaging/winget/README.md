@@ -8,27 +8,29 @@ the generated `winget-manifests-<version>.zip` release asset and validate it wit
 winget validate .\manifests\j\JacobOptimiza\DevNav\<version>
 ```
 
-The current `0.9.3` manifests are also committed in this directory so they can
-be copied directly into a submission branch for `microsoft/winget-pkgs`.
+The committed `0.9.3` manifests are historical seed/reference fixtures for the
+first submission. They are not the current release and should not be treated as
+the permanent procedure.
 
-The first submission must be opened against `microsoft/winget-pkgs`. Future
-releases can use `wingetcreate update` from a protected GitHub Actions secret.
+Submissions are opened against `microsoft/winget-pkgs`. Automation of future
+WinGet updates is intentionally deferred until the package has been accepted
+and a real catalog installation has been verified.
 Never replace the versioned URLs in a manifest with `/latest/download/` URLs.
 
-## Submit the first version
+## Submit a version
 
 In the Microsoft repository, manifests must be placed under the publisher-prefix
-directory `manifests/j/JacobOptimiza/DevNav/0.9.3/`. The files in this folder
-already use that layout. From a fork, validate, commit and open a pull request:
+directory `manifests/j/JacobOptimiza/DevNav/<version>/`. From a fork, validate,
+commit and open a pull request using the desired version:
 
 ```powershell
-winget validate .\manifests\j\JacobOptimiza\DevNav\0.9.3
-git checkout -b JacobOptimiza-DevNav-0.9.3
-git add manifests\j\JacobOptimiza\DevNav\0.9.3
-git commit -m "New package: JacobOptimiza.DevNav version 0.9.3"
-git push -u origin JacobOptimiza-DevNav-0.9.3
+winget validate .\manifests\j\JacobOptimiza\DevNav\<version>
+git checkout -b JacobOptimiza-DevNav-<version>
+git add manifests\j\JacobOptimiza\DevNav\<version>
+git commit -m "Update package: JacobOptimiza.DevNav version <version>"
+git push -u origin JacobOptimiza-DevNav-<version>
 gh pr create --repo microsoft/winget-pkgs --base master `
-  --head JacobOptimiza:JacobOptimiza-DevNav-0.9.3
+  --head JacobOptimiza:JacobOptimiza-DevNav-<version>
 ```
 
 The GitHub token used for this step must be allowed to create a fork and pull

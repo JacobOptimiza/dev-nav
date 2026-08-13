@@ -24,6 +24,9 @@ if ($parseErrors.Count -gt 0) {
     throw "PowerShell syntax errors:`n$($details -join "`n")"
 }
 
+$manifestPath = Join-Path $RepositoryRoot 'powershell\DevNav.psd1'
+Test-ModuleManifest -Path $manifestPath -ErrorAction Stop | Out-Null
+
 $diagnostics = @(
     foreach ($file in $powerShellFiles) {
         Invoke-ScriptAnalyzer -Path ([string] $file.FullName) -Settings $settingsPath

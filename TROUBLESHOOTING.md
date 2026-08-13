@@ -148,7 +148,8 @@ Install the missing CLI through its official installer and open a new terminal.
 1. Use PowerShell 7 inside Windows Terminal.
 2. Run `dev`, not the internal `dev.exe` directly.
 3. Close older DevNav instances.
-4. Run `dev update` and open a new terminal.
+4. Update DevNav using the installation channel that owns it, then open a new
+   terminal.
 
 If the problem continues, record the error shown after returning to the prompt
 and include:
@@ -175,6 +176,9 @@ installed version is current or the network is unavailable, and no update is
 installed without explicit confirmation.
 
 ### Install an update manually
+
+Scoop-managed installs are updated by Scoop; use `scoop update devnav` rather
+than `dev update` or `Shift+U`.
 
 Run:
 

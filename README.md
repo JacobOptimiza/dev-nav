@@ -45,7 +45,7 @@ irm https://raw.githubusercontent.com/JacobOptimiza/dev-nav/main/install.ps1 | i
 ```
 
 The latest release also includes silent per-user installers for x64 and ARM64.
-Download them from the [v0.9.3 release](https://github.com/JacobOptimiza/dev-nav/releases/tag/v0.9.3).
+Download them from the [latest release](https://github.com/JacobOptimiza/dev-nav/releases/latest).
 The `JacobOptimiza.DevNav` WinGet submission is prepared and validated, but the
 command becomes available only after Microsoft accepts the manifest in the
 community source. Until then, use the PowerShell installer above or the release
@@ -64,6 +64,39 @@ Set-Location dev-nav
 Get-Content .\install.ps1
 .\install.ps1
 ```
+
+### Upcoming package-manager channels
+
+Not available in v0.9.7. These commands become available with the first
+multichannel release after v0.9.7. The same
+release bytes will also be distributed through npm and Scoop. DevNav is never
+rebuilt per channel: every package derives from the canonical GitHub release
+and its `release-manifest.json` inventory.
+
+With Bun, npm, pnpm or Yarn — one package, `@jacoboptimiza/devnav`, works as an
+explicit bootstrap (no `postinstall`, no runtime dependencies):
+
+```sh
+bunx --bun @jacoboptimiza/devnav install            # Bun
+npx --yes @jacoboptimiza/devnav install             # npm
+pnx @jacoboptimiza/devnav install                   # pnpm
+yarn dlx -p @jacoboptimiza/devnav devnav install    # Yarn
+```
+
+The bootstrap verifies the bundled installer's SHA-256 against the release
+manifest, runs it silently and checks the installed version. DevNav remains a
+standalone application with its own updater, so the package does not need to
+stay installed afterwards.
+
+With Scoop:
+
+```powershell
+scoop bucket add jacoboptimiza https://github.com/JacobOptimiza/scoop-bucket
+scoop install jacoboptimiza/devnav
+```
+
+Scoop owns the files it installs, so a Scoop-managed DevNav skips its self
+updater: update it with `scoop update devnav` instead.
 
 Open a new PowerShell 7 window and run:
 
@@ -118,6 +151,7 @@ Press `F1` at any time for the complete, scrollable help panel.
 | `←` / `h` / `Backspace` | Go to the parent directory |
 | `/` | Start incremental fuzzy filtering |
 | `p` | Open any absolute path or drive |
+| `.` | Select the directory currently shown |
 | `g` | Return to the startup directory |
 | `Ctrl+S` | Save the highlighted directory as startup directory, with confirmation |
 | `f` | Add or remove a global favorite |
@@ -142,6 +176,19 @@ Press `F1` at any time for the complete, scrollable help panel.
 
 `:` remains available as a Vim-style alias for `e`.
 
+### Custom commands
+
+Bind commands to `Shift+1` … `Shift+9` and run them in the highlighted project:
+
+```powershell
+dev shortcut 1 "Dev" "bun run dev"
+dev shortcut 2 "Tests" "cargo test"
+```
+
+Use `Set-DevShortcut` for scripts, overwrite a slot by using the same index, or
+remove one with `Remove-DevShortcut -Index 1` (or `dev shortcut 1`). Bindings
+persist locally and appear in the `F1` help panel.
+
 ## Update
 
 From PowerShell:
@@ -154,6 +201,9 @@ Or press `Shift+U` inside the TUI. DevNav compares the installed semantic
 version with the latest release, downloads only when needed, verifies checksums,
 and reports the result. The updater replaces only application files and preserves
 the separate local configuration.
+
+Scoop-managed installs: use `scoop update devnav` instead of `dev update` or
+`Shift+U`.
 
 On the first interactive launch, DevNav asks once whether it may check GitHub for
 new releases at startup. This check never downloads or installs anything without
