@@ -20,7 +20,7 @@ impl DirectoryEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ShellResult {
     ChangeDirectory(PathBuf),
     Execute { directory: PathBuf, command: String },
@@ -56,6 +56,22 @@ mod tests {
         ShellResult::Update.write_to(&path).expect("write update result");
 
         assert_eq!(fs::read_to_string(&path).expect("read result"), "update\0\0");
+        fs::remove_file(path).expect("remove result");
+    }
+
+    #[test]
+    fn execute_result_carries_the_directory_and_command_verbatim() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let path = std::env::temp_dir().join(format!("devnav-exec-{unique}"));
+        let directory = std::path::PathBuf::from("C:\\code\\dev-nav");
+        let command = "bun run dev";
+
+        ShellResult::Execute { directory: directory.clone(), command: command.into() }
+            .write_to(&path)
+            .expect("write exec result");
+
+        let payload = fs::read_to_string(&path).expect("read exec result");
+        assert_eq!(payload, format!("exec\0{}\0{command}", directory.display()));
         fs::remove_file(path).expect("remove result");
     }
 }

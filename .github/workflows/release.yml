@@ -65,16 +65,36 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Release tags must point to a commit contained in main.' }
           $cargoVersion = (Get-Content Cargo.toml | Select-String '^version = "([0-9.]+)"$').Matches.Groups[1].Value
           if ($cargoVersion -ne $version) { throw "Tag version $version does not match Cargo.toml version $cargoVersion." }
+          $moduleManifestVersion = (Test-ModuleManifest -Path powershell/DevNav.psd1).Version.ToString()
+          if ($moduleManifestVersion -ne $version) { throw "Tag version $version does not match DevNav.psd1 version $moduleManifestVersion." }
+          $npmPackageVersion = (Get-Content packaging/npm/package.json -Raw | ConvertFrom-Json).version
+          if ($npmPackageVersion -ne $version) { throw "Tag version $version does not match packaging/npm/package.json version $npmPackageVersion." }
+          $scoopTemplateVersion = (Get-Content packaging/scoop/devnav.template.json -Raw | ConvertFrom-Json).version
+          if ($scoopTemplateVersion -ne $version) { throw "Tag version $version does not match packaging/scoop/devnav.template.json version $scoopTemplateVersion." }
           if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw 'Verified Inno Setup compiler was not found.' }
           & $iscc "/Qp" "/DMyAppVersion=$version" "/DArchitecture=${{ matrix.architecture }}" "installer\DevNav.iss"
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
           Copy-Item "release-assets/DevNavSetup-${{ matrix.architecture }}.exe" "DevNavSetup-${{ matrix.architecture }}.exe"
+          if ([version]$version -le [version]'0.9.7') {
+            throw "npm/Scoop channels must not publish v${version}; the first multichannel release must be newer than 0.9.7."
+          }
+          # Scoop owns the files it installs, so it gets a portable ZIP built
+          # from the same compiled bytes instead of the Inno installer. The
+          # marker file tells DevNav to defer updates to Scoop.
+          $scoopStage = Join-Path $env:RUNNER_TEMP "DevNav-scoop-${{ matrix.architecture }}"
+          New-Item -ItemType Directory -Path $scoopStage -Force | Out-Null
+          Copy-Item "release-assets/dev.exe" (Join-Path $scoopStage 'dev.exe')
+          Copy-Item "powershell/DevNav.psm1" (Join-Path $scoopStage 'DevNav.psm1')
+          Copy-Item "powershell/DevNav.psd1" (Join-Path $scoopStage 'DevNav.psd1')
+          New-Item -ItemType File -Path (Join-Path $scoopStage '.devnav-managed-by-scoop') -Force | Out-Null
+          Compress-Archive -Path (Join-Path $scoopStage '*') -DestinationPath "DevNav-scoop-${{ matrix.architecture }}.zip" -CompressionLevel Optimal -Force
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.asset }}
           path: |
             ${{ matrix.asset }}
             DevNavSetup-${{ matrix.architecture }}.exe
+            DevNav-scoop-${{ matrix.architecture }}.zip
 
   publish:
     needs: build
@@ -89,9 +109,7 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - run: cp powershell/DevNav.psm1 artifacts/DevNav.psm1
-      - working-directory: artifacts
-        run: sha256sum *.exe DevNav.psm1 > SHA256SUMS.txt
+      - run: cp powershell/DevNav.psm1 powershell/DevNav.psd1 artifacts/
       - name: Generate immutable WinGet manifests
         working-directory: artifacts
         shell: bash
@@ -139,13 +157,179 @@ jobs:
           ManifestVersion: 1.12.0
           EOF
           tar -a -c -f "winget-manifests-$version.zip" manifests
+      - name: Generate the Scoop manifest for this release
+        working-directory: artifacts
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          hash() { sha256sum "$1" | cut -d' ' -f1; }
+          base="https://github.com/JacobOptimiza/dev-nav/releases/download/v$version"
+          jq --arg version "$version" \
+            --arg url_x64 "$base/DevNav-scoop-x64.zip" --arg sha_x64 "$(hash DevNav-scoop-x64.zip)" \
+            --arg url_arm64 "$base/DevNav-scoop-arm64.zip" --arg sha_arm64 "$(hash DevNav-scoop-arm64.zip)" \
+            '.version = $version | .architecture = {
+              "64bit": { url: $url_x64, hash: $sha_x64 },
+              "arm64": { url: $url_arm64, hash: $sha_arm64 }
+            }' "$GITHUB_WORKSPACE/packaging/scoop/devnav.template.json" > devnav.scoop.json
+      # Every public release artifact is inventoried here; npm, Scoop and
+      # WinGet all derive from this single source of truth.
+      - name: Generate the release manifest
+        working-directory: artifacts
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          hash() { sha256sum "$1" | cut -d' ' -f1; }
+          jq -n --arg version "$version" \
+            --arg winget_file "winget-manifests-$version.zip" \
+            --arg installer_x64_sha "$(hash DevNavSetup-x64.exe)" \
+            --arg installer_arm64_sha "$(hash DevNavSetup-arm64.exe)" \
+            --arg scoop_x64_sha "$(hash DevNav-scoop-x64.zip)" \
+            --arg scoop_arm64_sha "$(hash DevNav-scoop-arm64.zip)" \
+            --arg winget_sha "$(hash "winget-manifests-$version.zip")" \
+            --arg binary_x64_sha "$(hash dev-windows-x86_64.exe)" \
+            --arg binary_arm64_sha "$(hash dev-windows-aarch64.exe)" \
+            --arg module_sha "$(hash DevNav.psm1)" \
+            --arg module_manifest_sha "$(hash DevNav.psd1)" \
+            --arg scoop_manifest_sha "$(hash devnav.scoop.json)" \
+            '{
+              schemaVersion: 1,
+              version: $version,
+              artifacts: {
+                "installer-x64": { file: "DevNavSetup-x64.exe", sha256: $installer_x64_sha },
+                "installer-arm64": { file: "DevNavSetup-arm64.exe", sha256: $installer_arm64_sha },
+                "scoop-x64": { file: "DevNav-scoop-x64.zip", sha256: $scoop_x64_sha },
+                "scoop-arm64": { file: "DevNav-scoop-arm64.zip", sha256: $scoop_arm64_sha },
+                "winget-manifests": { file: $winget_file, sha256: $winget_sha },
+                "binary-x64": { file: "dev-windows-x86_64.exe", sha256: $binary_x64_sha },
+                "binary-arm64": { file: "dev-windows-aarch64.exe", sha256: $binary_arm64_sha },
+                "module": { file: "DevNav.psm1", sha256: $module_sha },
+                "module-manifest": { file: "DevNav.psd1", sha256: $module_manifest_sha },
+                "scoop-manifest": { file: "devnav.scoop.json", sha256: $scoop_manifest_sha }
+              }
+            }' > release-manifest.json
+      - working-directory: artifacts
+        run: sha256sum *.exe *.zip DevNav.psm1 DevNav.psd1 devnav.scoop.json release-manifest.json > SHA256SUMS.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-manifest
+          path: artifacts/release-manifest.json
       - env:
           GH_TOKEN: ${{ github.token }}
         # Upload files only; the unpacked manifests directory is not a release asset.
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             artifacts/*.exe \
+            artifacts/*.zip \
             artifacts/*.psm1 \
+            artifacts/*.psd1 \
             artifacts/SHA256SUMS.txt \
-            artifacts/winget-manifests-*.zip \
+            artifacts/release-manifest.json \
+            artifacts/devnav.scoop.json \
             --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag
+
+  npm-package:
+    needs: publish
+    runs-on: windows-latest
+    environment: npm-production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # Node 24 is the canonical LTS baseline for release and npm
+          # publishing; Node 22 stays supported and Node 26 is exercised in CI
+          # for forward compatibility, but release ships on 24.
+          node-version: '24'
+      - name: Install a pinned npm CLI
+        run: npm install --global npm@12.0.2
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Assemble and verify the npm package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
+          if ([version]$version -le [version]'0.9.7') {
+            throw "npm must not publish v${version}; the first multichannel release must be newer than 0.9.7."
+          }
+          $stage = 'npm-package'
+          New-Item -ItemType Directory -Path "$stage\payload" -Force | Out-Null
+          Copy-Item packaging\npm\package.json, packaging\npm\README.md $stage
+          Copy-Item packaging\npm\bin $stage -Recurse
+          Copy-Item LICENSE $stage
+          Copy-Item artifacts\DevNavSetup-x64.exe, artifacts\DevNavSetup-arm64.exe "$stage\payload"
+          Copy-Item artifacts\release-manifest.json $stage
+          $package = Get-Content "$stage\package.json" -Raw | ConvertFrom-Json
+          if ($package.version -ne $version) { throw "package.json version $($package.version) does not match tag version $version." }
+          if ($package.PSObject.Properties['dependencies'] -or $package.PSObject.Properties['devDependencies']) {
+            throw 'The bootstrap package must not declare dependencies.'
+          }
+          if ($package.PSObject.Properties['scripts'] -and $package.scripts.PSObject.Properties['postinstall']) {
+            throw 'postinstall scripts are forbidden in the bootstrap package.'
+          }
+          $manifest = Get-Content "$stage\release-manifest.json" -Raw | ConvertFrom-Json
+          if ($manifest.version -ne $version) { throw "release-manifest.json version $($manifest.version) does not match tag version $version." }
+          foreach ($name in @('installer-x64', 'installer-arm64')) {
+            $entry = $manifest.artifacts.$name
+            $file = Join-Path $stage "payload\$($entry.file)"
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing payload file $($entry.file)." }
+            $actualHash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+            if ($actualHash -ne $entry.sha256.ToUpperInvariant()) { throw "SHA-256 mismatch for $($entry.file)." }
+          }
+      - name: Inspect the tarball before packing
+        working-directory: npm-package
+        run: npm pack --dry-run
+      - name: Pack the tarball
+        working-directory: npm-package
+        run: npm pack
+      - name: Run the bootstrap unit tests
+        run: node --test "tests/npm/**/*.test.mjs"
+      - name: End-to-end install on x64
+        working-directory: npm-package
+        shell: pwsh
+        run: |
+          node bin/devnav.mjs install
+          if ($LASTEXITCODE -ne 0) { throw 'Bootstrap install failed.' }
+      - name: Install pinned package managers
+        shell: pwsh
+        run: |
+          npm install --global bun@1.3.14 pnpm@11.21.0
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+      - name: Smoke test the documented ephemeral invocations
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
+          $tarball = (Resolve-Path "npm-package\jacoboptimiza-devnav-$version.tgz").Path
+          # Same forms the README documents, resolved against the local tarball
+          # instead of the registry.
+          $commands = [ordered]@{
+            'npm'  = { npx --yes --package $tarball devnav --version }
+            'bun'  = { bunx --bun "@jacoboptimiza/devnav@file:$tarball" --version }
+            'pnpm' = { pnx $tarball --version }
+            'yarn' = { yarn dlx -p "@jacoboptimiza/devnav@file:$tarball" devnav --version }
+          }
+          foreach ($manager in $commands.GetEnumerator()) {
+            $sandbox = Join-Path $env:RUNNER_TEMP "devnav-dlx-$($manager.Key)"
+            New-Item -ItemType Directory -Path $sandbox -Force | Out-Null
+            Push-Location $sandbox
+            try {
+              $output = & $manager.Value
+              if ($LASTEXITCODE -ne 0) { throw "$($manager.Key) ephemeral run failed." }
+              if (($output | Out-String).Trim() -ne $version) { throw "$($manager.Key) reported an unexpected version: $output" }
+            }
+            finally {
+              Pop-Location
+            }
+          }
+      # Publishes to the npm staging area through OIDC trusted publishing; no
+      # NPM_TOKEN is stored anywhere. A maintainer with 2FA approves the staged
+      # version on npmjs.com to make it public.
+      - name: Stage publish to npm via OIDC trusted publishing
+        working-directory: npm-package
+        run: npm stage publish

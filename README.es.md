@@ -4,8 +4,8 @@
 
 ![Interfaz de terminal de DevNav](assets/devnav-preview.svg)
 
-DevNav es un navegador TUI nativo para moverse entre repositorios desde PowerShell
-7 en Windows. Permite seleccionar una carpeta, cambiar la ubicación del shell,
+**DevNav es un navegador de espacios de trabajo nativo y de alto rendimiento para
+PowerShell 7 en Windows.** Permite seleccionar una carpeta, cambiar la ubicación del shell,
 guardar favoritos globales, asignar alias y abrir Codex, Claude Code, OpenCode o
 Kimi en el repositorio activo.
 
@@ -15,7 +15,6 @@ Kimi en el repositorio activo.
 
 - Windows 10 u 11, x64 o ARM64.
 - PowerShell 7 o posterior (`pwsh`).
-- Git, únicamente para clonar el repositorio durante la instalación.
 - Windows Terminal recomendado.
 
 Los binarios publicados no requieren Rust ni Visual Studio. Windows PowerShell
@@ -41,6 +40,7 @@ la última release, verifica ambos checksums SHA-256 y configura el perfil.
 
 ### Instalación desde un clon
 
+Git sólo es necesario para esta modalidad de instalación o para desarrollo.
 El repositorio puede clonarse en cualquier ubicación; no tiene que estar dentro
 de la carpeta que contiene tus repositorios:
 
@@ -49,6 +49,40 @@ git clone https://github.com/JacobOptimiza/dev-nav.git
 Set-Location dev-nav
 .\install.ps1
 ```
+
+### Próximos canales de gestores de paquetes
+
+No están disponibles en v0.9.7. Estos comandos estarán disponibles a partir de
+la primera release multicanal posterior a v0.9.7. Los mismos
+bytes de la release también se distribuirán mediante npm y Scoop. DevNav nunca
+se recompila por canal: cada paquete deriva de la release canónica de GitHub y
+de su inventario `release-manifest.json`.
+
+Con Bun, npm, pnpm o Yarn — un único paquete, `@jacoboptimiza/devnav`, actúa
+como bootstrap explícito (sin `postinstall` ni dependencias en runtime):
+
+```sh
+bunx --bun @jacoboptimiza/devnav install            # Bun
+npx --yes @jacoboptimiza/devnav install             # npm
+pnx @jacoboptimiza/devnav install                   # pnpm
+yarn dlx -p @jacoboptimiza/devnav devnav install    # Yarn
+```
+
+El bootstrap verifica el SHA-256 del instalador incluido contra el manifiesto
+de la release, lo ejecuta silenciosamente y comprueba la versión instalada.
+DevNav sigue siendo una aplicación independiente con su propio actualizador, así
+que el paquete no necesita permanecer instalado.
+
+Con Scoop:
+
+```powershell
+scoop bucket add jacoboptimiza https://github.com/JacobOptimiza/scoop-bucket
+scoop install jacoboptimiza/devnav
+```
+
+Scoop es el propietario de los archivos que instala, por lo que una instalación
+gestionada por Scoop omite su autoactualizador: actualízala con `scoop update
+devnav`.
 
 El instalador:
 
@@ -129,6 +163,9 @@ La actualización sólo sustituye `dev.exe` y `DevNav.psm1`: nunca elimina ni
 sobrescribe `%LOCALAPPDATA%\DevNav\config.tsv`, donde se conservan la ruta de
 inicio, los favoritos y los alias.
 
+**Instalaciones gestionadas por Scoop:** utiliza `scoop update devnav` en lugar
+de `dev update` o `Mayús+U`.
+
 En el primer inicio interactivo, DevNav pregunta una sola vez si puede comprobar
 en GitHub si hay nuevas versiones al arrancar. Esta comprobación nunca descarga
 ni instala nada sin una confirmación explícita. No muestra nada si ya tienes la
@@ -189,6 +226,7 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 | `Enter` | seleccionar la carpeta y volver a PowerShell |
 | `→` / `l` | entrar en la carpeta resaltada |
 | `←` / `h` | subir al directorio padre |
+| `Backspace` | subir al directorio padre |
 | `.` | seleccionar el directorio mostrado |
 | `g` | volver a la raíz configurada |
 | `p` | ir a cualquier ruta absoluta, incluso de otro disco |
@@ -228,6 +266,20 @@ puedes desplazarte con `↑` / `↓` y cerrarlo con `F1`, `Esc` o `Enter`.
 
 `:` se conserva como alias compatible de `e` para quienes prefieran el estilo de
 comandos de Vim.
+
+### Comandos personalizados
+
+Asigna comandos a `Shift+1` … `Shift+9` para ejecutarlos en el proyecto
+resaltado:
+
+```powershell
+dev shortcut 1 "Dev" "bun run dev"
+dev shortcut 2 "Tests" "cargo test"
+```
+
+Puedes usar `Set-DevShortcut` desde scripts, sobrescribir un slot repitiendo su
+índice o eliminarlo con `Remove-DevShortcut -Index 1` (o `dev shortcut 1`). Los
+atajos se guardan localmente y aparecen en la ayuda de `F1`.
 
 También puedes elegir primero el repositorio y pasar un comando desde el shell:
 
@@ -330,9 +382,9 @@ y actualiza DevNav. [Ver diagnóstico](TROUBLESHOOTING.es.md#cierre-inesperado-o
 
 ### ¿Cómo actualizo DevNav?
 
-Ejecuta `dev update` desde PowerShell o pulsa `Shift+U` dentro de la TUI. Ambas
-opciones comprueban la release más reciente y solo descargan e instalan archivos
-si existe una versión nueva.
+En instalaciones normales, ejecuta `dev update` desde PowerShell o pulsa
+`Shift+U` dentro de la TUI. Si DevNav está gestionado por Scoop, utiliza
+`scoop update devnav`.
 [Ver pasos](TROUBLESHOOTING.es.md#actualización).
 
 ### ¿Cómo desactivo o vuelvo a activar la comprobación al iniciar?

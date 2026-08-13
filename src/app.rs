@@ -67,6 +67,14 @@ impl App {
         }
     }
 
+    // The nested Option is the intentional run-loop outcome protocol:
+    //   None         = keep running (no result)
+    //   Some(None)   = leave the loop without a shell result (quit)
+    //   Some(Some(r))= leave the loop and emit `r` to the wrapper
+    // A dedicated enum would be clearer, but that is a semantic refactor of
+    // working code, out of scope for a pedantic audit.
+    #[allow(clippy::option_option)]
+    #[allow(clippy::too_many_lines)]
     fn handle_key(&mut self, key: Key) -> io::Result<Option<Option<ShellResult>>> {
         if matches!(key, Key::CtrlC) {
             return Ok(Some(None));
@@ -86,10 +94,7 @@ impl App {
                         self.help_scroll = self.help_scroll.saturating_sub(1);
                     }
                     Key::Down | Key::Char('j') => {
-                        self.help_scroll = self
-                            .help_scroll
-                            .saturating_add(1)
-                            .min(HELP_LINES.len().saturating_sub(1));
+                        self.help_scroll = self.help_scroll.saturating_add(1);
                     }
                     _ => {}
                 }
@@ -203,7 +208,7 @@ impl App {
                     Key::Enter => {
                         self.config.set_root(target.clone());
                         self.config.save(&self.config_path)?;
-                        self.home = target.clone();
+                        self.home.clone_from(&target);
                         self.mode = Mode::Normal;
                         self.message = format!("Ruta de inicio guardada: {}", target.display());
                     }
@@ -218,6 +223,9 @@ impl App {
         }
     }
 
+    /// See `handle_key`: the nested Option encodes the run-loop outcome
+    /// (continue / quit / emit) and is intentional.
+    #[allow(clippy::option_option)]
     fn handle_normal(&mut self, key: Key) -> io::Result<Option<Option<ShellResult>>> {
         match key {
             Key::Char('q') | Key::Escape => return Ok(Some(None)),
@@ -256,9 +264,10 @@ impl App {
             Key::Char('F') => self.toggle_favorites_visibility()?,
             Key::Char('a') => self.begin_alias(),
             Key::Char(character) if is_command_shortcut(character) => self.begin_command(),
+            Key::Shortcut(slot) => return Ok(self.execute_shortcut(slot).map(Some)),
             Key::Char(character) => {
                 if let Some(command) = agent_command(character) {
-                    return Ok(self.execute_selected(command));
+                    return Ok(self.execute_selected(command).map(Some));
                 }
             }
             _ => {}
@@ -450,12 +459,21 @@ impl App {
         self.mode = self.help_return_mode.take().unwrap_or(Mode::Normal);
     }
 
-    fn execute_selected(&self, command: &str) -> Option<Option<ShellResult>> {
-        self.selected_entry().map(|entry| {
-            Some(ShellResult::Execute {
-                directory: entry.path.clone(),
-                command: command.to_owned(),
-            })
+    fn execute_selected(&self, command: &str) -> Option<ShellResult> {
+        self.selected_entry().map(|entry| ShellResult::Execute {
+            directory: entry.path.clone(),
+            command: command.to_owned(),
+        })
+    }
+
+    /// Runs the Shift+digit shortcut bound to `slot` against the highlighted
+    /// entry. An empty or out-of-range slot, or an empty list, is a no-op
+    /// (returns `None`) and never falls through to another action.
+    fn execute_shortcut(&self, slot: u8) -> Option<ShellResult> {
+        let shortcut = self.config.shortcut(slot)?;
+        self.selected_entry().map(|entry| ShellResult::Execute {
+            directory: entry.path.clone(),
+            command: shortcut.command.clone(),
         })
     }
 
@@ -489,8 +507,9 @@ impl App {
         ));
         rows.push(format!("\x1b[38;2;90;100;120m├{}┤\x1b[0m", "─".repeat(width.saturating_sub(2))));
 
+        let lines = help_lines(&self.config);
         let help_layout = matches!(self.mode, Mode::Help)
-            .then(|| HelpLayout::new(inner, list_height, &mut self.help_scroll));
+            .then(|| HelpLayout::new(inner, list_height, &mut self.help_scroll, lines.clone()));
         for row_index in 0..list_height {
             let content = if let Some(layout) = &help_layout {
                 layout.render_row(row_index, inner)
@@ -527,7 +546,10 @@ impl App {
                     self.message.clone()
                 }
             }
-            Mode::Help => format!("Shortcuts · {} acciones disponibles", shortcut_count()),
+            Mode::Help => format!(
+                "Shortcuts · {} acciones disponibles",
+                lines.iter().filter(|line| matches!(line, HelpLine::Shortcut(_, _))).count()
+            ),
             Mode::Filter => format!("/{}", self.input),
             Mode::Path => format!("ruta › {}_", self.input),
             Mode::Alias { .. } => format!("alias › {}_", self.input),
@@ -540,70 +562,119 @@ impl App {
             "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
             fit(&prompt, inner)
         ));
-        let help = footer_help(&self.mode);
+        let help = self.footer_line();
         rows.push(format!(
             "\x1b[38;2;90;100;120m╰─{}─╯\x1b[0m",
-            fit(help, width.saturating_sub(4))
+            fit(&help, width.saturating_sub(4))
         ));
         self.renderer.draw(rows)
     }
+
+    /// Normal-mode footer with the configured shortcut aliases appended so the
+    /// bound slots are visible at a glance; other modes reuse the static copy.
+    fn footer_line(&self) -> String {
+        let Mode::Normal = &self.mode else {
+            return footer_help(&self.mode).to_string();
+        };
+        let mut footer = footer_help(&Mode::Normal).to_string();
+        let shortcuts = self.config.configured_shortcuts();
+        if shortcuts.is_empty() {
+            return footer;
+        }
+        footer.push_str("  ");
+        for (slot, shortcut) in shortcuts {
+            use std::fmt::Write as _;
+            let _ = write!(footer, "⇧{slot}");
+            if let Some(alias) = shortcut.alias.as_deref().filter(|alias| !alias.is_empty()) {
+                footer.push(' ');
+                footer.push_str(alias);
+            }
+            footer.push_str("  ");
+        }
+        footer
+    }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Debug)]
 enum HelpLine {
-    Section(&'static str),
-    Shortcut(&'static str, &'static str),
+    Section(String),
+    Shortcut(String, String),
     Blank,
 }
 
-const HELP_LINES: &[HelpLine] = &[
-    HelpLine::Section("NAVEGACIÓN"),
-    HelpLine::Shortcut("↑ / ↓ · j / k", "Navegar por las carpetas"),
-    HelpLine::Shortcut("→ / l", "Entrar en la carpeta resaltada"),
-    HelpLine::Shortcut("← / h / Retroceso", "Volver a la carpeta padre"),
-    HelpLine::Shortcut("Enter", "Seleccionar carpeta y volver a PowerShell"),
-    HelpLine::Shortcut(".", "Seleccionar la carpeta mostrada"),
-    HelpLine::Shortcut("g", "Volver a la ruta de inicio"),
-    HelpLine::Shortcut("p", "Abrir cualquier ruta o unidad"),
-    HelpLine::Shortcut("Ctrl+S", "Guardar la carpeta resaltada como inicio"),
-    HelpLine::Blank,
-    HelpLine::Section("BÚSQUEDA Y ORGANIZACIÓN"),
-    HelpLine::Shortcut("/", "Filtrar carpetas mientras escribes"),
-    HelpLine::Shortcut("f", "Añadir o quitar un favorito global"),
-    HelpLine::Shortcut("Mayús+F", "Mostrar u ocultar los favoritos globales"),
-    HelpLine::Shortcut("a", "Crear o editar el alias de la carpeta"),
-    HelpLine::Shortcut("u", "Actualizar el directorio actual"),
-    HelpLine::Shortcut("Ctrl+U", "Activar o desactivar comprobación al iniciar"),
-    HelpLine::Shortcut("Mayús+U", "Actualizar DevNav a la última versión"),
-    HelpLine::Blank,
-    HelpLine::Section("AGENTES EN EL REPOSITORIO"),
-    HelpLine::Shortcut("c", "Codex: sesión nueva"),
-    HelpLine::Shortcut("r", "Codex: última sesión del repositorio"),
-    HelpLine::Shortcut("d / Mayús+D", "Claude Code: sesión nueva / última sesión"),
-    HelpLine::Shortcut("o / Mayús+O", "OpenCode: sesión nueva / última sesión"),
-    HelpLine::Shortcut("i / Mayús+I", "Kimi: sesión nueva / última sesión"),
-    HelpLine::Blank,
-    HelpLine::Section("ACCIONES"),
-    HelpLine::Shortcut("e / :", "Ejecutar un comando en la carpeta resaltada"),
-    HelpLine::Shortcut("F1", "Abrir o cerrar este panel de ayuda"),
-    HelpLine::Shortcut("q / Esc", "Salir de DevNav o cancelar"),
-];
+fn help_lines(config: &Config) -> Vec<HelpLine> {
+    let mut lines: Vec<HelpLine> = vec![
+        HelpLine::Section("NAVEGACIÓN".into()),
+        HelpLine::Shortcut("↑ / ↓ · j / k".into(), "Navegar por las carpetas".into()),
+        HelpLine::Shortcut("→ / l".into(), "Entrar en la carpeta resaltada".into()),
+        HelpLine::Shortcut("← / h / Retroceso".into(), "Volver a la carpeta padre".into()),
+        HelpLine::Shortcut("Enter".into(), "Seleccionar carpeta y volver a PowerShell".into()),
+        HelpLine::Shortcut(".".into(), "Seleccionar la carpeta mostrada".into()),
+        HelpLine::Shortcut("g".into(), "Volver a la ruta de inicio".into()),
+        HelpLine::Shortcut("p".into(), "Abrir cualquier ruta o unidad".into()),
+        HelpLine::Shortcut("Ctrl+S".into(), "Guardar la carpeta resaltada como inicio".into()),
+        HelpLine::Blank,
+        HelpLine::Section("BÚSQUEDA Y ORGANIZACIÓN".into()),
+        HelpLine::Shortcut("/".into(), "Filtrar carpetas mientras escribes".into()),
+        HelpLine::Shortcut("f".into(), "Añadir o quitar un favorito global".into()),
+        HelpLine::Shortcut("Mayús+F".into(), "Mostrar u ocultar los favoritos globales".into()),
+        HelpLine::Shortcut("a".into(), "Crear o editar el alias de la carpeta".into()),
+        HelpLine::Shortcut("u".into(), "Actualizar el directorio actual".into()),
+        HelpLine::Shortcut("Ctrl+U".into(), "Activar o desactivar comprobación al iniciar".into()),
+        HelpLine::Shortcut("Mayús+U".into(), "Actualizar DevNav a la última versión".into()),
+        HelpLine::Blank,
+        HelpLine::Section("AGENTES EN EL REPOSITORIO".into()),
+        HelpLine::Shortcut("c".into(), "Codex: sesión nueva".into()),
+        HelpLine::Shortcut("r".into(), "Codex: última sesión del repositorio".into()),
+        HelpLine::Shortcut(
+            "d / Mayús+D".into(),
+            "Claude Code: sesión nueva / última sesión".into(),
+        ),
+        HelpLine::Shortcut("o / Mayús+O".into(), "OpenCode: sesión nueva / última sesión".into()),
+        HelpLine::Shortcut("i / Mayús+I".into(), "Kimi: sesión nueva / última sesión".into()),
+        HelpLine::Blank,
+        HelpLine::Section("ACCIONES".into()),
+        HelpLine::Shortcut("e / :".into(), "Ejecutar un comando en la carpeta resaltada".into()),
+        HelpLine::Shortcut(
+            "⇧1-⇧9".into(),
+            "Ejecutar un atajo configurado en la carpeta resaltada".into(),
+        ),
+        HelpLine::Shortcut("F1".into(), "Abrir o cerrar este panel de ayuda".into()),
+        HelpLine::Shortcut("q / Esc".into(), "Salir de DevNav o cancelar".into()),
+    ];
+    // Dynamic section: only configured slots appear, so the panel never lists
+    // nine empty entries.
+    let shortcuts = config.configured_shortcuts();
+    if !shortcuts.is_empty() {
+        lines.push(HelpLine::Blank);
+        lines.push(HelpLine::Section("ATAJOS PERSONALIZADOS".into()));
+        for (slot, shortcut) in shortcuts {
+            let description = match shortcut.alias.as_deref().filter(|alias| !alias.is_empty()) {
+                Some(alias) => format!("{alias} → {}", shortcut.command),
+                None => shortcut.command.clone(),
+            };
+            lines.push(HelpLine::Shortcut(format!("⇧{slot}"), description));
+        }
+    }
+    lines
+}
 
 struct HelpLayout {
     width: usize,
     height: usize,
     top: usize,
     start: usize,
+    lines: Vec<HelpLine>,
 }
 
 impl HelpLayout {
-    fn new(inner: usize, list_height: usize, scroll: &mut usize) -> Self {
+    fn new(inner: usize, list_height: usize, scroll: &mut usize, lines: Vec<HelpLine>) -> Self {
         let width = inner.min(104);
-        let height = list_height.min(HELP_LINES.len().saturating_add(2));
+        let height = list_height.min(lines.len().saturating_add(2));
         let capacity = height.saturating_sub(2);
-        let max_scroll = HELP_LINES.len().saturating_sub(capacity);
+        let max_scroll = lines.len().saturating_sub(capacity);
         *scroll = (*scroll).min(max_scroll);
-        Self { width, height, top: list_height.saturating_sub(height) / 2, start: *scroll }
+        Self { width, height, top: list_height.saturating_sub(height) / 2, start: *scroll, lines }
     }
 
     fn render_row(&self, row: usize, outer_width: usize) -> String {
@@ -617,7 +688,7 @@ impl HelpLayout {
             panel_border(self.width, "↑↓ DESPLAZAR  ·  F1 / ESC CERRAR", false)
         } else {
             render_help_line(
-                HELP_LINES.get(self.start + local - 1).copied().unwrap_or(HelpLine::Blank),
+                self.lines.get(self.start + local - 1).cloned().unwrap_or(HelpLine::Blank),
                 self.width,
             )
         };
@@ -639,8 +710,8 @@ fn render_help_line(line: HelpLine, width: usize) -> String {
             let description_width = content_width.saturating_sub(key_width + 3);
             format!(
                 "\x1b[38;2;90;100;120m│\x1b[0m  \x1b[38;2;255;203;107m{}\x1b[0m {}\x1b[38;2;90;100;120m│\x1b[0m",
-                fit(keys, key_width),
-                fit(description, description_width)
+                fit(&keys, key_width),
+                fit(&description, description_width)
             )
         }
         HelpLine::Blank => format!(
@@ -656,10 +727,6 @@ fn panel_border(width: usize, label: &str, top: bool) -> String {
     let prefix = format!("{left}─ {label} ");
     let fill = width.saturating_sub(prefix.chars().count() + 1);
     format!("\x1b[38;2;116;199;236m{prefix}{}{right}\x1b[0m", "─".repeat(fill))
-}
-
-fn shortcut_count() -> usize {
-    HELP_LINES.iter().filter(|line| matches!(line, HelpLine::Shortcut(_, _))).count()
 }
 
 fn footer_help(mode: &Mode) -> &'static str {
@@ -728,7 +795,9 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::{App, Mode, agent_command, footer_help, fuzzy_score, is_command_shortcut};
+    use super::{
+        App, Mode, ShellResult, agent_command, footer_help, fuzzy_score, is_command_shortcut,
+    };
     use crate::{config::Config, input::Key, render::fit};
 
     #[test]
@@ -848,13 +917,125 @@ mod tests {
             &app.mode,
             Mode::ConfirmRoot { target } if target == &selected_root
         ));
-        assert!(Config::load(&config_path).expect("load unsaved config").root().is_none());
+        assert!(Config::load(&config_path).expect("load").root().is_none());
 
         app.handle_key(Key::Enter).expect("confirm root");
-        assert_eq!(
-            Config::load(&config_path).expect("load saved config").root(),
-            Some(selected_root.as_path())
-        );
+        assert_eq!(Config::load(&config_path).expect("load").root(), Some(selected_root.as_path()));
+        fs::remove_dir_all(sandbox).expect("clean test sandbox");
+    }
+
+    fn shortcut_sandbox(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let sandbox = std::env::temp_dir().join(format!("devnav-shortcut-{label}-{unique}"));
+        let root = sandbox.join("home");
+        fs::create_dir_all(&root).expect("create sandbox root");
+        (sandbox, root)
+    }
+
+    #[test]
+    fn configured_shortcut_executes_against_the_selected_path() {
+        let (sandbox, root) = shortcut_sandbox("exec");
+        let project = root.join("my-project");
+        fs::create_dir_all(&project).expect("create project");
+
+        let mut config = Config::default();
+        assert!(config.set_shortcut(1, Some("Dev".into()), "bun run dev".into()));
+        let mut app = App::new(root, config, sandbox.join("config.tsv")).expect("create app");
+        assert_eq!(app.selected_entry().map(|entry| entry.path.clone()), Some(project.clone()));
+
+        match app.handle_key(Key::Shortcut(1)).expect("run shortcut") {
+            Some(Some(ShellResult::Execute { directory, command })) => {
+                assert_eq!(directory, project);
+                assert_eq!(command, "bun run dev");
+            }
+            other => panic!("expected ShellResult::Execute for the selected path, got {other:?}"),
+        }
+        fs::remove_dir_all(sandbox).expect("clean test sandbox");
+    }
+
+    #[test]
+    fn empty_shortcut_slot_does_nothing() {
+        let (sandbox, root) = shortcut_sandbox("empty");
+        let project = root.join("project");
+        fs::create_dir_all(&project).expect("create project");
+
+        let mut app =
+            App::new(root, Config::default(), sandbox.join("config.tsv")).expect("create app");
+
+        for slot in [1_u8, 5, 9] {
+            assert_eq!(app.handle_key(Key::Shortcut(slot)).expect("empty slot"), None);
+        }
+        assert!(matches!(app.mode, Mode::Normal));
+        fs::remove_dir_all(sandbox).expect("clean test sandbox");
+    }
+
+    #[test]
+    fn shortcut_persists_and_runs_again_after_reload() {
+        let (sandbox, root) = shortcut_sandbox("reload");
+        let project = root.join("project");
+        fs::create_dir_all(&project).expect("create project");
+        let config_path = sandbox.join("config.tsv");
+
+        let mut config = Config::default();
+        assert!(config.set_shortcut(9, Some("Tests".into()), "cargo test".into()));
+        config.save(&config_path).expect("save shortcut");
+
+        let reloaded = Config::load(&config_path).expect("load");
+        let mut app = App::new(root, reloaded, config_path).expect("create app");
+        match app.handle_key(Key::Shortcut(9)).expect("run shortcut") {
+            Some(Some(ShellResult::Execute { command, .. })) => assert_eq!(command, "cargo test"),
+            other => panic!("expected Execute after reload, got {other:?}"),
+        }
+        fs::remove_dir_all(sandbox).expect("clean test sandbox");
+    }
+
+    #[test]
+    fn configured_shortcuts_appear_in_the_help_panel_with_alias_and_command() {
+        let mut config = Config::default();
+        config.set_shortcut(1, Some("Dev".into()), "bun run dev".into());
+        config.set_shortcut(2, None, "cargo test".into());
+
+        let lines = super::help_lines(&config);
+        let has_section = lines.iter().any(|line| {
+            matches!(line, super::HelpLine::Section(title) if title == "ATAJOS PERSONALIZADOS")
+        });
+        assert!(has_section, "dynamic shortcuts section must appear when slots are configured");
+
+        let descriptions: Vec<String> = lines
+            .iter()
+            .filter_map(|line| match line {
+                super::HelpLine::Shortcut(key, description) if key.starts_with('⇧') => {
+                    Some(description.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(descriptions.iter().any(|d| d.contains("Dev") && d.contains("bun run dev")));
+        assert!(descriptions.iter().any(|d| d == "cargo test"));
+    }
+
+    #[test]
+    fn no_shortcuts_section_when_nothing_is_configured() {
+        let lines = super::help_lines(&Config::default());
+        assert!(!lines.iter().any(|line| {
+            matches!(line, super::HelpLine::Section(title) if title == "ATAJOS PERSONALIZADOS")
+        }));
+    }
+
+    #[test]
+    fn normal_footer_lists_configured_shortcut_aliases() {
+        let (sandbox, root) = shortcut_sandbox("footer");
+        let mut config = Config::default();
+        config.set_shortcut(1, Some("Dev".into()), "bun run dev".into());
+        config.set_shortcut(2, None, "cargo test".into());
+
+        let app = App::new(root, config, sandbox.join("config.tsv")).expect("create app");
+        let footer = app.footer_line();
+
+        assert!(footer.contains("⇧1 Dev"));
+        assert!(footer.contains("⇧2"));
+        // Unconfigured slots must not clutter the footer.
+        assert!(!footer.contains("⇧3"));
         fs::remove_dir_all(sandbox).expect("clean test sandbox");
     }
 }

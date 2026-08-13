@@ -1,36 +1,23 @@
 # Roadmap
 
-DevNav currently distributes signed-by-checksum release assets through GitHub
-and installs them with the PowerShell bootstrap script. The roadmap below keeps
-future distribution work visible without promising a package before it has been
-tested end to end.
+DevNav is currently distributed from GitHub through the PowerShell installer
+and release installers. Release payloads are checksum-verified with SHA-256;
+checksums verify integrity and are not digital signatures.
 
-## WinGet distribution
+## Distribution status
 
-Goal: support a reliable, silent, per-user installation with:
+- [x] GitHub releases with x64 and ARM64 application binaries.
+- [x] Per-user Windows installers and PowerShell integration.
+- [x] npm and Scoop packaging implemented from the canonical release payload.
+- [ ] Publish the first multichannel release after v0.9.7.
+- [ ] Make npm and Scoop installation channels available to users.
+- [x] Generate WinGet manifests with immutable versioned URLs and SHA-256.
+- [x] Submit the initial `JacobOptimiza.DevNav` manifests to
+  `microsoft/winget-pkgs`.
+- [ ] Microsoft acceptance and public WinGet catalog propagation.
+- [ ] Validate fresh install, upgrade and uninstall in Windows Sandbox.
+- [ ] Automate future WinGet submissions after a real catalog installation has
+  been verified.
 
-- [x] Build a real Windows installer for x64.
-- [x] Build a real Windows installer for ARM64.
-- [x] Install `dev.exe` and `DevNav.psm1`.
-- [x] Add a marker-based PowerShell profile integration that can be removed safely.
-- [x] Support silent install, upgrade, repair and clean uninstall.
-- [x] Preserve `%LOCALAPPDATA%\DevNav\config.tsv` during upgrades and uninstall.
-- [ ] Test fresh install, upgrade and uninstall in Windows Sandbox.
-- [x] Generate and validate WinGet manifests with pinned version URLs and SHA-256.
-- [x] Submit `JacobOptimiza.DevNav` to `microsoft/winget-pkgs`.
-- [ ] Microsoft acceptance and catalog propagation.
-- [ ] Automate future WinGet update submissions from GitHub Actions.
-
-The release pipeline now builds the x64 and ARM64 installers and generates the
-manifests. WinGet remains unavailable until the installers have passed Sandbox
-install/upgrade/uninstall validation and the first manifests have been accepted
-in `microsoft/winget-pkgs`.
-Until then, use the documented PowerShell installer.
-
-## Distribution requirements
-
-WinGet manifests will reference immutable release URLs such as
-`/releases/download/vX.Y.Z/DevNavSetup-x64.exe`, never `/latest/download/`. The
-installer must be non-interactive when invoked by WinGet and must return reliable
-exit codes. The existing PowerShell installer remains available for manual
-installation and source builds.
+The roadmap describes status only. Operational instructions live in the
+packaging documentation and workflows.

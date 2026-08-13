@@ -172,7 +172,8 @@ Repite `Get-Command <nombre>` antes de abrir el agente desde DevNav.
 1. Utiliza PowerShell 7 dentro de Windows Terminal.
 2. Ejecuta `dev`, no el `dev.exe` interno.
 3. Cierra cualquier instancia anterior.
-4. Actualiza DevNav y abre una terminal nueva.
+4. Actualiza DevNav mediante el canal de instalación que gestiona la copia y
+   abre una terminal nueva.
 
 Si el problema persiste, conserva el mensaje mostrado al volver al prompt y la
 salida de:
@@ -199,6 +200,9 @@ nada si la versión instalada ya es la última o falla la red, y nunca instala u
 actualización sin confirmación explícita.
 
 ### Actualización
+
+Si la instalación está gestionada por Scoop, utiliza `scoop update devnav` en
+lugar de `dev update` o `Mayús+U`.
 
 La instalación publicada se actualiza directamente con:
 

@@ -3,6 +3,26 @@
 All notable changes to DevNav are documented here. The project follows Semantic
 Versioning.
 
+## [Unreleased]
+
+### Added
+
+- Add npm packaging usable with Bun, npm, pnpm and Yarn, plus Scoop packaging,
+  beginning with the first multichannel release after v0.9.7.
+- Add portable x64/ARM64 Scoop archives and a `DevNav.psd1` module manifest
+  for PowerShell module registration.
+- Add configurable Shift+1…Shift+9 project shortcuts: each slot binds an
+  optional visible alias and a shell command, persists in `config.tsv`
+  (backward compatible), and runs in the selected project directory through the
+  existing `exec` result path. Configure with `dev shortcut <1..9> [alias]
+  <command>` (or `Set-DevShortcut`/`Remove-DevShortcut`); empty slots are
+  no-ops. Configured aliases surface in the footer and the shortcuts help
+  panel.
+
+### Changed
+
+- Scoop-managed installations delegate updates to `scoop update devnav`.
+
 ## [0.9.7] - 2026-08-12
 
 ### Fixed

@@ -50,3 +50,77 @@ jobs:
       - name: Run Pester tests
         shell: pwsh
         run: Invoke-Pester -Path ./tests/powershell -Output Detailed
+
+  distribution:
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['22', '24', '26']
+    name: distribution (Node ${{ matrix.node-version }})
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Enforce version consistency across channels
+        # Version surfaces share one value; verify it once on the canonical
+        # baseline leg instead of repeating it across the whole matrix.
+        if: matrix.node-version == '24'
+        shell: pwsh
+        run: |
+          $cargoVersion = (Get-Content Cargo.toml | Select-String '^version = "([0-9.]+)"$').Matches.Groups[1].Value
+          $channels = @{
+            'powershell/DevNav.psd1' = (Test-ModuleManifest -Path powershell/DevNav.psd1).Version.ToString()
+            'packaging/npm/package.json' = (Get-Content packaging/npm/package.json -Raw | ConvertFrom-Json).version
+            'packaging/scoop/devnav.template.json' = (Get-Content packaging/scoop/devnav.template.json -Raw | ConvertFrom-Json).version
+          }
+          foreach ($file in $channels.GetEnumerator()) {
+            if ($file.Value -ne $cargoVersion) {
+              throw "Version mismatch: Cargo.toml has $cargoVersion but $($file.Key) has $($file.Value). All channels must share one version."
+            }
+          }
+      - name: Run the npm bootstrap unit tests
+        run: node --test "tests/npm/**/*.test.mjs"
+      - name: Validate the npm tarball allow-list
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'devnav-pack-check'
+          New-Item -ItemType Directory -Path "$stage\payload" -Force | Out-Null
+          Copy-Item packaging\npm\package.json, packaging\npm\README.md, LICENSE $stage
+          Copy-Item packaging\npm\bin $stage -Recurse
+          Set-Content "$stage\payload\DevNavSetup-x64.exe" 'CI placeholder x64'
+          Set-Content "$stage\payload\DevNavSetup-arm64.exe" 'CI placeholder arm64'
+          $artifacts = [ordered]@{}
+          foreach ($name in @('installer-x64', 'installer-arm64')) {
+            $file = "DevNavSetup-$($name -replace 'installer-', '').exe"
+            $artifacts[$name] = @{
+              file   = $file
+              sha256 = (Get-FileHash (Join-Path "$stage\payload" $file) -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+          }
+          $packageVersion = (Get-Content packaging\npm\package.json -Raw | ConvertFrom-Json).version
+          [ordered]@{ schemaVersion = 1; version = $packageVersion; artifacts = $artifacts } |
+            ConvertTo-Json -Depth 5 | Set-Content "$stage\release-manifest.json"
+          Push-Location $stage
+          try {
+            $dryRun = npm pack --dry-run --json | ConvertFrom-Json
+            $files = @($dryRun[0].files | ForEach-Object { $_.path }) | Sort-Object
+            $expected = @(
+              'LICENSE', 'README.md', 'bin/devnav.mjs', 'package.json',
+              'payload/DevNavSetup-arm64.exe', 'payload/DevNavSetup-x64.exe',
+              'release-manifest.json'
+            ) | Sort-Object
+            $extra = @($files | Where-Object { $_ -notin $expected })
+            $missing = @($expected | Where-Object { $_ -notin $files })
+            if ($files.Count -ne $expected.Count -or $extra.Count -gt 0 -or $missing.Count -gt 0) {
+              throw "Tarball layout mismatch. Got [$($files -join ', ')]. Extra: $($extra -join ', '). Missing: $($missing -join ', ')."
+            }
+            Write-Host "Tarball allow-list verified: $($files.Count) files match exactly."
+          }
+          finally {
+            Pop-Location
+          }

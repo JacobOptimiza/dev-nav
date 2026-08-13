@@ -4,6 +4,22 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// The lowest and highest configurable shortcut slot indexes.
+pub const SHORTCUT_MIN: u8 = 1;
+pub const SHORTCUT_MAX: u8 = 9;
+
+/// A user-defined command bound to a Shift+digit slot.
+///
+/// `alias` is the optional visible label shown in the UI; `command` is the
+/// shell command executed in the selected project directory by the
+/// `PowerShell` wrapper. The command is never interpreted by `DevNav` during
+/// configuration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Shortcut {
+    pub alias: Option<String>,
+    pub command: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct Config {
     root: Option<PathBuf>,
@@ -11,6 +27,7 @@ pub struct Config {
     check_updates: Option<bool>,
     favorites: HashSet<PathBuf>,
     aliases: HashMap<PathBuf, String>,
+    shortcuts: HashMap<u8, Shortcut>,
 }
 
 impl Config {
@@ -22,8 +39,13 @@ impl Config {
     }
 
     pub fn load(path: &Path) -> io::Result<Self> {
-        let Ok(contents) = fs::read_to_string(path) else {
-            return Ok(Self::default());
+        // A missing config is normal (first run) and yields defaults; any other
+        // I/O failure (permissions, disk error) is real and must propagate
+        // instead of being silently swallowed.
+        let contents = match fs::read_to_string(path) {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(error) => return Err(error),
         };
         let mut config = Self::default();
         for line in contents.lines() {
@@ -43,6 +65,27 @@ impl Config {
                 }
                 (Some("alias"), Some(path), Some(alias)) => {
                     config.aliases.insert(PathBuf::from(decode(path)), decode(alias));
+                }
+                // Shortcut lines carry four logical fields:
+                // `shortcut\t<index>\t<encoded alias>\t<encoded command>`.
+                // splitn(3) keeps the alias/command pair together; we split it
+                // again on the single literal tab, which is safe because the
+                // encoded values never contain a raw tab.
+                (Some("shortcut"), Some(index_text), Some(rest)) => {
+                    if let Ok(index) = index_text.parse::<u8>()
+                        && (SHORTCUT_MIN..=SHORTCUT_MAX).contains(&index)
+                    {
+                        let (alias_raw, command_raw) = rest.split_once('\t').unwrap_or((rest, ""));
+                        let command = decode(command_raw);
+                        if !command.trim().is_empty() {
+                            let alias = decode(alias_raw);
+                            let alias = if alias.trim().is_empty() { None } else { Some(alias) };
+                            config.shortcuts.insert(
+                                index,
+                                Shortcut { alias, command: command.trim().to_owned() },
+                            );
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -83,6 +126,15 @@ impl Config {
             output.push_str(&encode(&path.to_string_lossy()));
             output.push('\t');
             output.push_str(&encode(alias));
+            output.push('\n');
+        }
+        for (index, shortcut) in self.configured_shortcuts() {
+            output.push_str("shortcut\t");
+            output.push_str(&index.to_string());
+            output.push('\t');
+            output.push_str(&encode(shortcut.alias.as_deref().unwrap_or_default()));
+            output.push('\t');
+            output.push_str(&encode(&shortcut.command));
             output.push('\n');
         }
         fs::write(path, output)
@@ -144,6 +196,50 @@ impl Config {
             self.aliases.insert(path, alias.trim().to_owned());
         }
     }
+
+    /// Returns the shortcut bound to `index` (1..=9), or `None` if the slot is
+    /// empty or the index is out of range.
+    pub fn shortcut(&self, index: u8) -> Option<&Shortcut> {
+        if (SHORTCUT_MIN..=SHORTCUT_MAX).contains(&index) {
+            self.shortcuts.get(&index)
+        } else {
+            None
+        }
+    }
+
+    /// Binds a command (and optional alias) to `index`. Returns `false` and
+    /// changes nothing when `index` is outside 1..=9. An empty command clears
+    /// the slot instead of storing an empty entry.
+    pub fn set_shortcut(&mut self, index: u8, alias: Option<String>, command: String) -> bool {
+        if !(SHORTCUT_MIN..=SHORTCUT_MAX).contains(&index) {
+            return false;
+        }
+        let command = command.trim().to_owned();
+        if command.is_empty() {
+            self.shortcuts.remove(&index);
+        } else {
+            let alias = alias.map(|a| a.trim().to_owned()).filter(|a| !a.is_empty());
+            self.shortcuts.insert(index, Shortcut { alias, command });
+        }
+        true
+    }
+
+    /// Removes the shortcut bound to `index`. Returns `false` for out-of-range
+    /// indexes.
+    pub fn clear_shortcut(&mut self, index: u8) -> bool {
+        if !(SHORTCUT_MIN..=SHORTCUT_MAX).contains(&index) {
+            return false;
+        }
+        self.shortcuts.remove(&index);
+        true
+    }
+
+    /// Configured shortcuts ordered by slot index, for stable UI rendering.
+    pub fn configured_shortcuts(&self) -> Vec<(u8, &Shortcut)> {
+        let mut slots: Vec<_> = self.shortcuts.iter().map(|(index, slot)| (*index, slot)).collect();
+        slots.sort_by_key(|(index, _)| *index);
+        slots
+    }
 }
 
 impl Default for Config {
@@ -154,6 +250,7 @@ impl Default for Config {
             check_updates: None,
             favorites: HashSet::new(),
             aliases: HashMap::new(),
+            shortcuts: HashMap::new(),
         }
     }
 }
@@ -190,7 +287,7 @@ mod tests {
         config.set_root(root.clone());
 
         config.save(&config_path).expect("save config");
-        let loaded = Config::load(&config_path).expect("load config");
+        let loaded = Config::load(&config_path).expect("load");
 
         assert_eq!(loaded.root(), Some(root.as_path()));
         fs::remove_file(config_path).expect("remove config");
@@ -206,7 +303,7 @@ mod tests {
         assert!(!config.toggle_favorites_visibility());
         config.save(&config_path).expect("save config");
 
-        assert!(!Config::load(&config_path).expect("load config").show_favorites());
+        assert!(!Config::load(&config_path).expect("load").show_favorites());
         fs::remove_file(config_path).expect("remove config");
     }
 
@@ -220,7 +317,142 @@ mod tests {
         assert!(!config.toggle_update_checks());
         config.save(&config_path).expect("save config");
 
-        assert_eq!(Config::load(&config_path).expect("load config").check_updates(), Some(false));
+        assert_eq!(Config::load(&config_path).expect("load").check_updates(), Some(false));
+        fs::remove_file(config_path).expect("remove config");
+    }
+
+    fn empty_shortcut_config_is_blank() {
+        let config = Config::default();
+        for index in super::SHORTCUT_MIN..=super::SHORTCUT_MAX {
+            assert!(config.shortcut(index).is_none());
+        }
+    }
+
+    #[test]
+    fn shortcut_slots_round_trip_across_the_full_range() {
+        empty_shortcut_config_is_blank();
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let config_path = std::env::temp_dir().join(format!("devnav-shortcut-range-{unique}.tsv"));
+        let mut config = Config::default();
+        for index in super::SHORTCUT_MIN..=super::SHORTCUT_MAX {
+            assert!(config.set_shortcut(
+                index,
+                Some(format!("alias{index}")),
+                format!("cmd {index}")
+            ));
+        }
+        config.save(&config_path).expect("save shortcuts");
+
+        let loaded = Config::load(&config_path).expect("load");
+        for index in super::SHORTCUT_MIN..=super::SHORTCUT_MAX {
+            let slot = loaded.shortcut(index).expect("slot configured");
+            assert_eq!(slot.alias.as_deref(), Some(format!("alias{index}").as_str()));
+            assert_eq!(slot.command, format!("cmd {index}"));
+        }
+        fs::remove_file(config_path).expect("remove config");
+    }
+
+    #[test]
+    fn shortcut_without_alias_is_stored_and_persists() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let config_path =
+            std::env::temp_dir().join(format!("devnav-shortcut-noalias-{unique}.tsv"));
+        let mut config = Config::default();
+        assert!(config.set_shortcut(2, None, "cargo test".into()));
+        assert!(config.shortcut(2).is_some());
+        config.save(&config_path).expect("save");
+
+        let loaded = Config::load(&config_path).expect("load");
+        let slot = loaded.shortcut(2).expect("slot present");
+        assert_eq!(slot.alias, None);
+        assert_eq!(slot.command, "cargo test");
+        fs::remove_file(config_path).expect("remove config");
+    }
+
+    #[test]
+    fn empty_slot_is_not_stored_and_does_not_execute() {
+        let mut config = Config::default();
+        // A valid index with an empty command is accepted (it clears the slot)
+        // but never stores a runnable binding.
+        assert!(config.set_shortcut(3, Some("Alias".into()), "   ".into()));
+        assert!(config.shortcut(3).is_none());
+        assert!(config.configured_shortcuts().is_empty());
+    }
+
+    #[test]
+    fn shortcut_overwrite_replaces_the_previous_binding() {
+        let mut config = Config::default();
+        assert!(config.set_shortcut(1, Some("Old".into()), "npm run old".into()));
+        assert!(config.set_shortcut(1, Some("New".into()), "bun run dev".into()));
+
+        let slot = config.shortcut(1).expect("overwritten slot");
+        assert_eq!(slot.alias.as_deref(), Some("New"));
+        assert_eq!(slot.command, "bun run dev");
+    }
+
+    #[test]
+    fn clear_shortcut_removes_the_binding() {
+        let mut config = Config::default();
+        config.set_shortcut(4, Some("Build".into()), "bun run build".into());
+        assert!(config.shortcut(4).is_some());
+
+        assert!(config.clear_shortcut(4));
+        assert!(config.shortcut(4).is_none());
+        assert!(config.configured_shortcuts().is_empty());
+    }
+
+    #[test]
+    fn out_of_range_indexes_are_rejected_for_every_operation() {
+        let mut config = Config::default();
+        assert!(!config.set_shortcut(0, None, "cmd".into()));
+        assert!(!config.set_shortcut(10, None, "cmd".into()));
+        assert!(!config.clear_shortcut(0));
+        assert!(!config.clear_shortcut(10));
+        assert!(config.shortcut(0).is_none());
+        assert!(config.shortcut(10).is_none());
+    }
+
+    #[test]
+    fn existing_config_remains_valid_when_shortcuts_are_added() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let config_path = std::env::temp_dir().join(format!("devnav-mixed-{unique}.tsv"));
+        let root = std::env::temp_dir().join(format!("devnav-root-{unique}"));
+        fs::create_dir_all(&root).expect("create root");
+
+        let mut config = Config::default();
+        config.set_root(root.clone());
+        config.toggle_favorite(&root);
+        config.set_alias(root.clone(), "principal".into());
+        config.set_shortcut(1, Some("Dev".into()), "bun run dev".into());
+        config.set_shortcut(9, Some("Tests".into()), "cargo test".into());
+        config.save(&config_path).expect("save mixed config");
+
+        let loaded = Config::load(&config_path).expect("load");
+        assert_eq!(loaded.root(), Some(root.as_path()));
+        assert!(loaded.is_favorite(&root));
+        assert_eq!(loaded.alias(&root).map(str::to_owned), Some("principal".into()));
+        assert_eq!(loaded.shortcut(1).map(|s| s.command.clone()), Some("bun run dev".into()));
+        assert_eq!(loaded.shortcut(9).map(|s| s.command.clone()), Some("cargo test".into()));
+
+        fs::remove_file(config_path).expect("remove config");
+        fs::remove_dir_all(root).expect("remove root");
+    }
+
+    #[test]
+    fn shortcut_commands_preserve_spaces_percent_and_special_characters() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let config_path =
+            std::env::temp_dir().join(format!("devnav-shortcut-special-{unique}.tsv"));
+        let mut config = Config::default();
+        let alias = "100% dev";
+        let command = "echo \"hello world\"\t&& cargo test";
+        assert!(config.set_shortcut(5, Some(alias.into()), command.into()));
+        config.save(&config_path).expect("save special");
+
+        let loaded = Config::load(&config_path).expect("load");
+        let slot = loaded.shortcut(5).expect("slot");
+        assert_eq!(slot.alias.as_deref(), Some(alias));
+        assert_eq!(slot.command, command);
         fs::remove_file(config_path).expect("remove config");
     }
 }

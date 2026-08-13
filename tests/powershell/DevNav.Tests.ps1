@@ -56,8 +56,30 @@ Describe 'DevNav updater lifecycle' {
         $moduleHash = (Get-FileHash (Join-Path $sourceRoot 'DevNav.psm1') -Algorithm SHA256).Hash
         "$binaryHash  dev-windows-x86_64.exe`n$moduleHash  DevNav.psm1" | Set-Content (Join-Path $sourceRoot 'SHA256SUMS.txt')
         Copy-Item (Join-Path $sourceRoot '*') $fixtureRoot -Force
+        $cargoVersion = (Get-Content (Join-Path $repositoryRoot 'Cargo.toml') | Select-String '^version = "([0-9.]+)"$').Matches.Groups[1].Value
+        $latestVersion = [version]$cargoVersion
+        # Derive a strictly-lower installed version from the current release so
+        # the updater path is always exercised without hardcoding a version that
+        # can drift. The decrement walks patch -> minor -> major.
+        $previousVersion = if ($latestVersion.Build -gt 0) {
+            [version]::new($latestVersion.Major, $latestVersion.Minor, $latestVersion.Build - 1)
+        }
+        elseif ($latestVersion.Minor -gt 0) {
+            [version]::new($latestVersion.Major, $latestVersion.Minor - 1, 0)
+        }
+        elseif ($latestVersion.Major -gt 0) {
+            [version]::new($latestVersion.Major - 1, 0, 0)
+        }
+        else {
+            [version]::new(0, 0, 0)
+        }
+        # Self-verify the fixture: the updater only runs when installed < latest,
+        # so a non-strictly-lower value would make these tests silently vacuous.
+        if (-not ($previousVersion -lt $latestVersion)) {
+            throw "Updater fixture is invalid: previous version '$previousVersion' is not strictly lower than release version '$latestVersion' (Cargo.toml $cargoVersion)."
+        }
         $release = [pscustomobject]@{
-            tag_name = 'v0.9.5'
+            tag_name = "v$cargoVersion"
             assets = @(
                 [pscustomobject]@{name = 'dev-windows-x86_64.exe'; browser_download_url = 'https://example.test/dev-windows-x86_64.exe'},
                 [pscustomobject]@{name = 'DevNav.psm1'; browser_download_url = 'https://example.test/DevNav.psm1'},
@@ -66,6 +88,7 @@ Describe 'DevNav updater lifecycle' {
         }
         $global:DevNavTestSourceRoot = $sourceRoot
         $global:DevNavTestRelease = $release
+        $global:DevNavTestPreviousVersion = $previousVersion
     }
 
     BeforeEach {
@@ -81,7 +104,7 @@ Describe 'DevNav updater lifecycle' {
 
     It 'updates an identical module and leaves no staging files' {
         $devModule.Invoke({
-            Mock Get-DevInstalledVersion { [version]'0.9.4' }
+            Mock Get-DevInstalledVersion { $global:DevNavTestPreviousVersion }
             Mock Get-DevLatestRelease { $global:DevNavTestRelease }
             Mock Invoke-WebRequest {
                 Copy-Item (Join-Path $global:DevNavTestSourceRoot ([IO.Path]::GetFileName(([uri]$Uri).AbsolutePath))) $OutFile
@@ -99,7 +122,7 @@ Describe 'DevNav updater lifecycle' {
         $moduleHash = (Get-FileHash (Join-Path $sourceRoot 'DevNav.psm1') -Algorithm SHA256).Hash
         (Get-Content (Join-Path $sourceRoot 'SHA256SUMS.txt')) -replace '^[0-9A-Fa-f]+  DevNav.psm1$', "$moduleHash  DevNav.psm1" | Set-Content (Join-Path $sourceRoot 'SHA256SUMS.txt')
         $devModule.Invoke({
-            Mock Get-DevInstalledVersion { [version]'0.9.4' }
+            Mock Get-DevInstalledVersion { $global:DevNavTestPreviousVersion }
             Mock Get-DevLatestRelease { $global:DevNavTestRelease }
             Mock Invoke-WebRequest {
                 Copy-Item (Join-Path $global:DevNavTestSourceRoot ([IO.Path]::GetFileName(([uri]$Uri).AbsolutePath))) $OutFile
@@ -113,7 +136,7 @@ Describe 'DevNav updater lifecycle' {
         (Get-Content (Join-Path $sourceRoot 'SHA256SUMS.txt')) -replace '^[0-9A-Fa-f]+  dev-windows-x86_64.exe$', ('0' * 64 + '  dev-windows-x86_64.exe') | Set-Content (Join-Path $sourceRoot 'SHA256SUMS.txt')
         $before = (Get-FileHash (Join-Path $installRoot 'dev.exe') -Algorithm SHA256).Hash
         $devModule.Invoke({
-            Mock Get-DevInstalledVersion { [version]'0.9.4' }
+            Mock Get-DevInstalledVersion { $global:DevNavTestPreviousVersion }
             Mock Get-DevLatestRelease { $global:DevNavTestRelease }
             Mock Invoke-WebRequest {
                 Copy-Item (Join-Path $global:DevNavTestSourceRoot ([IO.Path]::GetFileName(([uri]$Uri).AbsolutePath))) $OutFile
@@ -131,7 +154,7 @@ Describe 'DevNav updater lifecycle' {
         (Get-Content (Join-Path $sourceRoot 'SHA256SUMS.txt')) -replace '^[0-9A-Fa-f]+  dev-windows-x86_64.exe$', "$binaryHash  dev-windows-x86_64.exe" | Set-Content (Join-Path $sourceRoot 'SHA256SUMS.txt')
         $before = (Get-FileHash (Join-Path $installRoot 'dev.exe') -Algorithm SHA256).Hash
         $devModule.Invoke({
-            Mock Get-DevInstalledVersion { [version]'0.9.4' }
+            Mock Get-DevInstalledVersion { $global:DevNavTestPreviousVersion }
             Mock Get-DevLatestRelease { $global:DevNavTestRelease }
             Mock Invoke-WebRequest {
                 Copy-Item (Join-Path $global:DevNavTestSourceRoot ([IO.Path]::GetFileName(([uri]$Uri).AbsolutePath))) $OutFile
@@ -148,7 +171,7 @@ Describe 'DevNav updater lifecycle' {
         $beforeModule = (Get-FileHash (Join-Path $installRoot 'DevNav.psm1') -Algorithm SHA256).Hash
         $global:DevNavMoveFailureInjected = $false
         $devModule.Invoke({
-            Mock Get-DevInstalledVersion { [version]'0.9.4' }
+            Mock Get-DevInstalledVersion { $global:DevNavTestPreviousVersion }
             Mock Get-DevLatestRelease { $global:DevNavTestRelease }
             Mock Invoke-WebRequest {
                 Copy-Item (Join-Path $global:DevNavTestSourceRoot ([IO.Path]::GetFileName(([uri]$Uri).AbsolutePath))) $OutFile
@@ -205,5 +228,158 @@ Describe 'DevNav updater lifecycle' {
         })
         $global:DevNavDownloadAttempts | Should -Be 3
         Test-Path -LiteralPath $downloadPath | Should -BeFalse
+    }
+}
+
+Describe 'DevNav Scoop-managed installation' {
+    BeforeAll {
+        $scoopModuleRoot = Join-Path $testLocalAppData 'scoop-module'
+        New-Item -ItemType Directory -Path $scoopModuleRoot -Force | Out-Null
+        $scoopModulePath = Join-Path $scoopModuleRoot 'DevNav.psm1'
+        Copy-Item -LiteralPath $modulePath -Destination $scoopModulePath
+        New-Item -ItemType File -Path (Join-Path $scoopModuleRoot '.devnav-managed-by-scoop') -Force | Out-Null
+        Import-Module $scoopModulePath -Force
+        $scoopModule = Get-Module | Where-Object { $_.Path -eq $scoopModulePath } | Select-Object -First 1
+    }
+
+    It 'detects the marker file next to the module' {
+        $scoopModule.Invoke({ Test-DevManagedInstallation }) | Should -BeTrue
+        $devModule.Invoke({ Test-DevManagedInstallation }) | Should -BeFalse
+    }
+
+    It 'refuses to self-update and points to scoop update' {
+        $global:DevNavScoopMessageShown = $false
+        $scoopModule.Invoke({
+            Mock Get-DevLatestRelease { throw 'A managed installation must not query GitHub.' }
+            Mock Write-Host {
+                if ($Object -match 'scoop update devnav') { $global:DevNavScoopMessageShown = $true }
+            }
+            Update-DevNavigator -Confirm:$false
+        })
+        $global:DevNavScoopMessageShown | Should -BeTrue
+    }
+
+    It 'never initializes the startup update check' {
+        $scoopModule.Invoke({
+            Mock Initialize-DevUpdateCheckPreference { throw 'A managed installation must not prompt for update checks.' }
+            { Invoke-DevStartupUpdateCheck } | Should -Not -Throw
+        })
+    }
+
+    It 'keeps the managed-installation guard wired in the module source' {
+        $source = Get-Content -LiteralPath $modulePath -Raw
+        $source | Should -Match '\.devnav-managed-by-scoop'
+        $source | Should -Match 'scoop update devnav'
+    }
+}
+
+Describe 'DevNav shortcut commands' {
+    BeforeAll {
+        cargo build --quiet --manifest-path (Join-Path $repositoryRoot 'Cargo.toml')
+        $global:DevNavTestDevExe = (Join-Path $repositoryRoot 'target\debug\dev.exe')
+        $script:shortcutConfigPath = Join-Path $testLocalAppData 'DevNav\config.tsv'
+
+        function InvokeShortcutViaDev {
+            param([string[]] $Tokens)
+            $global:DevNavShortcutTokens = $Tokens
+            $devModule.Invoke({
+                $tokens = $global:DevNavShortcutTokens
+                Mock Invoke-DevCli {
+                [void]$global:DevNavCliCalls.Add(($Arguments -join '|'))
+                return 0
+            }
+                Mock Write-Host {}
+                Invoke-DevNavigator @tokens
+            })
+        }
+    }
+
+    BeforeEach {
+        Remove-Item -LiteralPath $script:shortcutConfigPath -Force -ErrorAction SilentlyContinue
+        $global:DevNavCliCalls = [System.Collections.Generic.List[string]]::new()
+    }
+
+    It 'binds slot 1 with alias and command via: dev shortcut 1 Dev "bun run dev"' {
+        InvokeShortcutViaDev -Tokens 'shortcut', '1', 'Dev', 'bun run dev'
+        $global:DevNavCliCalls.Count | Should -Be 1
+        $global:DevNavCliCalls[0] | Should -Be '--set-shortcut|1|bun run dev|--alias|Dev'
+    }
+
+    It 'binds slot 9 with a command only via: dev shortcut 9 "cargo test"' {
+        InvokeShortcutViaDev -Tokens 'shortcut', '9', 'cargo test'
+        $global:DevNavCliCalls[0] | Should -Be '--set-shortcut|9|cargo test'
+    }
+
+    It 'binds an intermediate slot via: dev shortcut 5 Tests "bun test"' {
+        InvokeShortcutViaDev -Tokens 'shortcut', '5', 'Tests', 'bun test'
+        $global:DevNavCliCalls[0] | Should -Be '--set-shortcut|5|bun test|--alias|Tests'
+    }
+
+    It 'clears a slot via: dev shortcut 3' {
+        InvokeShortcutViaDev -Tokens 'shortcut', '3'
+        $global:DevNavCliCalls[0] | Should -Be '--clear-shortcut|3'
+    }
+
+    It 'rejects an index below the supported range' {
+        { InvokeShortcutViaDev -Tokens 'shortcut', '0', 'cmd' } | Should -Throw
+    }
+
+    It 'rejects an index above the supported range' {
+        { InvokeShortcutViaDev -Tokens 'shortcut', '10', 'cmd' } | Should -Throw
+    }
+
+    It 'rejects a non-numeric index' {
+        { InvokeShortcutViaDev -Tokens 'shortcut', 'x', 'cmd' } | Should -Throw
+    }
+
+    It 'rejects too many arguments and prints usage' {
+        { InvokeShortcutViaDev -Tokens 'shortcut', '1', 'a', 'b', 'c' } | Should -Throw '*Uso*'
+    }
+
+    It 'persists, overwrites and clears shortcuts through dev.exe without corrupting existing config' {
+        $devModule.Invoke({
+            Mock Get-DevExecutable { $global:DevNavTestDevExe }
+            Mock Write-Host {}
+            Set-DevRoot -Path $HOME
+            Set-DevShortcut -Index 1 -Alias 'Dev' -Command 'bun run dev' -Confirm:$false
+            Set-DevShortcut -Index 9 -Command 'cargo test' -Confirm:$false
+        })
+        $lines = Get-Content -LiteralPath $script:shortcutConfigPath
+        $lines | Should -Contain "shortcut`t1`tDev`tbun run dev"
+        # An empty alias still reserves its field, so the line carries two tabs.
+        $lines | Should -Contain "shortcut`t9`t`tcargo test"
+        ($lines | Where-Object { $_ -match '^root\t' }) | Should -Not -BeNullOrEmpty
+
+        # Overwrite slot 1: the previous binding must be replaced, not duplicated.
+        $devModule.Invoke({
+            Mock Get-DevExecutable { $global:DevNavTestDevExe }
+            Mock Write-Host {}
+            Set-DevShortcut -Index 1 -Alias 'Tests' -Command 'cargo test' -Confirm:$false
+        })
+        $lines = Get-Content -LiteralPath $script:shortcutConfigPath
+        $lines | Should -Contain "shortcut`t1`tTests`tcargo test"
+        ($lines | Where-Object { $_ -eq "shortcut`t1`tDev`tbun run dev" }) | Should -BeNullOrEmpty
+
+        # Clear slot 1; slot 9 and the pre-existing root must survive.
+        $devModule.Invoke({
+            Mock Get-DevExecutable { $global:DevNavTestDevExe }
+            Mock Write-Host {}
+            Remove-DevShortcut -Index 1
+        })
+        $lines = Get-Content -LiteralPath $script:shortcutConfigPath
+        ($lines | Where-Object { $_ -match '^shortcut`t1\t' }) | Should -BeNullOrEmpty
+        $lines | Should -Contain "shortcut`t9`t`tcargo test"
+        ($lines | Where-Object { $_ -match '^root\t' }) | Should -Not -BeNullOrEmpty
+    }
+
+    It 'preserves special characters (spaces, percent, quotes) round-trip' {
+        $devModule.Invoke({
+            Mock Get-DevExecutable { $global:DevNavTestDevExe }
+            Mock Write-Host {}
+            Set-DevShortcut -Index 2 -Alias '100% dev' -Command 'echo "hi there"' -Confirm:$false
+        })
+        $lines = Get-Content -LiteralPath $script:shortcutConfigPath
+        # encode(): % -> %25, tabs/newlines encoded, spaces and quotes preserved.
+        $lines | Should -Contain "shortcut`t2`t100%25 dev`techo `"hi there`""
     }
 }

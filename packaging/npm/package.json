@@ -1,0 +1,43 @@
+{
+  "name": "@jacoboptimiza/devnav",
+  "version": "0.9.7",
+  "description": "Native high-performance workspace navigator for PowerShell 7 on Windows",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JacobOptimiza/dev-nav.git"
+  },
+  "homepage": "https://github.com/JacobOptimiza/dev-nav",
+  "keywords": [
+    "powershell",
+    "tui",
+    "windows",
+    "navigation",
+    "terminal"
+  ],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "devnav": "bin/devnav.mjs"
+  },
+  "files": [
+    "bin/",
+    "payload/",
+    "release-manifest.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

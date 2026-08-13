@@ -113,8 +113,16 @@ function Initialize-DevUpdateCheckPreference {
     return $enabled
 }
 
+function Test-DevManagedInstallation {
+    # Package managers such as Scoop own the files they install; DevNav must not
+    # self-update underneath them. Managed layouts carry a marker file next to
+    # this module.
+    return (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.devnav-managed-by-scoop') -PathType Leaf)
+}
+
 function Invoke-DevStartupUpdateCheck {
     if ([Console]::IsInputRedirected) { return }
+    if (Test-DevManagedInstallation) { return }
     if (-not (Initialize-DevUpdateCheckPreference)) { return }
 
     try {
@@ -152,10 +160,93 @@ function Get-DevExecutable {
     return $executable
 }
 
+function Invoke-DevCli {
+    # Thin, mockable wrapper around the dev.exe binary used by the shortcut
+    # configuration commands. Returns the process exit code.
+    param([Parameter(Mandatory)][string[]] $Arguments)
+    $executable = Get-DevExecutable
+    & $executable @Arguments
+    return $LASTEXITCODE
+}
+
+function Set-DevShortcut {
+    [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Bind')]
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [ValidateRange(1, 9)]
+        [int] $Index,
+
+        [Parameter(Mandatory, Position = 1, ParameterSetName = 'Bind')]
+        [string] $Command,
+
+        [Parameter(Position = 2, ParameterSetName = 'Bind')]
+        [string] $Alias,
+
+        [Parameter(ParameterSetName = 'Clear')]
+        [switch] $Clear
+    )
+
+    if ($Clear) {
+        if (-not $PSCmdlet.ShouldProcess("atajo $Index", 'Eliminar')) { return }
+        $exitCode = Invoke-DevCli -Arguments @('--clear-shortcut', $Index)
+        if ($exitCode -ne 0) { throw "No se pudo eliminar el atajo $Index (dev.exe salió con $exitCode)." }
+        Write-Host "Atajo $Index eliminado." -ForegroundColor Green
+        return
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Command)) {
+        throw 'Debes indicar el comando del atajo, o usar -Clear para eliminarlo.'
+    }
+    if (-not $PSCmdlet.ShouldProcess("atajo $Index", "Vincular '$Command'")) { return }
+    # The command is stored verbatim and only evaluated by the shell when the
+    # shortcut is invoked; never during configuration.
+    $arguments = @('--set-shortcut', [string]$Index, $Command)
+    if (-not [string]::IsNullOrWhiteSpace($Alias)) {
+        $arguments += @('--alias', $Alias)
+    }
+    $exitCode = Invoke-DevCli -Arguments $arguments
+    if ($exitCode -ne 0) { throw "No se pudo guardar el atajo $Index (dev.exe salió con $exitCode)." }
+    $label = if ([string]::IsNullOrWhiteSpace($Alias)) { $Command } else { $Alias }
+    Write-Host "Atajo $Index guardado: $label" -ForegroundColor Green
+}
+
+function Remove-DevShortcut {
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [ValidateRange(1, 9)]
+        [int] $Index
+    )
+
+    Set-DevShortcut -Index $Index -Clear -Confirm:$false
+}
+
+function Invoke-DevShortcutCommand {
+    # Parses the `dev shortcut <args>` form. Kept separate from
+    # Invoke-DevNavigator so the parsing is unit-testable in isolation.
+    param([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]] $Items)
+
+    switch ($Items.Count) {
+        1 { Remove-DevShortcut -Index $Items[0] }
+        2 { Set-DevShortcut -Index $Items[0] -Command $Items[1] }
+        3 { Set-DevShortcut -Index $Items[0] -Alias $Items[1] -Command $Items[2] }
+        default {
+            throw "Uso: dev shortcut <1..9> [alias] <comando>`nPara eliminar: dev shortcut <1..9>"
+        }
+    }
+}
+
 function Update-DevNavigator {
     [CmdletBinding(SupportsShouldProcess)]
     param()
 
+    if (Test-DevManagedInstallation) {
+        Write-Host 'Esta instalación la gestiona Scoop; DevNav no se actualiza a sí mismo.' -ForegroundColor Yellow
+        Write-Host 'Para actualizar, ejecuta: scoop update devnav' -ForegroundColor Cyan
+        return
+    }
     $ErrorActionPreference = 'Stop'
     if (-not $PSCmdlet.ShouldProcess('DevNav installation', 'Download and install the selected release')) { return }
     $currentVersion = Get-DevInstalledVersion
@@ -292,6 +383,14 @@ function Invoke-DevNavigator {
         Update-DevNavigator
         return
     }
+    if ($Command.Count -ge 1 -and $Command[0] -eq 'shortcut') {
+        $items = @($Command | Select-Object -Skip 1)
+        if ($items.Count -eq 0) {
+            throw "Uso: dev shortcut <1..9> [alias] <comando>`nPara eliminar: dev shortcut <1..9>"
+        }
+        Invoke-DevShortcutCommand -Items $items
+        return
+    }
     $script:DevNavUpdateCompleted = $false
     Invoke-DevStartupUpdateCheck
     if ($script:DevNavUpdateCompleted) {
@@ -357,4 +456,4 @@ function Set-DevRoot {
 }
 
 Set-Alias -Name dev -Value Invoke-DevNavigator -Scope Global
-Export-ModuleMember -Function Invoke-DevNavigator, Update-DevNavigator, Get-DevRoot, Set-DevRoot, Set-DevUpdateCheck -Alias dev
+Export-ModuleMember -Function Invoke-DevNavigator, Update-DevNavigator, Get-DevRoot, Set-DevRoot, Set-DevUpdateCheck, Set-DevShortcut, Remove-DevShortcut -Alias dev
