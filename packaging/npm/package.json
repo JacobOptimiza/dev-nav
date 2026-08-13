@@ -9,9 +9,6 @@
     "url": "https://github.com/JacobOptimiza/dev-nav.git"
   },
   "homepage": "https://github.com/JacobOptimiza/dev-nav",
-  "bugs": {
-    "url": "https://github.com/JacobOptimiza/dev-nav/issues"
-  },
   "keywords": [
     "powershell",
     "tui",
@@ -27,7 +24,7 @@
     "arm64"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "bin": {
     "devnav": "bin/devnav.mjs"

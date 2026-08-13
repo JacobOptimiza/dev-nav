@@ -21,6 +21,8 @@ artifacts/
 dist/
 out/
 bin/
+!packaging/npm/bin/
+!packaging/npm/bin/devnav.mjs
 obj/
 .cargo-home/
 .nuget/
