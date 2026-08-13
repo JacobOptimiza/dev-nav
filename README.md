@@ -66,6 +66,29 @@ package version. The runner exits after setup and is not required at runtime.
 
 </details>
 
+### Scoop
+
+Add the official DevNav bucket:
+
+```powershell
+scoop bucket add jacoboptimiza https://github.com/JacobOptimiza/scoop-bucket
+```
+
+Then install DevNav:
+
+```powershell
+scoop install jacoboptimiza/devnav
+```
+
+Scoop installs the portable native build and owns the installed files. It does
+not use the Inno Setup installer.
+
+Update Scoop-managed installations with:
+
+```powershell
+scoop update devnav
+```
+
 ### PowerShell
 
 No Node.js or package manager is required. Run the official installer from
@@ -93,7 +116,7 @@ The same per-user x64 and ARM64 installers are also available from the
 |---|---|
 | GitHub installer | Available |
 | npm, Bun, pnpm and Yarn | Available |
-| Scoop | Coming soon—the portable release artifacts exist; the public bucket is still being validated |
+| Scoop | Available — official [JacobOptimiza/scoop-bucket](https://github.com/JacobOptimiza/scoop-bucket) |
 | WinGet | Pending Microsoft approval of `JacobOptimiza.DevNav` |
 
 ### Start DevNav
@@ -224,6 +247,10 @@ the separate local configuration.
 
 Installs bootstrapped through npm, Bun, pnpm, Yarn, PowerShell, or the GitHub
 installer use `dev update`; the bootstrap tool does not own future updates.
+
+Scoop-managed installations use `scoop update devnav`. Their
+`.devnav-managed-by-scoop` marker tells `dev update` to detect Scoop ownership,
+skip self-updating, and show the Scoop command instead.
 
 On the first interactive launch, DevNav asks once whether it may check GitHub for
 new releases at startup. This check never downloads or installs anything without

@@ -83,7 +83,22 @@ Un checksum incorrecto puede indicar una descarga incompleta o manipulada.
 DevNav debe cargarse mediante su módulo para poder cambiar la ubicación de la
 PowerShell actual. Cierra todas las ventanas de PowerShell 7 y abre una nueva.
 Esto también se aplica después de instalar correctamente mediante Bun, npm,
-pnpm o Yarn.
+pnpm, Yarn, PowerShell o el instalador de GitHub.
+
+En instalaciones clásicas o de bootstrap, el módulo suele estar en:
+
+```text
+%LOCALAPPDATA%\Programs\DevNav
+```
+
+En instalaciones gestionadas por Scoop, diagnostica la copia propiedad de
+Scoop:
+
+```powershell
+scoop prefix devnav
+Get-Module -ListAvailable DevNav
+Get-Command dev -ErrorAction SilentlyContinue
+```
 Si el alias sigue sin aparecer, ejecuta:
 
 ```powershell
@@ -93,7 +108,11 @@ Import-Module $module -Force
 Get-Command dev
 ```
 
-- Si `Test-Path` devuelve `False`, vuelve a ejecutar `install.ps1`.
+- Si `Test-Path` devuelve `False`, vuelve a ejecutar `install.ps1` para una
+  instalación clásica/bootstrap. Para Scoop, ejecuta `scoop update devnav` o,
+  si es necesario, `scoop uninstall devnav` seguido de `scoop install
+  jacoboptimiza/devnav`. No repares una instalación Scoop modificando
+  manualmente el perfil de PowerShell.
 - Si la importación manual funciona, verifica el perfil del host actual:
 
 ```powershell
@@ -203,9 +222,11 @@ actualización sin confirmación explícita.
 
 ### Actualización
 
-Las instalaciones iniciadas mediante Bun, npm, pnpm, Yarn, PowerShell o el
-instalador de GitHub usan el actualizador propio de DevNav. No utilices el
-gestor de bootstrap para actualizarlas.
+Las instalaciones clásicas/bootstrap (Bun, npm, pnpm, Yarn, PowerShell y el
+instalador de GitHub) usan el actualizador propio de DevNav. Las instalaciones
+Scoop usan `scoop update devnav`; no utilices el gestor de bootstrap para
+actualizarlas. En Scoop, `dev update` solo delega en Scoop y no se
+autoactualiza.
 
 La instalación publicada se actualiza directamente con:
 

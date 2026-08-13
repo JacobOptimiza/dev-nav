@@ -46,20 +46,44 @@ JacobOptimiza/scoop-bucket
     └── devnav.json
 ```
 
-## Setting up the bucket (one time)
+## Public bucket
+
+The official public bucket is
+[`JacobOptimiza/scoop-bucket`](https://github.com/JacobOptimiza/scoop-bucket).
+Its current installable manifest is `bucket/devnav.json`.
+
+Install DevNav with:
+
+```powershell
+scoop bucket add jacoboptimiza https://github.com/JacobOptimiza/scoop-bucket
+scoop install jacoboptimiza/devnav
+```
+
+Update with:
+
+```powershell
+scoop update devnav
+```
+
+The bucket is protected by pull requests and required CI. GitHub Actions are
+pinned to commits and Dependabot reviews those pins weekly. Excavator exists as
+a `workflow_dispatch` workflow only; there is no scheduled write automation.
+Future manifest changes must be reviewed and pass CI before they are merged.
+
+## Setting up the bucket (historical bootstrap)
 
 1. Create `JacobOptimiza/scoop-bucket` from the official
    [ScoopInstaller/BucketTemplate](https://github.com/ScoopInstaller/BucketTemplate)
    ("Use this template"). The template ships with CI, manifest validation and
    the `checkver`/`autoupdate` tooling under `bin/`.
-2. After the first multichannel GitHub release exists, download its
+2. After a multichannel GitHub release exists, download its
    `devnav.scoop.json` asset and commit it as `bucket/devnav.json`:
 
    ```powershell
    gh release download --repo JacobOptimiza/dev-nav --pattern devnav.scoop.json --clobber
    ```
 
-3. From then on the bucket's scheduled automation keeps the manifest current:
+3. Validate a future manifest update with the bucket tooling:
 
    ```powershell
    .\bin\checkver.ps1 * -u
@@ -68,27 +92,9 @@ JacobOptimiza/scoop-bucket
    `checkver` reads the latest GitHub release and `autoupdate` rewrites the
    URLs and downloads the published ZIPs to compute their SHA-256 hashes.
 
-## Installing DevNav with Scoop
-
-The public bucket is not available yet. The following commands describe the
-target user flow after `JacobOptimiza/scoop-bucket` has been created and
-validated; do not present them as an active installation channel before then.
-
-```powershell
-scoop bucket add jacoboptimiza https://github.com/JacobOptimiza/scoop-bucket
-scoop install jacoboptimiza/devnav
-```
-
 The `psmodule` directive registers `DevNav` as a PowerShell module, so `dev`
 autoloads it in a fresh PowerShell 7 session without touching the profile.
-
-Updates:
-
-```powershell
-scoop update devnav
-```
 
 ## Distribution scope
 
 The current distribution target is `JacobOptimiza/scoop-bucket`.
-Upstream Scoop bucket submissions are outside the scope of the current release.
