@@ -5,10 +5,12 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-13
+
 ### Added
 
 - Add npm packaging usable with Bun, npm, pnpm and Yarn, plus Scoop packaging,
-  beginning with the first multichannel release after v0.9.7.
+  beginning with the first multichannel release v0.10.0.
 - Add portable x64/ARM64 Scoop archives and a `DevNav.psd1` module manifest
   for PowerShell module registration.
 - Add configurable Shift+1…Shift+9 project shortcuts: each slot binds an

@@ -67,8 +67,8 @@ Get-Content .\install.ps1
 
 ### Upcoming package-manager channels
 
-Not available in v0.9.7. These commands become available with the first
-multichannel release after v0.9.7. The same
+Not available yet. These commands are planned for the first multichannel
+release, v0.10.0. The same
 release bytes will also be distributed through npm and Scoop. DevNav is never
 rebuilt per channel: every package derives from the canonical GitHub release
 and its `release-manifest.json` inventory.

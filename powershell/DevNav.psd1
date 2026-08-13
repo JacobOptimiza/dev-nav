@@ -1,6 +1,6 @@
 @{
     RootModule        = 'DevNav.psm1'
-    ModuleVersion     = '0.9.7'
+    ModuleVersion     = '0.10.0'
     GUID              = '5e631432-751b-46ce-bfa6-8a0051bc9bd1'
     Author            = 'Jacob Optimiza'
     CompanyName       = 'Jacob Optimiza'
