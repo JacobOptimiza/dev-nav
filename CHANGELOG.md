@@ -9,8 +9,8 @@ Versioning.
 
 ### Added
 
-- Add npm packaging usable with Bun, npm, pnpm and Yarn, plus Scoop packaging,
-  beginning with the first multichannel release v0.10.0.
+- Add the official npm bootstrap package for Bun, npm, pnpm and Yarn, plus
+  Scoop packaging, beginning with the first multichannel release v0.10.0.
 - Add portable x64/ARM64 Scoop archives and a `DevNav.psd1` module manifest
   for PowerShell module registration.
 - Add configurable Shift+1…Shift+9 project shortcuts: each slot binds an

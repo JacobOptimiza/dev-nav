@@ -82,6 +82,8 @@ Un checksum incorrecto puede indicar una descarga incompleta o manipulada.
 
 DevNav debe cargarse mediante su módulo para poder cambiar la ubicación de la
 PowerShell actual. Cierra todas las ventanas de PowerShell 7 y abre una nueva.
+Esto también se aplica después de instalar correctamente mediante Bun, npm,
+pnpm o Yarn.
 Si el alias sigue sin aparecer, ejecuta:
 
 ```powershell
@@ -201,8 +203,9 @@ actualización sin confirmación explícita.
 
 ### Actualización
 
-Si la instalación está gestionada por Scoop, utiliza `scoop update devnav` en
-lugar de `dev update` o `Mayús+U`.
+Las instalaciones iniciadas mediante Bun, npm, pnpm, Yarn, PowerShell o el
+instalador de GitHub usan el actualizador propio de DevNav. No utilices el
+gestor de bootstrap para actualizarlas.
 
 La instalación publicada se actualiza directamente con:
 

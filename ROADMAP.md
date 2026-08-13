@@ -1,16 +1,19 @@
 # Roadmap
 
-DevNav is currently distributed from GitHub through the PowerShell installer
-and release installers. Release payloads are checksum-verified with SHA-256;
-checksums verify integrity and are not digital signatures.
+DevNav is distributed from GitHub and through the public npm bootstrap package.
+Release payloads are checksum-verified with SHA-256; checksums verify integrity
+and are not digital signatures.
 
 ## Distribution status
 
 - [x] GitHub releases with x64 and ARM64 application binaries.
 - [x] Per-user Windows installers and PowerShell integration.
-- [x] npm and Scoop packaging implemented from the canonical release payload.
-- [ ] Publish the first multichannel release after v0.9.7.
-- [ ] Make npm and Scoop installation channels available to users.
+- [x] Publish the v0.10.0 multichannel release payload.
+- [x] Publish `@jacoboptimiza/devnav` as a public npm bootstrap package.
+- [x] Verify Bun, npm, pnpm and Yarn bootstrap commands from the public registry.
+- [x] Configure npm Trusted Publishing for future releases.
+- [x] Publish portable x64 and ARM64 Scoop artifacts in the GitHub Release.
+- [ ] Create and validate the public `JacobOptimiza/scoop-bucket` bootstrap.
 - [x] Generate WinGet manifests with immutable versioned URLs and SHA-256.
 - [x] Submit the initial `JacobOptimiza.DevNav` manifests to
   `microsoft/winget-pkgs`.

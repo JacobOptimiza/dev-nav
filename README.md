@@ -1,108 +1,128 @@
 # DevNav
 
-**A fast, native workspace navigator for PowerShell 7 on Windows.**
-
-Built in Rust · keyboard-first · no TUI framework · no telemetry.
+**Fast native workspace navigation for PowerShell 7 on Windows.**
 
 [![CI](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml/badge.svg)](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/JacobOptimiza/dev-nav)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/@jacoboptimiza/devnav?logo=npm)](https://www.npmjs.com/package/@jacoboptimiza/devnav)
 [![Windows](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-0078D4)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **English** | [Español](README.es.md)
 
 ![DevNav terminal interface](assets/devnav-preview.svg)
 
-Open `dev`, find a repository, and launch Codex, Claude Code, OpenCode, Kimi, or
-any command in that directory. DevNav also provides persistent aliases, global
-favorites, fuzzy filtering, and a visual way to choose your startup directory.
+Jump between projects, fuzzy-search workspaces, save favorites and aliases, and
+launch coding agents or commands directly in the selected repository.
 
-## Why DevNav?
+## Install DevNav
 
-- Starts directly in your chosen workspace.
-- Keeps every favorite available while you navigate across drives.
-- Opens coding agents in the highlighted repository with one key.
-- Returns directory changes to the current PowerShell session correctly.
-- Runs as a native, event-driven Windows executable with differential VT rendering.
-- Stores configuration locally and never sends telemetry.
+Choose the tool you already use. Every bootstrap installs the same native
+DevNav release for Windows x64 or ARM64.
 
-## Requirements
+### Package runners
 
-- Windows 10 or 11, x64 or ARM64.
-- PowerShell 7 or newer (`pwsh`).
-- Windows Terminal recommended.
+#### Bun
 
-Published binaries do not require Rust or Visual Studio.
+```powershell
+bunx --bun @jacoboptimiza/devnav install
+```
 
-## Install
+#### npm
 
-### Quick install
+```powershell
+npx --yes @jacoboptimiza/devnav install
+```
 
-Run this in PowerShell 7:
+#### pnpm
+
+```powershell
+pnx @jacoboptimiza/devnav install
+```
+
+#### Yarn
+
+```powershell
+yarn dlx -p @jacoboptimiza/devnav devnav install
+```
+
+These are verified bootstrap channels, not JavaScript installations of DevNav.
+They have no `postinstall` script or runtime dependencies: the bootstrap selects
+the official x64 or ARM64 installer, verifies its SHA-256 against
+`release-manifest.json`, installs it, and validates the installed version.
+
+After installation, update DevNav with `dev update`—not with npm, Bun, pnpm, or
+Yarn. The package runner is a discovery and bootstrap channel; it does not own
+the installed application.
+
+<details>
+<summary>How package-runner installation works</summary>
+
+The npm package contains the installers published by the canonical GitHub
+Release. Running `install` detects Windows and the current architecture, checks
+the selected installer against the release inventory, invokes the silent
+per-user Inno Setup installer, and confirms that `dev.exe --version` matches the
+package version. The runner exits after setup and is not required at runtime.
+
+</details>
+
+### PowerShell
+
+No Node.js or package manager is required. Run the official installer from
+PowerShell 7:
 
 ```powershell
 irm https://raw.githubusercontent.com/JacobOptimiza/dev-nav/main/install.ps1 | iex
 ```
 
-The latest release also includes silent per-user installers for x64 and ARM64.
-Download them from the [latest release](https://github.com/JacobOptimiza/dev-nav/releases/latest).
-The `JacobOptimiza.DevNav` WinGet submission is prepared and validated, but the
-command becomes available only after Microsoft accepts the manifest in the
-community source. Until then, use the PowerShell installer above or the release
-installer directly.
-
-The installer detects the architecture, downloads `dev.exe` and its PowerShell
-module from the latest GitHub release, verifies both SHA-256 checksums, installs
-them under `%LOCALAPPDATA%\Programs\DevNav`, and adds the module import to the
-PowerShell 7 profile.
-
-If you prefer to inspect the installer before running it:
+To inspect the script before executing it:
 
 ```powershell
-git clone https://github.com/JacobOptimiza/dev-nav.git
-Set-Location dev-nav
-Get-Content .\install.ps1
-.\install.ps1
+$installer = Join-Path $env:TEMP 'devnav-install.ps1'
+Invoke-WebRequest https://raw.githubusercontent.com/JacobOptimiza/dev-nav/main/install.ps1 -OutFile $installer
+Get-Content $installer
+& $installer
 ```
 
-### Upcoming package-manager channels
+The same per-user x64 and ARM64 installers are also available from the
+[latest GitHub Release](https://github.com/JacobOptimiza/dev-nav/releases/latest).
 
-Not available yet. These commands are planned for the first multichannel
-release, v0.10.0. The same
-release bytes will also be distributed through npm and Scoop. DevNav is never
-rebuilt per channel: every package derives from the canonical GitHub release
-and its `release-manifest.json` inventory.
+### Other distribution channels
 
-With Bun, npm, pnpm or Yarn — one package, `@jacoboptimiza/devnav`, works as an
-explicit bootstrap (no `postinstall`, no runtime dependencies):
+| Channel | Status |
+|---|---|
+| GitHub installer | Available |
+| npm, Bun, pnpm and Yarn | Available |
+| Scoop | Coming soon—the portable release artifacts exist; the public bucket is still being validated |
+| WinGet | Pending Microsoft approval of `JacobOptimiza.DevNav` |
 
-```sh
-bunx --bun @jacoboptimiza/devnav install            # Bun
-npx --yes @jacoboptimiza/devnav install             # npm
-pnx @jacoboptimiza/devnav install                   # pnpm
-yarn dlx -p @jacoboptimiza/devnav devnav install    # Yarn
-```
+### Start DevNav
 
-The bootstrap verifies the bundled installer's SHA-256 against the release
-manifest, runs it silently and checks the installed version. DevNav remains a
-standalone application with its own updater, so the package does not need to
-stay installed afterwards.
-
-With Scoop:
-
-```powershell
-scoop bucket add jacoboptimiza https://github.com/JacobOptimiza/scoop-bucket
-scoop install jacoboptimiza/devnav
-```
-
-Scoop owns the files it installs, so a Scoop-managed DevNav skips its self
-updater: update it with `scoop update devnav` instead.
-
-Open a new PowerShell 7 window and run:
+Open a new PowerShell 7 session:
 
 ```powershell
 dev
 ```
+
+Continue with [First run](#first-run-choose-your-startup-directory) to choose
+the folder DevNav opens by default.
+
+### Requirements
+
+- Windows 10 or 11 on x64 or ARM64.
+- PowerShell 7 or newer (`pwsh`).
+- Windows Terminal recommended.
+
+Published binaries do not require Rust or Visual Studio. A package runner is
+required only when you choose its bootstrap command.
+
+## Why DevNav?
+
+- Starts directly in your chosen workspace.
+- Keeps every favorite available while you navigate across drives.
+- Opens coding agents or runs commands in the highlighted repository.
+- Returns directory changes to the current PowerShell session correctly.
+- Runs as a native, keyboard-first Windows application with no telemetry.
 
 ## First run: choose your startup directory
 
@@ -202,8 +222,8 @@ version with the latest release, downloads only when needed, verifies checksums,
 and reports the result. The updater replaces only application files and preserves
 the separate local configuration.
 
-Scoop-managed installs: use `scoop update devnav` instead of `dev update` or
-`Shift+U`.
+Installs bootstrapped through npm, Bun, pnpm, Yarn, PowerShell, or the GitHub
+installer use `dev update`; the bootstrap tool does not own future updates.
 
 On the first interactive launch, DevNav asks once whether it may check GitHub for
 new releases at startup. This check never downloads or installs anything without
@@ -227,10 +247,12 @@ Set-DevUpdateCheck $false  # disable
 
 ## Security and privacy
 
-- No telemetry. Network access is limited to the optional, consented release check and explicit updates.
+- No telemetry. Network access is limited to installation, the optional
+  consented release check, and explicit updates.
 - Release binaries and the PowerShell module are verified with SHA-256.
 - Local configuration is excluded from the repository and preserved on updates.
 - GitHub Actions use minimal permissions and commit-pinned actions.
+- Future npm releases use OIDC Trusted Publishing; no `NPM_TOKEN` is stored.
 - The public repository is read-only for external contributors.
 
 See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the

@@ -1,8 +1,8 @@
 # DevNav Scoop packaging
 
 Scoop owns the files it installs, so DevNav is distributed to Scoop as portable
-ZIP archives — not through the Inno Setup installer. Each GitHub release
-(starting with the first multichannel release) publishes:
+ZIP archives — not through the Inno Setup installer. GitHub releases starting
+with v0.10.0 publish:
 
 - `DevNav-scoop-x64.zip`
 - `DevNav-scoop-arm64.zip`
@@ -69,6 +69,10 @@ JacobOptimiza/scoop-bucket
    URLs and downloads the published ZIPs to compute their SHA-256 hashes.
 
 ## Installing DevNav with Scoop
+
+The public bucket is not available yet. The following commands describe the
+target user flow after `JacobOptimiza/scoop-bucket` has been created and
+validated; do not present them as an active installation channel before then.
 
 ```powershell
 scoop bucket add jacoboptimiza https://github.com/JacobOptimiza/scoop-bucket

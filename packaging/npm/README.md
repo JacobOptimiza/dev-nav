@@ -1,38 +1,32 @@
 # @jacoboptimiza/devnav
 
-Native high-performance workspace navigator for PowerShell 7 on Windows.
+Official bootstrap for DevNav, the native workspace navigator for PowerShell 7
+on Windows.
 
-This package is the **bootstrap channel** for DevNav: it carries the official
-x64 and ARM64 Inno Setup installers inside the tarball, verifies their SHA-256
-hashes against the release manifest, and runs the matching installer
-silently. After installation, DevNav lives as a standalone application under
-`%LOCALAPPDATA%\Programs\DevNav` with its own updater — this package does not
-need to stay installed.
-
-No `postinstall` scripts, no runtime dependencies: nothing happens until you
-explicitly run `install`.
+Use the package runner you already have. Each command installs the same official
+native DevNav release for Windows x64 or ARM64.
 
 ## Install
 
-With Bun:
+### Bun
 
 ```sh
 bunx --bun @jacoboptimiza/devnav install
 ```
 
-With npm:
+### npm
 
 ```sh
 npx --yes @jacoboptimiza/devnav install
 ```
 
-With pnpm:
+### pnpm
 
 ```sh
 pnx @jacoboptimiza/devnav install
 ```
 
-With Yarn:
+### Yarn
 
 ```sh
 yarn dlx -p @jacoboptimiza/devnav devnav install
@@ -44,6 +38,18 @@ Then open a new PowerShell 7 window and run:
 dev
 ```
 
+After installation, use `dev update`. Bun, npm, pnpm and Yarn are verified
+bootstrap channels; they do not own or update the installed application.
+
+## Security properties
+
+- No `postinstall` script.
+- Zero runtime dependencies.
+- Explicit installation only through the `install` command.
+- Architecture selection restricted to Windows x64 and ARM64.
+- Installer SHA-256 verified against `release-manifest.json`.
+- Installed `dev.exe` version verified after setup.
+
 ## What `devnav install` does
 
 1. Checks the platform (`win32`) and architecture (`x64` or `arm64`).
@@ -51,6 +57,11 @@ dev
 3. Verifies its SHA-256 hash against `release-manifest.json`; aborts on mismatch.
 4. Runs the Inno Setup installer silently (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`).
 5. Verifies the installed `dev.exe --version` matches the package version.
+
+The package carries the x64 and ARM64 Inno Setup installers from the canonical
+GitHub Release. It runs the matching installer and then gets out of the way;
+DevNav remains a standalone native application under
+`%LOCALAPPDATA%\Programs\DevNav`.
 
 ## Requirements
 
