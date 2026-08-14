@@ -49,6 +49,14 @@ impl Config {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::default()),
             Err(error) => return Err(error),
         };
+        Ok(Self::parse_tsv(&contents))
+    }
+
+    /// Parses the textual `config.tsv` representation without performing I/O.
+    ///
+    /// Unknown or malformed records are ignored for backwards compatibility,
+    /// while valid records retain the same semantics as [`Config::load`].
+    pub fn parse_tsv(contents: &str) -> Self {
         let mut config = Self::default();
         for line in contents.lines() {
             let mut fields = line.splitn(3, '\t');
@@ -97,7 +105,7 @@ impl Config {
                 _ => {}
             }
         }
-        Ok(config)
+        config
     }
 
     pub fn save(&self, path: &Path) -> io::Result<()> {
@@ -355,6 +363,17 @@ mod tests {
     fn encoding_round_trip() {
         let input = "C:\\code\t100%\nnext";
         assert_eq!(decode(&encode(input)), input);
+    }
+
+    #[test]
+    fn parser_ignores_malformed_records_without_losing_valid_shortcuts() {
+        let config = Config::parse_tsv(
+            "shortcut\t0\tignored\tnope\nshortcut\t2\tTests\tcargo test\ninvalid\n",
+        );
+
+        assert!(config.shortcut(0).is_none());
+        assert_eq!(config.shortcut(2).map(|slot| slot.alias.as_deref()), Some(Some("Tests")));
+        assert_eq!(config.shortcut(2).map(|slot| slot.command.as_str()), Some("cargo test"));
     }
 
     #[test]

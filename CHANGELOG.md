@@ -5,6 +5,11 @@ Versioning.
 
 ## [Unreleased]
 
+### Security
+
+- Add verified npm CLI bootstrapping, Rust parser fuzzing, and artifact
+  attestations for future releases.
+
 ## [0.13.0] - 2026-08-14
 
 ### Changed

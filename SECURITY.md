@@ -3,7 +3,7 @@
 ## Supported versions
 
 Security fixes are provided for the latest stable DevNav release line. The
-currently supported release is `0.12.x` (latest: `0.12.0`). Please update to
+currently supported release is `0.13.x` (latest: `0.13.0`). Please update to
 the latest release before reporting an issue against an older version.
 
 ## Reporting a vulnerability
