@@ -2,7 +2,7 @@ use std::{collections::HashSet, fs, io, path::PathBuf};
 
 use crate::{
     config::Config,
-    i18n::{KeyBinding, KeyToken, Locale, Modifier, format_binding},
+    i18n::{KeyBinding, KeyToken, Locale, Modifier, TextId, format_binding, text},
     input::{self, Key},
     model::{DirectoryEntry, ShellResult},
     render::{Renderer, fit},
@@ -18,7 +18,7 @@ enum Mode {
     Alias { target: PathBuf },
     Command { target: PathBuf },
     ConfirmRoot { target: PathBuf },
-    Commands { selected: usize },
+    Commands { selected: usize, scroll: usize },
     CommandEditor { slot: u8, field: EditorField, alias: TextField, command: TextField },
     ConfirmDelete { slot: u8 },
 }
@@ -33,16 +33,26 @@ enum EditorField {
 struct TextField {
     value: String,
     cursor: usize,
+    viewport: usize,
 }
 
 impl TextField {
     fn new(value: String) -> Self {
         let cursor = value.len();
-        Self { value, cursor }
+        Self { value, cursor, viewport: 0 }
     }
     fn insert(&mut self, character: char) {
         self.value.insert(self.cursor, character);
         self.cursor += character.len_utf8();
+    }
+    fn delete(&mut self) {
+        if self.cursor < self.value.len() {
+            let end = self.value[self.cursor..]
+                .char_indices()
+                .nth(1)
+                .map_or(self.value.len(), |(index, _)| self.cursor + index);
+            self.value.replace_range(self.cursor..end, "");
+        }
     }
     fn backspace(&mut self) {
         if self.cursor > 0 {
@@ -67,6 +77,17 @@ impl TextField {
     fn right(&mut self) {
         if self.cursor < self.value.len() {
             self.cursor += self.value[self.cursor..].chars().next().map_or(0, char::len_utf8);
+        }
+    }
+    fn ensure_viewport(&mut self, width: usize) {
+        if self.cursor < self.viewport {
+            self.viewport = self.cursor;
+        }
+        while self.cursor.saturating_sub(self.viewport) >= width {
+            self.viewport = self.value[self.viewport..]
+                .chars()
+                .next()
+                .map_or(self.viewport, |ch| self.viewport + ch.len_utf8());
         }
     }
 }
@@ -312,7 +333,7 @@ impl App {
                 }
                 Ok(None)
             }
-            Mode::Commands { selected } => self.handle_commands(key, *selected),
+            Mode::Commands { selected, scroll } => self.handle_commands(key, *selected, *scroll),
             Mode::CommandEditor { slot, field, alias, command } => {
                 self.handle_command_editor(key, *slot, *field, alias.clone(), command.clone())
             }
@@ -434,7 +455,7 @@ impl App {
     }
 
     fn begin_commands(&mut self) {
-        let previous = std::mem::replace(&mut self.mode, Mode::Commands { selected: 0 });
+        let previous = std::mem::replace(&mut self.mode, Mode::Commands { selected: 0, scroll: 0 });
         self.commands_return_mode = Some(previous);
     }
 
@@ -446,12 +467,15 @@ impl App {
         &mut self,
         key: Key,
         selected: usize,
+        scroll: usize,
     ) -> io::Result<Option<Option<ShellResult>>> {
         let mut index = selected;
+        let mut top = scroll;
         match key {
             Key::Escape => self.close_commands(),
             Key::Up => index = index.saturating_sub(1),
             Key::Down => index = (index + 1).min(8),
+            Key::Char(character @ '1'..='9') => index = usize::from(character as u8 - b'1'),
             Key::Enter => {
                 let slot = (index + 1) as u8;
                 let (alias, command) =
@@ -474,8 +498,18 @@ impl App {
             }
             _ => {}
         }
-        if let Mode::Commands { selected: current } = &mut self.mode {
+        // The smallest supported terminal still has three manager rows; the
+        // renderer recalculates the exact viewport for taller terminals.
+        let capacity = 3usize;
+        if index < top {
+            top = index;
+        }
+        if index >= top + capacity {
+            top = index + 1 - capacity;
+        }
+        if let Mode::Commands { selected: current, scroll: current_scroll } = &mut self.mode {
             *current = index;
+            *current_scroll = top;
         }
         Ok(None)
     }
@@ -490,7 +524,13 @@ impl App {
     ) -> io::Result<Option<Option<ShellResult>>> {
         let mut next_field = field;
         match key {
-            Key::Escape => self.close_commands(),
+            Key::Escape => {
+                self.mode = Mode::Commands {
+                    selected: usize::from(slot - 1),
+                    scroll: usize::from(slot - 1).saturating_sub(6),
+                };
+                self.editor_error = None;
+            }
             Key::Tab => {
                 next_field = match field {
                     EditorField::Alias => EditorField::Command,
@@ -507,19 +547,25 @@ impl App {
             Key::Enter => {
                 let mut next_config = self.config.clone();
                 next_config.set_shortcut(slot, Some(alias.value.clone()), command.value.clone());
-                next_config.save(&self.config_path)?;
-                self.config = next_config;
-                self.mode = Mode::Commands { selected: usize::from(slot - 1) };
-                self.message = if matches!(self.locale, Locale::EsEs) {
-                    "Comando guardado"
-                } else {
-                    "Command saved"
+                if let Err(error) = next_config.save(&self.config_path) {
+                    self.editor_error =
+                        Some(format!("{}: {error}", text(self.locale, TextId::SaveError)));
+                    return Ok(None);
                 }
-                .into();
+                self.config = next_config;
+                self.mode = Mode::Commands {
+                    selected: usize::from(slot - 1),
+                    scroll: usize::from(slot - 1).saturating_sub(6),
+                };
+                self.message = text(self.locale, TextId::CommandSaved).into();
             }
             Key::Backspace => {
                 self.editor_error = None;
                 self.active_field(field, &mut alias, &mut command).backspace();
+            }
+            Key::Delete => {
+                self.editor_error = None;
+                self.active_field(field, &mut alias, &mut command).delete();
             }
             Key::Left => self.active_field(field, &mut alias, &mut command).left(),
             Key::Right => self.active_field(field, &mut alias, &mut command).right(),
@@ -532,6 +578,8 @@ impl App {
             _ => {}
         }
         if matches!(self.mode, Mode::CommandEditor { .. }) {
+            alias.ensure_viewport(48);
+            command.ensure_viewport(48);
             self.mode = Mode::CommandEditor { slot, field: next_field, alias, command };
         }
         Ok(None)
@@ -555,19 +603,26 @@ impl App {
         slot: u8,
     ) -> io::Result<Option<Option<ShellResult>>> {
         match key {
-            Key::Escape => self.mode = Mode::Commands { selected: usize::from(slot - 1) },
+            Key::Escape => {
+                self.mode = Mode::Commands {
+                    selected: usize::from(slot - 1),
+                    scroll: usize::from(slot - 1).saturating_sub(6),
+                }
+            }
             Key::Enter => {
                 let mut next_config = self.config.clone();
                 next_config.clear_shortcut(slot);
-                next_config.save(&self.config_path)?;
-                self.config = next_config;
-                self.mode = Mode::Commands { selected: usize::from(slot - 1) };
-                self.message = if matches!(self.locale, Locale::EsEs) {
-                    "Comando eliminado"
-                } else {
-                    "Command deleted"
+                if let Err(error) = next_config.save(&self.config_path) {
+                    self.editor_error =
+                        Some(format!("{}: {error}", text(self.locale, TextId::DeleteError)));
+                    return Ok(None);
                 }
-                .into();
+                self.config = next_config;
+                self.mode = Mode::Commands {
+                    selected: usize::from(slot - 1),
+                    scroll: usize::from(slot - 1).saturating_sub(6),
+                };
+                self.message = text(self.locale, TextId::CommandDeleted).into();
             }
             _ => {}
         }
@@ -915,19 +970,20 @@ impl App {
 
     fn command_panel_row(&self, row: usize, list_height: usize, width: usize) -> String {
         let line = match &self.mode {
-            Mode::Commands { selected } => {
+            Mode::Commands { selected, scroll } => {
                 if row == 0 {
                     return fit(
-                        if matches!(self.locale, Locale::EsEs) {
-                            "╭─ COMANDOS PERSONALIZADOS ─────────────────────────────╮"
-                        } else {
-                            "╭─ CUSTOM COMMANDS ────────────────────────────────────╮"
-                        },
+                        &format!(
+                            "╭─ {} ────────────────────────────────────╮",
+                            text(self.locale, TextId::ManagerTitle)
+                        ),
                         width,
                     );
                 }
-                if row <= 9 {
-                    let slot = row as u8;
+                let capacity = list_height.saturating_sub(2).min(9);
+                let start = if capacity >= 9 { 0 } else { (*scroll).min(9 - capacity) };
+                if row >= 1 && row <= capacity {
+                    let slot = (start + row - 1 + 1) as u8;
                     let binding = format_binding(
                         KeyBinding::with_modifier(
                             Modifier::Shift,
@@ -938,7 +994,7 @@ impl App {
                     let content = self.config.shortcut(slot).map_or_else(
                         || {
                             if matches!(self.locale, Locale::EsEs) {
-                                "—  Vacío".to_owned()
+                                format!("—  {}", text(self.locale, TextId::Empty))
                             } else {
                                 "—  Empty".to_owned()
                             }
@@ -982,16 +1038,12 @@ impl App {
                     0 => format!("╭─ {title} ─────────────────────────────────────────╮"),
                     2 => format!(
                         "  {}: {}",
-                        if matches!(self.locale, Locale::EsEs) {
-                            "Alias (opcional)"
-                        } else {
-                            "Alias (optional)"
-                        },
+                        text(self.locale, TextId::AliasOptional),
                         cursor_text(alias, *field == EditorField::Alias)
                     ),
                     4 => format!(
                         "  {}: {}",
-                        if matches!(self.locale, Locale::EsEs) { "Comando" } else { "Command" },
+                        text(self.locale, TextId::Command),
                         cursor_text(command, *field == EditorField::Command)
                     ),
                     5 => self.editor_error.clone().unwrap_or_default(),
@@ -1015,6 +1067,7 @@ impl App {
                     .map(|s| format!("{}: {}", s.alias.as_deref().unwrap_or("—"), s.command))
                     .unwrap_or_default();
                 match row {
+                    3 => self.editor_error.clone().unwrap_or_default(),
                     2 => {
                         if matches!(self.locale, Locale::EsEs) {
                             format!("¿Eliminar Mayús+{slot}? {detail}")
@@ -1186,7 +1239,7 @@ fn help_lines_for(config: &Config, locale: Locale) -> Vec<HelpLine> {
             .into(),
         ),
         HelpLine::Shortcut(
-            format!("{} … {}", shift('1'), shift('9')),
+            format!("{}–{}", shift('1'), shift('9')),
             text("Ejecutar un comando personalizado", "Run a configured custom command").into(),
         ),
         HelpLine::Shortcut(
@@ -1194,6 +1247,10 @@ fn help_lines_for(config: &Config, locale: Locale) -> Vec<HelpLine> {
             text("Abrir o cerrar este panel de ayuda", "Open or close this help").into(),
         ),
         HelpLine::Shortcut("F2".into(), text("Cambiar idioma", "Change language").into()),
+        HelpLine::Shortcut(
+            "F3".into(),
+            text("Gestionar comandos personalizados", "Manage custom commands").into(),
+        ),
         HelpLine::Shortcut(
             "q / Esc".into(),
             text("Salir de DevNav o cancelar", "Quit DevNav or cancel").into(),
@@ -1319,7 +1376,18 @@ fn cursor_text(field: &TextField, active: bool) -> String {
     if !active {
         return field.value.clone();
     }
-    let (left, right) = field.value.split_at(field.cursor);
+    let width = 48;
+    let mut viewport = field.viewport.min(field.value.len());
+    if field.cursor < viewport {
+        viewport = field.cursor;
+    }
+    while field.cursor.saturating_sub(viewport) >= width {
+        viewport =
+            field.value[viewport..].chars().next().map_or(viewport, |ch| viewport + ch.len_utf8());
+    }
+    let left = &field.value[viewport..field.cursor];
+    let remaining = width.saturating_sub(left.chars().count() + 1);
+    let right: String = field.value[field.cursor..].chars().take(remaining).collect();
     format!("{left}_{right}")
 }
 
@@ -1414,7 +1482,8 @@ mod tests {
     };
 
     use super::{
-        App, Mode, ShellResult, agent_command, footer_help, fuzzy_score, is_command_shortcut,
+        App, Mode, ShellResult, TextField, agent_command, cursor_text, footer_help, fuzzy_score,
+        help_lines_for, is_command_shortcut,
     };
     use crate::{config::Config, input::Key, render::fit};
 
@@ -1487,9 +1556,9 @@ mod tests {
         let config = Config::default();
         let mut app = App::new(sandbox.clone(), config, config_path).expect("create app");
         app.handle_key(Key::F3).expect("open manager");
-        assert!(matches!(app.mode, Mode::Commands { selected: 0 }));
+        assert!(matches!(app.mode, Mode::Commands { selected: 0, .. }));
         app.handle_key(Key::Shortcut(1)).expect("ignore slot in manager");
-        assert!(matches!(app.mode, Mode::Commands { selected: 0 }));
+        assert!(matches!(app.mode, Mode::Commands { selected: 0, .. }));
         fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 
@@ -1532,6 +1601,106 @@ mod tests {
         app.handle_key(Key::Enter).expect("reject empty command");
         assert!(app.editor_error.is_some());
         assert!(matches!(app.mode, Mode::CommandEditor { .. }));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn text_field_delete_and_unicode_cursor_are_safe() {
+        let mut field = TextField::new("αβgamma".into());
+        field.home();
+        field.right();
+        field.delete();
+        assert_eq!(field.value, "αgamma");
+        field.end();
+        field.ensure_viewport(3);
+        assert!(cursor_text(&field, true).contains('_'));
+    }
+
+    #[test]
+    fn manager_direct_selection_and_small_viewport_keep_slot_visible() {
+        let sandbox =
+            std::env::temp_dir().join(format!("devnav-manager-scroll-{}", std::process::id()));
+        fs::create_dir_all(&sandbox).expect("create sandbox");
+        let mut app = App::new(sandbox.clone(), Config::default(), sandbox.join("config.tsv"))
+            .expect("create app");
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Char('9')).expect("select slot nine");
+        assert!(matches!(app.mode, Mode::Commands { selected: 8, scroll: 6 }));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn help_names_f3_and_uses_en_dash_for_slots() {
+        let lines = help_lines_for(&Config::default(), crate::i18n::Locale::EsEs);
+        let joined = lines.iter().map(|line| format!("{line:?}")).collect::<String>();
+        assert!(joined.contains("F3"));
+        assert!(!joined.contains('\u{2026}'));
+        assert!(joined.contains("Mayús+1–Mayús+9"));
+    }
+
+    #[test]
+    fn editor_escape_returns_to_manager_and_f2_preserves_draft() {
+        let sandbox =
+            std::env::temp_dir().join(format!("devnav-manager-draft-{}", std::process::id()));
+        fs::create_dir_all(&sandbox).expect("create sandbox");
+        let mut config = Config::default();
+        config.set_language("es-ES");
+        let mut app =
+            App::new(sandbox.clone(), config, sandbox.join("config.tsv")).expect("create app");
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Char('4')).expect("select slot four");
+        app.handle_key(Key::Enter).expect("open editor");
+        app.handle_key(Key::Char('X')).expect("type draft");
+        app.handle_key(Key::F2).expect("toggle language");
+        assert!(matches!(app.mode, Mode::CommandEditor { slot: 4, .. }));
+        app.handle_key(Key::Escape).expect("cancel editor");
+        assert!(matches!(app.mode, Mode::Commands { selected: 3, .. }));
+        assert!(app.config.shortcut(4).is_none());
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn failed_editor_save_keeps_draft_and_editor_open() {
+        let sandbox = std::env::temp_dir()
+            .join(format!("devnav-manager-save-failure-{}", std::process::id()));
+        fs::create_dir_all(&sandbox).expect("create sandbox");
+        let config_path = sandbox.join("config.tsv");
+        fs::create_dir_all(&config_path).expect("block config path");
+        let mut app =
+            App::new(sandbox.clone(), Config::default(), config_path).expect("create app");
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Enter).expect("open editor");
+        app.handle_key(Key::Tab).expect("command field");
+        app.handle_key(Key::Char('x')).expect("type command");
+        app.handle_key(Key::Enter).expect("failed save remains interactive");
+        assert!(matches!(app.mode, Mode::CommandEditor { slot: 1, .. }));
+        assert!(app.editor_error.is_some());
+        assert!(app.config.shortcut(1).is_none());
+        assert!(
+            !fs::read_dir(&sandbox)
+                .expect("read sandbox")
+                .flatten()
+                .any(|entry| entry.file_name().to_string_lossy().contains("config.tmp-"))
+        );
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn failed_delete_keeps_slot_and_confirmation_open() {
+        let sandbox = std::env::temp_dir()
+            .join(format!("devnav-manager-delete-failure-{}", std::process::id()));
+        fs::create_dir_all(&sandbox).expect("create sandbox");
+        let config_path = sandbox.join("config.tsv");
+        fs::create_dir_all(&config_path).expect("block config path");
+        let mut config = Config::default();
+        config.set_shortcut(1, Some("Dev".into()), "bun run dev".into());
+        let mut app = App::new(sandbox.clone(), config, config_path).expect("create app");
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Delete).expect("confirm delete");
+        app.handle_key(Key::Enter).expect("failed delete remains interactive");
+        assert!(matches!(app.mode, Mode::ConfirmDelete { slot: 1 }));
+        assert!(app.config.shortcut(1).is_some());
+        assert!(app.editor_error.is_some());
         fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 

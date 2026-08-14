@@ -270,17 +270,26 @@ fn save_atomic(path: &Path, payload: &[u8]) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     let temp = path.with_extension(format!("tmp-{}", std::process::id()));
-    {
+    let write_result = (|| -> io::Result<()> {
         let mut file = fs::File::create(&temp)?;
         file.write_all(payload)?;
         file.sync_all()?;
+        Ok(())
+    })();
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(&temp);
+        return Err(error);
     }
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStrExt;
         use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
         if !path.exists() {
-            return fs::rename(&temp, path);
+            let result = fs::rename(&temp, path);
+            if result.is_err() {
+                let _ = fs::remove_file(&temp);
+            }
+            return result;
         }
         let replaced: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
         let replacement: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
@@ -303,7 +312,11 @@ fn save_atomic(path: &Path, payload: &[u8]) -> io::Result<()> {
     }
     #[cfg(not(windows))]
     {
-        fs::rename(&temp, path)
+        let result = fs::rename(&temp, path);
+        if result.is_err() {
+            let _ = fs::remove_file(&temp);
+        }
+        result
     }
 }
 

@@ -223,7 +223,7 @@ Press `F1` at any time for the complete, scrollable help panel.
 
 ### Custom commands
 
-Bind commands to `Shift+1` … `Shift+9` and run them in the highlighted project:
+Bind commands to `Shift+1–9` and run them in the highlighted project:
 
 Press `F3` to add, edit, or remove slots interactively. `Enter` saves an edit,
 `Tab` switches between alias and command, and `Esc` cancels without changing

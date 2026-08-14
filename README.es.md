@@ -277,7 +277,7 @@ comandos de Vim.
 
 ### Comandos personalizados
 
-Asigna comandos a `Mayús+1` … `Mayús+9` para ejecutarlos en el proyecto
+Asigna comandos a `Mayús+1–9` para ejecutarlos en el proyecto
 resaltado:
 
 Pulsa `F3` para añadir, editar o eliminar slots. `Enter` guarda, `Tab` cambia
