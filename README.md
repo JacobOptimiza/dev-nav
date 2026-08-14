@@ -4,8 +4,10 @@
 
 [![CI](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml/badge.svg)](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/JacobOptimiza/dev-nav)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
-[![npm](https://img.shields.io/npm/v/@jacoboptimiza/devnav?logo=npm)](https://www.npmjs.com/package/@jacoboptimiza/devnav)
 [![Windows](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-0078D4)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
+[![PowerShell 7+](https://img.shields.io/badge/PowerShell-7%2B-5391FE?logo=powershell&logoColor=white)](https://learn.microsoft.com/powershell/)
+[![Rust 1.97+](https://img.shields.io/badge/Rust-1.97%2B-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/tools/install)
+[![npm](https://img.shields.io/npm/v/@jacoboptimiza/devnav?logo=npm)](https://www.npmjs.com/package/@jacoboptimiza/devnav)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **English** | [Español](README.es.md)
@@ -20,9 +22,17 @@ launch coding agents or commands directly in the selected repository.
 Real captures from the native DevNav executable: the navigator, the F1 help
 panel, and the centered F3 custom-command manager.
 
-| Navigator | Help (F1) | Custom commands (F3) |
-|---|---|---|
-| ![DevNav navigator](assets/screenshots/devnav-main.png) | ![DevNav help modal](assets/screenshots/devnav-f1-help.png) | ![DevNav custom-command manager](assets/screenshots/devnav-f3-manager.png) |
+### Navigator
+
+![DevNav navigator](assets/screenshots/devnav-main.png)
+
+### Help — F1
+
+![DevNav help modal](assets/screenshots/devnav-f1-help.png)
+
+### Custom commands — F3
+
+![DevNav custom-command manager](assets/screenshots/devnav-f3-manager.png)
 
 ## Install DevNav
 
