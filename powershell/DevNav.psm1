@@ -47,13 +47,86 @@ function Set-DevUpdateCheck {
 
     if (-not $PSCmdlet.ShouldProcess('DevNav local configuration', 'Change startup update checks')) { return }
     Set-DevConfigValue -Name 'check_updates' -Value $Enabled.ToString().ToLowerInvariant()
-    $state = if ($Enabled) { 'activada' } else { 'desactivada' }
-    Write-Host "Comprobación de actualizaciones al iniciar: $state." -ForegroundColor Green
+    $english = (Get-DevLanguage) -eq 'en-US'
+    $state = if ($english) { if ($Enabled) { 'enabled' } else { 'disabled' } } else { if ($Enabled) { 'activada' } else { 'desactivada' } }
+    if ($english) { Write-Host "Startup update checks: $state." -ForegroundColor Green }
+    else { Write-Host "Comprobación de actualizaciones al iniciar: $state." -ForegroundColor Green }
+}
+
+function Get-DevLanguage {
+    $value = Get-DevConfigValue -Name 'language'
+    if ($value -in @('es-ES', 'en-US')) { return $value }
+    return $null
+}
+
+function Get-DevSystemLanguage {
+    try {
+        # Avoid passing the new diagnostic switch to an older installed binary;
+        # that binary would interpret it as a TUI invocation. The native
+        # detector is used once the executable supports it, with the Windows UI
+        # culture as a safe bootstrap fallback for older installations.
+        $version = Get-DevInstalledVersion
+        if ($version -ge [version]'0.10.0') {
+            $output = (& (Get-DevExecutable) --detect-language | Out-String).Trim()
+            if ($output -in @('es-ES', 'en-US')) { return $output }
+        }
+        $uiLanguage = (Get-UICulture).Name
+        if ($uiLanguage -match '^es(?:-|$)') { return 'es-ES' }
+        if ($uiLanguage -match '^en(?:-|$)') { return 'en-US' }
+    }
+    catch { Write-Verbose "System language detection failed: $($_.Exception.Message)" }
+    return 'en-US'
+}
+
+function Set-DevLanguage {
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory, Position = 0)][ValidateSet('es', 'en', 'es-ES', 'en-US')][string] $Language)
+    $canonical = if ($Language -in @('es', 'es-ES')) { 'es-ES' } else { 'en-US' }
+    if (-not $PSCmdlet.ShouldProcess('DevNav language', "Set language to $canonical")) { return }
+    $exitCode = Invoke-DevCli -Arguments @('--set-language', $canonical)
+    if ($exitCode -ne 0) {
+        if ($canonical -eq 'en-US') { throw "Could not save language '$canonical'." }
+        throw "No se pudo guardar el idioma '$canonical'."
+    }
+    if ($canonical -eq 'en-US') { Write-Host 'Language: English (en-US)' -ForegroundColor Green }
+    else { Write-Host 'Idioma: Español (es-ES)' -ForegroundColor Green }
+}
+
+function Initialize-DevLanguage {
+    $saved = Get-DevLanguage
+    if ($saved) { return $saved }
+    $detected = Get-DevSystemLanguage
+    if ([Console]::IsInputRedirected) {
+        Set-DevLanguage -Language $detected -Confirm:$false
+        return $detected
+    }
+    if ($detected -eq 'es-ES') {
+        Write-Host 'Idioma detectado / Detected language: Español' -ForegroundColor Cyan
+        Write-Host '[1] Seguir en Español'
+        Write-Host '[2] Switch to English'
+    }
+    else {
+        Write-Host 'Detected language / Idioma detectado: English' -ForegroundColor Cyan
+        Write-Host '[1] Continue in English'
+        Write-Host '[2] Cambiar a Español'
+    }
+    Write-Host 'Elige / Choose: ' -NoNewline
+    $key = [Console]::ReadKey($true)
+    if ($key.Key -eq [ConsoleKey]::Escape) {
+        Write-Host 'Esc'
+        return $null
+    }
+    $answer = $key.KeyChar.ToString()
+    Write-Host $answer
+    $selected = if ($answer -eq '2') { if ($detected -eq 'es-ES') { 'en-US' } else { 'es-ES' } } else { $detected }
+    Set-DevLanguage -Language $selected -Confirm:$false
+    return $selected
 }
 
 function Get-DevInstalledVersion {
     $versionOutput = (& (Get-DevExecutable) --version | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^dev-nav\s+(?<Version>\d+\.\d+\.\d+)$') {
+        if ((Get-DevLanguage) -eq 'en-US') { throw 'Unable to determine the installed DevNav version.' }
         throw 'No se pudo determinar la versión instalada de DevNav.'
     }
     return [version]$Matches.Version
@@ -97,6 +170,7 @@ function Invoke-DevDownload {
             }
         }
     }
+    if ((Get-DevLanguage) -eq 'en-US') { throw "Could not download '$Uri' after $Attempts attempts: $($lastError.Exception.Message)" }
     throw "No se pudo descargar '$Uri' tras $Attempts intentos: $($lastError.Exception.Message)"
 }
 
@@ -105,10 +179,19 @@ function Initialize-DevUpdateCheckPreference {
     if ($null -ne $saved) { return $saved -eq 'true' }
     if ([Console]::IsInputRedirected) { return $false }
 
-    Write-Host 'DevNav puede comprobar en GitHub si existe una versión nueva al iniciar.' -ForegroundColor Cyan
-    Write-Host 'Sólo comprueba: nunca descarga ni instala sin tu confirmación explícita.'
-    $answer = (Read-Host '¿Mantener esta comprobación activada? [S/n]').Trim()
-    $enabled = $answer -notmatch '^(?i:n|no)$'
+    $english = (Get-DevLanguage) -eq 'en-US'
+    if ($english) {
+        Write-Host 'DevNav can check GitHub for new versions at startup.' -ForegroundColor Cyan
+        Write-Host 'It only checks: it never downloads or installs without your explicit confirmation.'
+        $answer = (Read-Host 'Keep startup update checks enabled? [Y/n]').Trim()
+        $enabled = $answer -notmatch '^(?i:n|no)$'
+    }
+    else {
+        Write-Host 'DevNav puede comprobar en GitHub si existe una versión nueva al iniciar.' -ForegroundColor Cyan
+        Write-Host 'Sólo comprueba: nunca descarga ni instala sin tu confirmación explícita.'
+        $answer = (Read-Host '¿Mantener esta comprobación activada? [S/n]').Trim()
+        $enabled = $answer -notmatch '^(?i:n|no)$'
+    }
     Set-DevConfigValue -Name 'check_updates' -Value $enabled.ToString().ToLowerInvariant()
     return $enabled
 }
@@ -123,6 +206,7 @@ function Test-DevManagedInstallation {
 function Invoke-DevStartupUpdateCheck {
     if ([Console]::IsInputRedirected) { return }
     if (Test-DevManagedInstallation) { return }
+    Initialize-DevLanguage | Out-Null
     if (-not (Initialize-DevUpdateCheckPreference)) { return }
 
     try {
@@ -137,8 +221,15 @@ function Invoke-DevStartupUpdateCheck {
     }
 
     if ($latestVersion -le $installedVersion) { return }
-    Write-Host "Nueva versión disponible: v$installedVersion → v$latestVersion" -ForegroundColor Yellow
-    $answer = (Read-Host '¿Quieres actualizar ahora? [s/N]').Trim()
+    $english = (Get-DevLanguage) -eq 'en-US'
+    if ($english) {
+        Write-Host "New version available: v$installedVersion → v$latestVersion" -ForegroundColor Yellow
+        $answer = (Read-Host 'Update now? [y/N]').Trim()
+    }
+    else {
+        Write-Host "Nueva versión disponible: v$installedVersion → v$latestVersion" -ForegroundColor Yellow
+        $answer = (Read-Host '¿Quieres actualizar ahora? [s/N]').Trim()
+    }
     if ($answer -match '^(?i:s|si|sí|y|yes)$') {
         # An explicitly requested update reports failures instead of hiding them.
         Update-DevNavigator
@@ -155,6 +246,7 @@ function Get-DevExecutable {
         $developmentExecutable
     }
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+        if ((Get-DevLanguage) -eq 'en-US') { throw 'dev.exe was not found. Run install.ps1 from the DevNav repository root.' }
         throw 'No se encuentra dev.exe. Ejecuta install.ps1 desde la raíz de DevNav.'
     }
     return $executable
@@ -190,12 +282,17 @@ function Set-DevShortcut {
     if ($Clear) {
         if (-not $PSCmdlet.ShouldProcess("atajo $Index", 'Eliminar')) { return }
         $exitCode = Invoke-DevCli -Arguments @('--clear-shortcut', $Index)
-        if ($exitCode -ne 0) { throw "No se pudo eliminar el atajo $Index (dev.exe salió con $exitCode)." }
-        Write-Host "Atajo $Index eliminado." -ForegroundColor Green
+        if ($exitCode -ne 0) {
+            if ((Get-DevLanguage) -eq 'en-US') { throw "Could not remove shortcut $Index (dev.exe exited with $exitCode)." }
+            throw "No se pudo eliminar el atajo $Index (dev.exe salió con $exitCode)."
+        }
+        if ((Get-DevLanguage) -eq 'en-US') { Write-Host "Shortcut $Index removed." -ForegroundColor Green }
+        else { Write-Host "Atajo $Index eliminado." -ForegroundColor Green }
         return
     }
 
     if ([string]::IsNullOrWhiteSpace($Command)) {
+        if ((Get-DevLanguage) -eq 'en-US') { throw 'Specify the shortcut command, or use -Clear to remove it.' }
         throw 'Debes indicar el comando del atajo, o usar -Clear para eliminarlo.'
     }
     if (-not $PSCmdlet.ShouldProcess("atajo $Index", "Vincular '$Command'")) { return }
@@ -206,9 +303,13 @@ function Set-DevShortcut {
         $arguments += @('--alias', $Alias)
     }
     $exitCode = Invoke-DevCli -Arguments $arguments
-    if ($exitCode -ne 0) { throw "No se pudo guardar el atajo $Index (dev.exe salió con $exitCode)." }
+    if ($exitCode -ne 0) {
+        if ((Get-DevLanguage) -eq 'en-US') { throw "Could not save shortcut $Index (dev.exe exited with $exitCode)." }
+        throw "No se pudo guardar el atajo $Index (dev.exe salió con $exitCode)."
+    }
     $label = if ([string]::IsNullOrWhiteSpace($Alias)) { $Command } else { $Alias }
-    Write-Host "Atajo $Index guardado: $label" -ForegroundColor Green
+    if ((Get-DevLanguage) -eq 'en-US') { Write-Host "Shortcut $Index saved: $label" -ForegroundColor Green }
+    else { Write-Host "Atajo $Index guardado: $label" -ForegroundColor Green }
 }
 
 function Remove-DevShortcut {
@@ -233,6 +334,8 @@ function Invoke-DevShortcutCommand {
         2 { Set-DevShortcut -Index $Items[0] -Command $Items[1] }
         3 { Set-DevShortcut -Index $Items[0] -Alias $Items[1] -Command $Items[2] }
         default {
+            if ((Get-DevLanguage) -eq 'en-US') { throw "Usage: dev shortcut <1..9> [alias] <command>`nTo remove: dev shortcut <1..9>" }
+            if ((Get-DevLanguage) -eq 'en-US') { throw "Usage: dev shortcut <1..9> [alias] <command>`nTo remove: dev shortcut <1..9>" }
             throw "Uso: dev shortcut <1..9> [alias] <comando>`nPara eliminar: dev shortcut <1..9>"
         }
     }
@@ -243,27 +346,40 @@ function Update-DevNavigator {
     param()
 
     if (Test-DevManagedInstallation) {
-        Write-Host 'Esta instalación la gestiona Scoop; DevNav no se actualiza a sí mismo.' -ForegroundColor Yellow
-        Write-Host 'Para actualizar, ejecuta: scoop update devnav' -ForegroundColor Cyan
+        if ((Get-DevLanguage) -eq 'en-US') {
+            Write-Host 'This installation is managed by Scoop; DevNav will not self-update.' -ForegroundColor Yellow
+            Write-Host 'Update it with: scoop update devnav' -ForegroundColor Cyan
+        } else {
+            Write-Host 'Esta instalación la gestiona Scoop; DevNav no se actualiza a sí mismo.' -ForegroundColor Yellow
+            Write-Host 'Para actualizar, ejecuta: scoop update devnav' -ForegroundColor Cyan
+        }
         return
     }
     $ErrorActionPreference = 'Stop'
     if (-not $PSCmdlet.ShouldProcess('DevNav installation', 'Download and install the selected release')) { return }
     $currentVersion = Get-DevInstalledVersion
     $currentText = $currentVersion.ToString()
-    Write-Host "Versión instalada: v$currentText"
-    Write-Host 'Comprobando la última versión publicada...'
+    if ((Get-DevLanguage) -eq 'en-US') {
+        Write-Host "Installed version: v$currentText"
+        Write-Host 'Checking the latest published version...'
+    } else {
+        Write-Host "Versión instalada: v$currentText"
+        Write-Host 'Comprobando la última versión publicada...'
+    }
     $release = Get-DevLatestRelease
     $latestText = ([string]$release.tag_name).TrimStart('v')
     $latestVersion = [version]$latestText
-    Write-Host "Última publicada: v$latestText"
+    if ((Get-DevLanguage) -eq 'en-US') { Write-Host "Latest published: v$latestText" }
+    else { Write-Host "Última publicada: v$latestText" }
 
     if ($currentVersion -ge $latestVersion) {
         if ($currentVersion -eq $latestVersion) {
-            Write-Host "Ya tienes la última versión (v$currentText). No hace falta actualizar." -ForegroundColor Green
+            if ((Get-DevLanguage) -eq 'en-US') { Write-Host "You already have the latest version (v$currentText). No update is needed." -ForegroundColor Green }
+            else { Write-Host "Ya tienes la última versión (v$currentText). No hace falta actualizar." -ForegroundColor Green }
         }
         else {
-            Write-Host 'La versión instalada es más reciente que la última release publicada; no se modificó nada.' -ForegroundColor Yellow
+            if ((Get-DevLanguage) -eq 'en-US') { Write-Host 'The installed version is newer than the latest published release; nothing changed.' -ForegroundColor Yellow }
+            else { Write-Host 'La versión instalada es más reciente que la última release publicada; no se modificó nada.' -ForegroundColor Yellow }
         }
         return
     }
@@ -296,7 +412,8 @@ function Update-DevNavigator {
     New-Item -ItemType Directory -Path $temporaryRoot, $installRoot -Force | Out-Null
 
     try {
-        Write-Host "Descargando DevNav v$latestText..."
+        if ((Get-DevLanguage) -eq 'en-US') { Write-Host "Downloading DevNav v$latestText..." }
+        else { Write-Host "Descargando DevNav v$latestText..." }
         foreach ($assetName in $requiredAssets) {
             Invoke-DevDownload -Uri $downloads[$assetName] -OutFile (Join-Path $temporaryRoot $assetName)
         }
@@ -351,13 +468,16 @@ function Update-DevNavigator {
             Remove-Item -LiteralPath $backupExecutable, $backupModule -Force -ErrorAction SilentlyContinue
             throw
         }
-        Write-Host "DevNav actualizado correctamente: v$currentText → v$latestText." -ForegroundColor Green
+        if ((Get-DevLanguage) -eq 'en-US') { Write-Host "DevNav updated successfully: v$currentText → v$latestText." -ForegroundColor Green }
+        else { Write-Host "DevNav actualizado correctamente: v$currentText → v$latestText." -ForegroundColor Green }
         if ($moduleChanged) {
             $script:DevNavRestartRequired = $true
-            Write-Warning 'DevNav.psm1 también cambió. Reinicia PowerShell para cargar el módulo actualizado.'
+            if ((Get-DevLanguage) -eq 'en-US') { Write-Warning 'DevNav.psm1 also changed. Restart PowerShell to load the updated module.' }
+            else { Write-Warning 'DevNav.psm1 también cambió. Reinicia PowerShell para cargar el módulo actualizado.' }
         }
         else {
-            Write-Host 'Ejecuta dev de nuevo para continuar.' -ForegroundColor Cyan
+            if ((Get-DevLanguage) -eq 'en-US') { Write-Host 'Run dev again to continue.' -ForegroundColor Cyan }
+            else { Write-Host 'Ejecuta dev de nuevo para continuar.' -ForegroundColor Cyan }
         }
         $script:DevNavUpdateCompleted = $true
     }
@@ -378,6 +498,16 @@ function Invoke-DevNavigator {
         [string[]] $Command = @()
     )
 
+    if ($Command.Count -ge 1 -and $Command[0] -eq 'language') {
+        if ($Command.Count -eq 1) {
+            $current = Get-DevLanguage
+            if (-not $current) { $current = Get-DevSystemLanguage }
+            if ($current -eq 'en-US') { Write-Output 'English (en-US)' } else { Write-Output 'Español (es-ES)' }
+        } else {
+            Set-DevLanguage -Language $Command[1]
+        }
+        return
+    }
     if ($Command.Count -eq 1 -and $Command[0] -eq 'update') {
         $script:DevNavUpdateCompleted = $false
         Update-DevNavigator
@@ -386,18 +516,23 @@ function Invoke-DevNavigator {
     if ($Command.Count -ge 1 -and $Command[0] -eq 'shortcut') {
         $items = @($Command | Select-Object -Skip 1)
         if ($items.Count -eq 0) {
+            if ((Get-DevLanguage) -eq 'en-US') { throw "Usage: dev shortcut <1..9> [alias] <command>`nTo remove: dev shortcut <1..9>" }
+            if ((Get-DevLanguage) -eq 'en-US') { throw "Usage: dev shortcut <1..9> [alias] <command>`nTo remove: dev shortcut <1..9>" }
             throw "Uso: dev shortcut <1..9> [alias] <comando>`nPara eliminar: dev shortcut <1..9>"
         }
         Invoke-DevShortcutCommand -Items $items
         return
     }
     $script:DevNavUpdateCompleted = $false
+    $selectedLanguage = Initialize-DevLanguage
+    if (-not $selectedLanguage) { return }
     Invoke-DevStartupUpdateCheck
     if ($script:DevNavUpdateCompleted) {
         return
     }
     if ($script:DevNavRestartRequired) {
-        Write-Warning 'DevNav se ha actualizado. Reinicia PowerShell para cargar el módulo actualizado.'
+        if ((Get-DevLanguage) -eq 'en-US') { Write-Warning 'DevNav was updated. Restart PowerShell to load the updated module.' }
+        else { Write-Warning 'DevNav se ha actualizado. Reinicia PowerShell para cargar el módulo actualizado.' }
         return
     }
     $executable = Get-DevExecutable
@@ -409,7 +544,10 @@ function Invoke-DevNavigator {
         if (-not (Test-Path -LiteralPath $resultFile)) { return }
 
         $parts = [System.IO.File]::ReadAllText($resultFile).Split([char]0)
-        if ($parts.Count -lt 2) { throw 'DevNav devolvió un resultado no válido.' }
+        if ($parts.Count -lt 2) {
+            if ((Get-DevLanguage) -eq 'en-US') { throw 'DevNav returned an invalid result.' }
+            throw 'DevNav devolvió un resultado no válido.'
+        }
         $kind, $directory = $parts[0], $parts[1]
         if ($kind -eq 'update') {
             Update-DevNavigator
@@ -452,8 +590,9 @@ function Set-DevRoot {
     if (-not $PSCmdlet.ShouldProcess($resolvedRoot, 'Save as DevNav startup directory')) { return }
     $encodedRoot = $resolvedRoot.Replace('%', '%25').Replace("`t", '%09').Replace("`n", '%0A')
     Set-DevConfigValue -Name 'root' -Value $encodedRoot
-    Write-Host "Ruta de inicio guardada: $resolvedRoot" -ForegroundColor Green
+    if ((Get-DevLanguage) -eq 'en-US') { Write-Host "Startup folder saved: $resolvedRoot" -ForegroundColor Green }
+    else { Write-Host "Ruta de inicio guardada: $resolvedRoot" -ForegroundColor Green }
 }
 
 Set-Alias -Name dev -Value Invoke-DevNavigator -Scope Global
-Export-ModuleMember -Function Invoke-DevNavigator, Update-DevNavigator, Get-DevRoot, Set-DevRoot, Set-DevUpdateCheck, Set-DevShortcut, Remove-DevShortcut -Alias dev
+Export-ModuleMember -Function Invoke-DevNavigator, Update-DevNavigator, Get-DevRoot, Set-DevRoot, Set-DevUpdateCheck, Set-DevLanguage, Get-DevLanguage, Set-DevShortcut, Remove-DevShortcut -Alias dev

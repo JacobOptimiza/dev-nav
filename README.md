@@ -215,6 +215,7 @@ Press `F1` at any time for the complete, scrollable help panel.
 | `Ctrl+U` | Enable or disable update checks at startup |
 | `Shift+U` | Check for and install a DevNav update |
 | `F1` | Open or close the shortcuts panel |
+| `F2` | Switch between English and Español |
 | `q` / `Esc` | Exit or cancel |
 
 `:` remains available as a Vim-style alias for `e`.
@@ -231,6 +232,24 @@ dev shortcut 2 "Tests" "cargo test"
 Use `Set-DevShortcut` for scripts, overwrite a slot by using the same index, or
 remove one with `Remove-DevShortcut -Index 1` (or `dev shortcut 1`). Bindings
 persist locally and appear in the `F1` help panel.
+
+### Language
+
+On the first interactive launch, DevNav detects the first supported language in
+your Windows UI language preference list (`es-*` or `en-*`). It shows a bilingual
+confirmation before asking about startup update checks. The confirmed choice is
+stored as `es-ES` or `en-US`, so the prompt appears only once.
+
+Use `F2` at any time to switch language without losing the current folder,
+selection, mode, scroll position or input. From PowerShell:
+
+```powershell
+dev language
+dev language en
+dev language es
+```
+
+The equivalent module commands are `Get-DevLanguage` and `Set-DevLanguage`.
 
 ## Update
 

@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod i18n;
 mod input;
 mod model;
 mod render;
@@ -9,6 +10,7 @@ use std::{env, io, path::PathBuf, process::ExitCode};
 
 use app::App;
 use config::{Config, SHORTCUT_MAX, SHORTCUT_MIN};
+use i18n::{Locale, resolve_preferred_tags};
 use model::ShellResult;
 use terminal::Terminal;
 
@@ -76,6 +78,20 @@ fn default_root() -> Option<PathBuf> {
 /// exit cleanly, and `Ok(false)` when the arguments are not a config command.
 fn try_config_command(args: &[String], config_path: &std::path::Path) -> io::Result<bool> {
     match args.first().map(String::as_str) {
+        Some("--set-language") => {
+            let locale =
+                args.get(1).and_then(|value| Locale::from_tag(value)).ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "language must be es-ES or en-US")
+                })?;
+            let mut config = Config::load(config_path)?;
+            config.set_language(locale.tag());
+            config.save(config_path)?;
+            Ok(true)
+        }
+        Some("--detect-language") => {
+            println!("{}", detect_system_locale().tag());
+            Ok(true)
+        }
         Some("--set-shortcut") => {
             let index = parse_shortcut_index(args.get(1).map(String::as_str))?;
             let mut alias: Option<String> = None;
@@ -108,6 +124,45 @@ fn try_config_command(args: &[String], config_path: &std::path::Path) -> io::Res
         }
         _ => Ok(false),
     }
+}
+
+fn detect_system_locale() -> Locale {
+    // The PowerShell wrapper uses this canonical Rust operation before its
+    // first-run prompt, so the persisted choice is independent of region,
+    // keyboard layout, timezone, or IP address.
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAGE_NAME};
+        let mut count = 0_u32;
+        let mut length = 0_u32;
+        let first = unsafe {
+            GetUserPreferredUILanguages(
+                MUI_LANGUAGE_NAME,
+                &raw mut count,
+                std::ptr::null_mut(),
+                &raw mut length,
+            )
+        };
+        if first == 0 && length > 0 {
+            let mut buffer = vec![0_u16; length as usize];
+            let mut length = length;
+            let ok = unsafe {
+                GetUserPreferredUILanguages(
+                    MUI_LANGUAGE_NAME,
+                    &raw mut count,
+                    buffer.as_mut_ptr(),
+                    &raw mut length,
+                )
+            };
+            if ok != 0 {
+                let values = String::from_utf16_lossy(&buffer);
+                return resolve_preferred_tags(
+                    values.split('\0').filter(|value| !value.is_empty()),
+                );
+            }
+        }
+    }
+    Locale::EnUs
 }
 
 fn parse_shortcut_index(raw: Option<&str>) -> io::Result<u8> {

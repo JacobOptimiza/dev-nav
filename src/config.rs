@@ -25,6 +25,7 @@ pub struct Config {
     root: Option<PathBuf>,
     show_favorites: bool,
     check_updates: Option<bool>,
+    language: Option<String>,
     favorites: HashSet<PathBuf>,
     aliases: HashMap<PathBuf, String>,
     shortcuts: HashMap<u8, Shortcut>,
@@ -59,6 +60,11 @@ impl Config {
                 }
                 (Some("check_updates"), Some(value), _) => {
                     config.check_updates = Some(value == "true");
+                }
+                (Some("language"), Some(value), _) => {
+                    if value == "es-ES" || value == "en-US" {
+                        config.language = Some(value.to_owned());
+                    }
                 }
                 (Some("favorite"), Some(path), _) => {
                     config.favorites.insert(PathBuf::from(decode(path)));
@@ -116,6 +122,11 @@ impl Config {
             output.push_str(if check_updates { "true" } else { "false" });
             output.push('\n');
         }
+        if let Some(language) = &self.language {
+            output.push_str("language\t");
+            output.push_str(language);
+            output.push('\n');
+        }
         for favorite in favorites {
             output.push_str("favorite\t");
             output.push_str(&encode(&favorite.to_string_lossy()));
@@ -170,6 +181,16 @@ impl Config {
         let enabled = !self.check_updates.unwrap_or(true);
         self.check_updates = Some(enabled);
         enabled
+    }
+
+    pub fn language(&self) -> Option<&str> {
+        self.language.as_deref()
+    }
+
+    pub fn set_language(&mut self, language: &str) {
+        if language == "es-ES" || language == "en-US" {
+            self.language = Some(language.to_owned());
+        }
     }
 
     pub fn favorite_paths(&self) -> impl Iterator<Item = &Path> {
@@ -248,6 +269,7 @@ impl Default for Config {
             root: None,
             show_favorites: true,
             check_updates: None,
+            language: None,
             favorites: HashSet::new(),
             aliases: HashMap::new(),
             shortcuts: HashMap::new(),
@@ -318,6 +340,20 @@ mod tests {
         config.save(&config_path).expect("save config");
 
         assert_eq!(Config::load(&config_path).expect("load").check_updates(), Some(false));
+        fs::remove_file(config_path).expect("remove config");
+    }
+
+    #[test]
+    fn language_round_trip_and_legacy_config_compatibility() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let config_path = std::env::temp_dir().join(format!("devnav-language-{unique}.tsv"));
+        let mut config = Config::default();
+        assert_eq!(config.language(), None);
+        config.set_language("es-ES");
+        config.save(&config_path).expect("save language");
+        assert_eq!(Config::load(&config_path).expect("load").language(), Some("es-ES"));
+        fs::write(&config_path, "show_favorites\ttrue\nlanguage\tfr-FR\n").expect("write legacy");
+        assert_eq!(Config::load(&config_path).expect("load legacy").language(), None);
         fs::remove_file(config_path).expect("remove config");
     }
 

@@ -14,6 +14,8 @@
         'Get-DevRoot'
         'Set-DevRoot'
         'Set-DevUpdateCheck'
+        'Get-DevLanguage'
+        'Set-DevLanguage'
         'Set-DevShortcut'
         'Remove-DevShortcut'
     )

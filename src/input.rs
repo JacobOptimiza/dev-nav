@@ -10,6 +10,7 @@ const VK_BACK: u16 = 0x08;
 const VK_RETURN: u16 = 0x0D;
 const VK_ESCAPE: u16 = 0x1B;
 const VK_F1: u16 = 0x70;
+const VK_F2: u16 = 0x71;
 const VK_LEFT: u16 = 0x25;
 const VK_UP: u16 = 0x26;
 const VK_RIGHT: u16 = 0x27;
@@ -25,6 +26,7 @@ pub enum Key {
     Backspace,
     Escape,
     F1,
+    F2,
     CtrlC,
     CtrlS,
     CtrlU,
@@ -84,7 +86,7 @@ fn map_key(event: windows_sys::Win32::System::Console::KEY_EVENT_RECORD) -> Key 
     }
     // Shift+digit maps to a shortcut slot only when Shift is held and no
     // control/alt modifier accompanies it, so a plain digit stays a character
-    // and Ctrl+Shift+digit / Alt+Shift+digit stay available for the OS.
+    // and multi-modifier digit combinations stay available for the OS.
     let shift = event.dwControlKeyState & SHIFT_PRESSED != 0;
     let no_modifiers =
         !control && event.dwControlKeyState & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED) == 0;
@@ -104,6 +106,7 @@ fn map_key(event: windows_sys::Win32::System::Console::KEY_EVENT_RECORD) -> Key 
         VK_BACK => Key::Backspace,
         VK_ESCAPE => Key::Escape,
         VK_F1 => Key::F1,
+        VK_F2 => Key::F2,
         _ => char::from_u32(u32::from(unsafe { event.uChar.UnicodeChar }))
             .filter(|character| !character.is_control())
             .map_or(Key::Unknown, Key::Char),
@@ -121,7 +124,7 @@ fn shortcut_slot(virtual_key: u16) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Key, VK_DOWN, VK_ESCAPE, VK_F1, VK_UP, map_key};
+    use super::{Key, VK_DOWN, VK_ESCAPE, VK_F1, VK_F2, VK_UP, map_key};
     use windows_sys::Win32::System::Console::KEY_EVENT_RECORD;
     use windows_sys::Win32::System::Console::{LEFT_CTRL_PRESSED, SHIFT_PRESSED};
 
@@ -140,6 +143,7 @@ mod tests {
         assert_eq!(map_key(key_event(VK_DOWN)), Key::Down);
         assert_eq!(map_key(key_event(VK_ESCAPE)), Key::Escape);
         assert_eq!(map_key(key_event(VK_F1)), Key::F1);
+        assert_eq!(map_key(key_event(VK_F2)), Key::F2);
     }
 
     #[test]
