@@ -65,10 +65,10 @@ Update with:
 scoop update devnav
 ```
 
-The bucket is protected by pull requests and required CI. GitHub Actions are
-pinned to commits and Dependabot reviews those pins weekly. Excavator exists as
-a `workflow_dispatch` workflow only; there is no scheduled write automation.
-Future manifest changes must be reviewed and pass CI before they are merged.
+The bucket is maintained separately from this repository. Consult its current
+repository policy and automation before changing a manifest; this repository's
+release workflow remains the source for the generated release manifest and
+SHA-256 values.
 
 ## Setting up the bucket (historical bootstrap)
 

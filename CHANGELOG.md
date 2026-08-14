@@ -10,6 +10,11 @@ Versioning.
 - Render the F3 custom-command manager as a centered modal consistent with the
   navigator and F1 help panel.
 
+### Security
+
+- Add GitHub Private Vulnerability Reporting, CodeQL analysis, and OpenSSF
+  Scorecard supply-chain checks.
+
 ## [0.12.0] - 2026-08-14
 
 ### Added
