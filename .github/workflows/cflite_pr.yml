@@ -18,6 +18,10 @@ jobs:
       group: ${{ github.workflow }}-address-${{ github.ref }}
       cancel-in-progress: true
     steps:
+      - name: Harden runner (audit)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
       - name: Build Rust fuzzers
         id: build
         uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
