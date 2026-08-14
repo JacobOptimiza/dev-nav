@@ -5,10 +5,14 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-14
+
 ### Added
 
-- Add an interactive `F3` custom-command manager with localized editing,
-  delete confirmation, and atomic configuration persistence.
+- Add an interactive `F3` manager for nine custom commands, including
+  localized create, edit, and delete flows.
+- Add responsive Unicode-safe command editing with transactional configuration
+  persistence and Shift+1–9 isolation while configuring commands.
 
 ## [0.11.0] - 2026-08-14
 
