@@ -1,5 +1,16 @@
 use std::io::{self, Write};
 
+pub const CYAN: &str = "\x1b[38;2;116;199;236m";
+pub const FRAME: &str = "\x1b[38;2;90;100;120m";
+pub const SELECTED_BG: &str = "\x1b[48;2;32;43;65m";
+pub const SELECTED_FG: &str = "\x1b[38;2;232;238;252m";
+pub const SHORTCUT: &str = "\x1b[38;2;255;203;107m";
+pub const RESET: &str = "\x1b[0m";
+
+pub fn selected(text: &str, width: usize) -> String {
+    format!("{SELECTED_BG}{SELECTED_FG}{}{}", fit(text, width), RESET)
+}
+
 pub struct Renderer {
     previous: Vec<String>,
 }

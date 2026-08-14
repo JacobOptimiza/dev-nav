@@ -5,6 +5,11 @@ Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Render the F3 custom-command manager as a centered modal consistent with the
+  navigator and F1 help panel.
+
 ## [0.12.0] - 2026-08-14
 
 ### Added

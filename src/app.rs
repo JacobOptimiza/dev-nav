@@ -3,12 +3,12 @@ use std::{collections::HashSet, fs, io, path::PathBuf};
 use crate::{
     config::Config,
     i18n::{
-        KeyBinding, KeyToken, Locale, Modifier, TextId, delete_prompt, editor_footer, editor_title,
-        format_binding, manager_footer, shift_range, text,
+        KeyBinding, KeyToken, Locale, Modifier, TextId, delete_footer, delete_prompt,
+        editor_footer, editor_title, format_binding, manager_footer, shift_range, text,
     },
     input::{self, Key},
     model::{DirectoryEntry, ShellResult},
-    render::{Renderer, fit},
+    render::{CYAN, FRAME, RESET, Renderer, SELECTED_BG, SELECTED_FG, SHORTCUT, fit, selected},
     terminal::Terminal,
 };
 
@@ -473,7 +473,7 @@ impl App {
         scroll: usize,
     ) -> io::Result<Option<Option<ShellResult>>> {
         let mut index = selected;
-        let mut top = scroll;
+        let top = scroll;
         match key {
             Key::Escape => self.close_commands(),
             Key::Up => index = index.saturating_sub(1),
@@ -501,15 +501,6 @@ impl App {
                 }
             }
             _ => {}
-        }
-        // The smallest supported terminal still has three manager rows; the
-        // renderer recalculates the exact viewport for taller terminals.
-        let capacity = 3usize;
-        if index < top {
-            top = index;
-        }
-        if index >= top + capacity {
-            top = index + 1 - capacity;
         }
         if let Mode::Commands { selected: current, scroll: current_scroll } = &mut self.mode {
             *current = index;
@@ -583,8 +574,6 @@ impl App {
             _ => {}
         }
         if matches!(self.mode, Mode::CommandEditor { .. }) {
-            alias.ensure_viewport(48);
-            command.ensure_viewport(48);
             self.mode = Mode::CommandEditor { slot, field: next_field, alias, command };
         }
         Ok(None)
@@ -825,7 +814,7 @@ impl App {
 
         let mut rows = Vec::with_capacity(height);
         rows.push(format!(
-            "\x1b[38;2;116;199;236m╭─ DEV \x1b[2m{}\x1b[22m{}╮\x1b[0m",
+            "{CYAN}╭─ DEV \x1b[2m{}\x1b[22m{}╮{RESET}",
             fit(&self.current.display().to_string(), width.saturating_sub(9)),
             "─"
         ));
@@ -840,24 +829,19 @@ impl App {
                 Locale::EnUs => "☆  FAVORITES HIDDEN · Shift+F to show",
             }
         };
-        rows.push(format!(
-            "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
-            fit(list_header, inner)
-        ));
-        rows.push(format!("\x1b[38;2;90;100;120m├{}┤\x1b[0m", "─".repeat(width.saturating_sub(2))));
+        rows.push(format!("{FRAME}│{RESET} {} {FRAME}│{RESET}", fit(list_header, inner)));
+        rows.push(format!("{FRAME}├{}┤{RESET}", "─".repeat(width.saturating_sub(2))));
 
         let lines = help_lines_for(&self.config, self.locale);
         let help_layout = matches!(self.mode, Mode::Help).then(|| {
             HelpLayout::new(inner, list_height, &mut self.help_scroll, lines.clone(), self.locale)
         });
+        let command_layout = self.command_panel_layout(inner, list_height);
         for row_index in 0..list_height {
             let content = if let Some(layout) = &help_layout {
                 layout.render_row(row_index, inner)
-            } else if matches!(
-                self.mode,
-                Mode::Commands { .. } | Mode::CommandEditor { .. } | Mode::ConfirmDelete { .. }
-            ) {
-                self.command_panel_row(row_index, list_height, inner)
+            } else if let Some(layout) = &command_layout {
+                self.command_modal_row(row_index, layout, inner)
             } else {
                 let visible_index = self.scroll + row_index;
                 if let Some(entry_index) = self.visible.get(visible_index) {
@@ -866,10 +850,7 @@ impl App {
                     let prefix = if visible_index == self.selected { "›" } else { " " };
                     let label = format!("{prefix} {marker}  {}", entry.label());
                     if visible_index == self.selected {
-                        format!(
-                            "\x1b[48;2;32;43;65m\x1b[38;2;232;238;252m{}\x1b[0m",
-                            fit(&label, inner)
-                        )
+                        selected(&label, inner)
                     } else {
                         fit(&label, inner)
                     }
@@ -877,12 +858,10 @@ impl App {
                     " ".repeat(inner)
                 }
             };
-            rows.push(format!(
-                "\x1b[38;2;90;100;120m│\x1b[0m {content} \x1b[38;2;90;100;120m│\x1b[0m"
-            ));
+            rows.push(format!("{FRAME}│{RESET} {content} {FRAME}│{RESET}"));
         }
 
-        rows.push(format!("\x1b[38;2;90;100;120m├{}┤\x1b[0m", "─".repeat(width.saturating_sub(2))));
+        rows.push(format!("{FRAME}├{}┤{RESET}", "─".repeat(width.saturating_sub(2))));
         let prompt = match self.mode {
             Mode::Normal => {
                 if self.message.is_empty() {
@@ -937,130 +916,164 @@ impl App {
                     format!("Save as startup folder?  {}", target.display())
                 }
             }
-            Mode::Commands { .. } => match self.locale {
-                Locale::EsEs | Locale::EnUs => manager_footer(self.locale),
+            Mode::Commands { .. } | Mode::CommandEditor { .. } | Mode::ConfirmDelete { .. } => {
+                self.message.clone()
             }
-            .into(),
-            Mode::CommandEditor { .. } => editor_footer(self.locale).into(),
-            Mode::ConfirmDelete { .. } => match self.locale {
-                Locale::EsEs => "Enter Confirmar · Esc Cancelar",
-                Locale::EnUs => "Enter Confirm · Esc Cancel",
-            }
-            .into(),
         };
-        rows.push(format!(
-            "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
-            fit(&prompt, inner)
-        ));
+        rows.push(format!("{FRAME}│{RESET} {} {FRAME}│{RESET}", fit(&prompt, inner)));
         let help = self.footer_line();
-        rows.push(format!(
-            "\x1b[38;2;90;100;120m╰─{}─╯\x1b[0m",
-            fit(&help, width.saturating_sub(4))
-        ));
+        rows.push(format!("{FRAME}╰─{}─╯{RESET}", fit(&help, width.saturating_sub(4))));
         self.renderer.draw(rows)
     }
 
-    fn command_panel_row(&self, row: usize, list_height: usize, width: usize) -> String {
-        let line = match &self.mode {
+    fn command_panel_layout(&mut self, inner: usize, list_height: usize) -> Option<PanelLayout> {
+        let (max_width, desired_height) = match self.mode {
+            Mode::Commands { .. } => (88, 11),
+            Mode::CommandEditor { .. } => (88, 7),
+            Mode::ConfirmDelete { .. } => (72, 6),
+            _ => return None,
+        };
+        let layout = PanelLayout::new(inner, list_height, max_width, desired_height);
+        if let Mode::Commands { selected, scroll } = &mut self.mode {
+            *scroll = command_scroll(*selected, *scroll, layout.height.saturating_sub(2));
+        }
+        Some(layout)
+    }
+
+    fn command_modal_row(&self, row: usize, layout: &PanelLayout, outer_width: usize) -> String {
+        let Some(local) = layout.local_row(row) else {
+            return " ".repeat(outer_width);
+        };
+        let panel = match &self.mode {
             Mode::Commands { selected, scroll } => {
-                if row == 0 {
-                    return fit(
-                        &format!(
-                            "╭─ {} ────────────────────────────────────╮",
-                            text(self.locale, TextId::ManagerTitle)
-                        ),
-                        width,
-                    );
-                }
-                let capacity = list_height.saturating_sub(2).min(9);
-                let start = if capacity >= 9 { 0 } else { (*scroll).min(9 - capacity) };
-                if row >= 1 && row <= capacity {
-                    let slot = (start + row - 1 + 1) as u8;
-                    let binding = format_binding(
-                        KeyBinding::with_modifier(
-                            Modifier::Shift,
-                            KeyToken::Char(char::from(b'0' + slot)),
-                        ),
-                        self.locale,
-                    );
-                    let content = self.config.shortcut(slot).map_or_else(
-                        || {
-                            if matches!(self.locale, Locale::EsEs) {
-                                format!("—  {}", text(self.locale, TextId::Empty))
-                            } else {
-                                "—  Empty".to_owned()
-                            }
-                        },
-                        |shortcut| {
-                            format!(
-                                "{}  {}",
-                                shortcut.alias.as_deref().unwrap_or("—"),
-                                shortcut.command
-                            )
-                        },
-                    );
-                    let prefix = if usize::from(slot - 1) == *selected { "›" } else { " " };
-                    return fit(&format!("{prefix} {binding:<8} {content}"), width);
-                }
-                if row == list_height.saturating_sub(1) {
-                    let footer = format!("╰─ {} ─╯", manager_footer(self.locale));
-                    return fit(&footer, width);
-                }
-                "".to_owned()
+                self.render_manager_panel_row(local, layout, *selected, *scroll)
             }
             Mode::CommandEditor { slot, field, alias, command } => {
-                let binding = format_binding(
-                    KeyBinding::with_modifier(
-                        Modifier::Shift,
-                        KeyToken::Char(char::from(b'0' + *slot)),
-                    ),
-                    self.locale,
-                );
-                let title =
-                    format!("{binding} · {}", editor_title(self.locale, command.value.is_empty()));
-                match row {
-                    0 => format!("╭─ {title} ─────────────────────────────────────────╮"),
-                    2 => format!(
-                        "  {}: {}",
-                        text(self.locale, TextId::AliasOptional),
-                        cursor_text(alias, *field == EditorField::Alias)
-                    ),
-                    4 => format!(
-                        "  {}: {}",
-                        text(self.locale, TextId::Command),
-                        cursor_text(command, *field == EditorField::Command)
-                    ),
-                    5 => self.editor_error.clone().unwrap_or_default(),
-                    6 => format!("╰─ {} ─╯", editor_footer(self.locale)),
-                    _ => String::new(),
-                }
+                self.render_editor_panel_row(local, layout, *slot, *field, alias, command)
             }
-            Mode::ConfirmDelete { slot } => {
-                let detail = self
-                    .config
-                    .shortcut(*slot)
-                    .map(|s| format!("{}: {}", s.alias.as_deref().unwrap_or("—"), s.command))
-                    .unwrap_or_default();
-                match row {
-                    3 => self.editor_error.clone().unwrap_or_default(),
-                    2 => {
-                        if matches!(self.locale, Locale::EsEs) {
-                            format!("{} Mayús+{slot}? {detail}", delete_prompt(self.locale))
-                        } else {
-                            format!("{} Shift+{slot}? {detail}", delete_prompt(self.locale))
-                        }
-                    }
-                    _ => String::new(),
-                }
-            }
+            Mode::ConfirmDelete { slot } => self.render_delete_panel_row(local, layout, *slot),
             _ => String::new(),
         };
-        fit(&line, width)
+        layout.center(panel, outer_width)
+    }
+
+    fn render_manager_panel_row(
+        &self,
+        local: usize,
+        layout: &PanelLayout,
+        selected_slot: usize,
+        scroll: usize,
+    ) -> String {
+        if local == 0 {
+            return panel_border(layout.width, text(self.locale, TextId::ManagerTitle), true);
+        }
+        if local + 1 == layout.height {
+            return panel_border(layout.width, manager_footer(self.locale), false);
+        }
+        let slot = (scroll + local) as u8;
+        let binding = format_binding(
+            KeyBinding::with_modifier(Modifier::Shift, KeyToken::Char(char::from(b'0' + slot))),
+            self.locale,
+        );
+        let content = self.config.shortcut(slot).map_or_else(
+            || text(self.locale, TextId::Empty).to_owned(),
+            |shortcut| format!("{}  {}", shortcut.alias.as_deref().unwrap_or(""), shortcut.command),
+        );
+        panel_slot_row(layout.width, &binding, &content, usize::from(slot - 1) == selected_slot)
+    }
+
+    fn render_editor_panel_row(
+        &self,
+        local: usize,
+        layout: &PanelLayout,
+        slot: u8,
+        field: EditorField,
+        alias: &TextField,
+        command: &TextField,
+    ) -> String {
+        let binding = format_binding(
+            KeyBinding::with_modifier(Modifier::Shift, KeyToken::Char(char::from(b'0' + slot))),
+            self.locale,
+        );
+        if local == 0 {
+            return panel_border_with_binding(
+                layout.width,
+                &binding,
+                editor_title(self.locale, command.value.is_empty()),
+            );
+        }
+        if local + 1 == layout.height {
+            return panel_border(layout.width, editor_footer(self.locale), false);
+        }
+        let field_width = layout.width.saturating_sub(20).max(1);
+        match local {
+            1 => panel_field_row(
+                layout.width,
+                text(self.locale, TextId::AliasOptional),
+                &cursor_text(alias, field == EditorField::Alias, field_width),
+                field == EditorField::Alias,
+            ),
+            2 => panel_field_row(
+                layout.width,
+                text(self.locale, TextId::Command),
+                &cursor_text(command, field == EditorField::Command, field_width),
+                field == EditorField::Command,
+            ),
+            3 => panel_text_row(layout.width, self.editor_error.as_deref().unwrap_or("")),
+            _ => panel_text_row(layout.width, ""),
+        }
+    }
+
+    fn render_delete_panel_row(&self, local: usize, layout: &PanelLayout, slot: u8) -> String {
+        if local == 0 {
+            return panel_border(layout.width, text(self.locale, TextId::DeleteTitle), true);
+        }
+        if local + 1 == layout.height {
+            return panel_border(layout.width, delete_footer(self.locale), false);
+        }
+        let binding = format_binding(
+            KeyBinding::with_modifier(Modifier::Shift, KeyToken::Char(char::from(b'0' + slot))),
+            self.locale,
+        );
+        let shortcut = self.config.shortcut(slot);
+        if layout.height == 5 {
+            return match local {
+                1 => panel_binding_row(layout.width, &binding, delete_prompt(self.locale)),
+                2 => panel_text_row(
+                    layout.width,
+                    &shortcut.map_or_else(String::new, |s| {
+                        format!("{}: {}", s.alias.as_deref().unwrap_or(""), s.command)
+                    }),
+                ),
+                3 => panel_text_row(layout.width, self.editor_error.as_deref().unwrap_or("")),
+                _ => panel_text_row(layout.width, ""),
+            };
+        }
+        match local {
+            1 => panel_binding_row(layout.width, &binding, delete_prompt(self.locale)),
+            2 => panel_text_row(
+                layout.width,
+                shortcut.and_then(|s| s.alias.as_deref()).unwrap_or(""),
+            ),
+            3 => panel_text_row(layout.width, shortcut.map_or("", |s| s.command.as_str())),
+            4 => panel_text_row(layout.width, self.editor_error.as_deref().unwrap_or("")),
+            _ => panel_text_row(layout.width, ""),
+        }
     }
 
     /// Normal-mode footer with the configured shortcut aliases appended so the
     /// bound slots are visible at a glance; other modes reuse the static copy.
     fn footer_line(&self) -> String {
+        if matches!(
+            self.mode,
+            Mode::Commands { .. } | Mode::CommandEditor { .. } | Mode::ConfirmDelete { .. }
+        ) {
+            return match self.locale {
+                Locale::EsEs => "F1 Ayuda  F2 Idioma",
+                Locale::EnUs => "F1 Help  F2 Language",
+            }
+            .to_owned();
+        }
         let Mode::Normal = &self.mode else {
             return footer_help_for(&self.mode, self.locale).to_string();
         };
@@ -1249,12 +1262,37 @@ fn help_lines_for(config: &Config, locale: Locale) -> Vec<HelpLine> {
 }
 
 struct HelpLayout {
-    width: usize,
-    height: usize,
-    top: usize,
+    panel: PanelLayout,
     start: usize,
     lines: Vec<HelpLine>,
     locale: Locale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PanelLayout {
+    width: usize,
+    height: usize,
+    top: usize,
+    left: usize,
+}
+
+impl PanelLayout {
+    fn new(inner: usize, list_height: usize, max_width: usize, desired_height: usize) -> Self {
+        let width = inner.min(max_width);
+        let height = list_height.min(desired_height).max(2);
+        let top = list_height.saturating_sub(height) / 2;
+        let left = inner.saturating_sub(width) / 2;
+        Self { width, height, top, left }
+    }
+
+    fn local_row(self, row: usize) -> Option<usize> {
+        if row >= self.top && row < self.top + self.height { Some(row - self.top) } else { None }
+    }
+
+    fn center(self, panel: String, outer_width: usize) -> String {
+        let right = outer_width.saturating_sub(self.left + self.width);
+        format!("{}{}{}", " ".repeat(self.left), panel, " ".repeat(right))
+    }
 }
 
 impl HelpLayout {
@@ -1265,29 +1303,20 @@ impl HelpLayout {
         lines: Vec<HelpLine>,
         locale: Locale,
     ) -> Self {
-        let width = inner.min(104);
-        let height = list_height.min(lines.len().saturating_add(2));
-        let capacity = height.saturating_sub(2);
+        let panel = PanelLayout::new(inner, list_height, 104, lines.len().saturating_add(2));
+        let capacity = panel.height.saturating_sub(2);
         let max_scroll = lines.len().saturating_sub(capacity);
         *scroll = (*scroll).min(max_scroll);
-        Self {
-            width,
-            height,
-            top: list_height.saturating_sub(height) / 2,
-            start: *scroll,
-            lines,
-            locale,
-        }
+        Self { panel, start: *scroll, lines, locale }
     }
 
     fn render_row(&self, row: usize, outer_width: usize) -> String {
-        if row < self.top || row >= self.top + self.height || self.height < 2 {
+        let Some(local) = self.panel.local_row(row) else {
             return " ".repeat(outer_width);
-        }
-        let local = row - self.top;
+        };
         let panel = if local == 0 {
             panel_border(
-                self.width,
+                self.panel.width,
                 if matches!(self.locale, Locale::EsEs) {
                     "ATAJOS DE TECLADO"
                 } else {
@@ -1295,9 +1324,9 @@ impl HelpLayout {
                 },
                 true,
             )
-        } else if local + 1 == self.height {
+        } else if local + 1 == self.panel.height {
             panel_border(
-                self.width,
+                self.panel.width,
                 match self.locale {
                     Locale::EsEs => "↑↓ DESPLAZAR · F1 / ESC CERRAR",
                     Locale::EnUs => "↑↓ SCROLL · F1 / ESC CLOSE",
@@ -1307,12 +1336,10 @@ impl HelpLayout {
         } else {
             render_help_line(
                 self.lines.get(self.start + local - 1).cloned().unwrap_or(HelpLine::Blank),
-                self.width,
+                self.panel.width,
             )
         };
-        let left = outer_width.saturating_sub(self.width) / 2;
-        let right = outer_width.saturating_sub(self.width + left);
-        format!("{}{}{}", " ".repeat(left), panel, " ".repeat(right))
+        self.panel.center(panel, outer_width)
     }
 }
 
@@ -1320,22 +1347,19 @@ fn render_help_line(line: HelpLine, width: usize) -> String {
     let content_width = width.saturating_sub(2);
     match line {
         HelpLine::Section(title) => format!(
-            "\x1b[38;2;90;100;120m│\x1b[0m\x1b[38;2;116;199;236m{}\x1b[0m\x1b[38;2;90;100;120m│\x1b[0m",
+            "{FRAME}│{RESET}{CYAN}{}{RESET}{FRAME}│{RESET}",
             fit(&format!("  {title}"), content_width)
         ),
         HelpLine::Shortcut(keys, description) => {
             let key_width = 18.min(content_width.saturating_sub(12)).max(1);
             let description_width = content_width.saturating_sub(key_width + 3);
             format!(
-                "\x1b[38;2;90;100;120m│\x1b[0m  \x1b[38;2;255;203;107m{}\x1b[0m {}\x1b[38;2;90;100;120m│\x1b[0m",
+                "{FRAME}│{RESET}  {SHORTCUT}{}{RESET} {}{FRAME}│{RESET}",
                 fit(&keys, key_width),
                 fit(&description, description_width)
             )
         }
-        HelpLine::Blank => format!(
-            "\x1b[38;2;90;100;120m│\x1b[0m{}\x1b[38;2;90;100;120m│\x1b[0m",
-            " ".repeat(content_width)
-        ),
+        HelpLine::Blank => format!("{FRAME}│{RESET}{}{FRAME}│{RESET}", " ".repeat(content_width)),
     }
 }
 
@@ -1344,14 +1368,81 @@ fn panel_border(width: usize, label: &str, top: bool) -> String {
     let label = label.chars().take(width.saturating_sub(5)).collect::<String>();
     let prefix = format!("{left}─ {label} ");
     let fill = width.saturating_sub(prefix.chars().count() + 1);
-    format!("\x1b[38;2;116;199;236m{prefix}{}{right}\x1b[0m", "─".repeat(fill))
+    format!("{CYAN}{prefix}{}{right}{RESET}", "─".repeat(fill))
 }
 
-fn cursor_text(field: &TextField, active: bool) -> String {
+fn panel_border_with_binding(width: usize, binding: &str, title: &str) -> String {
+    let label = format!("{binding} · {title}");
+    let visible = label.chars().count().min(width.saturating_sub(5));
+    let fill = width.saturating_sub(visible + 4);
+    format!("{CYAN}╭─ {SHORTCUT}{binding}{CYAN} · {title} {}╮{RESET}", "─".repeat(fill))
+}
+
+fn command_scroll(selected: usize, scroll: usize, capacity: usize) -> usize {
+    let capacity = capacity.clamp(1, 9);
+    if selected < scroll {
+        selected
+    } else if selected >= scroll + capacity {
+        selected + 1 - capacity
+    } else {
+        scroll.min(9 - capacity)
+    }
+}
+
+fn panel_text_row(width: usize, text: &str) -> String {
+    let content_width = width.saturating_sub(2);
+    format!("{FRAME}│{RESET}{}{}│{RESET}", fit(&format!(" {text}"), content_width), FRAME)
+}
+
+fn panel_binding_row(width: usize, binding: &str, text: &str) -> String {
+    let content_width = width.saturating_sub(2);
+    let binding_width = 10.min(content_width.saturating_sub(4));
+    let text_width = content_width.saturating_sub(binding_width + 3);
+    format!(
+        "{FRAME}│{RESET} {SHORTCUT}{}{RESET} {}{FRAME}│{RESET}",
+        fit(binding, binding_width),
+        fit(text, text_width)
+    )
+}
+
+fn panel_slot_row(width: usize, binding: &str, text: &str, is_selected: bool) -> String {
+    let available_width = if is_selected { width } else { width.saturating_sub(2) };
+    let binding_width = 10.min(available_width.saturating_sub(4));
+    let text_width = available_width.saturating_sub(binding_width + 3);
+    let prefix = if is_selected { "›" } else { " " };
+    if is_selected {
+        format!(
+            "{SELECTED_BG}{SELECTED_FG}{prefix} {SHORTCUT}{}{SELECTED_FG} {}{RESET}",
+            fit(binding, binding_width),
+            fit(text, text_width)
+        )
+    } else {
+        format!(
+            "{FRAME}│{RESET}{prefix} {SHORTCUT}{}{RESET} {}{FRAME}│{RESET}",
+            fit(binding, binding_width),
+            fit(text, text_width)
+        )
+    }
+}
+
+fn panel_field_row(width: usize, label: &str, value: &str, active: bool) -> String {
+    let content_width = width.saturating_sub(2);
+    let label_width = 18.min(content_width.saturating_sub(4));
+    let value_width = content_width.saturating_sub(label_width + 3);
+    let content = format!(" {}: {}", fit(label, label_width), fit(value, value_width));
+    if active {
+        selected(&content, width)
+    } else {
+        format!("{FRAME}│{RESET}{content}{FRAME}│{RESET}")
+    }
+}
+
+fn cursor_text(field: &TextField, active: bool, width: usize) -> String {
     if !active {
         return field.value.clone();
     }
-    let width = 48;
+    let mut field = field.clone();
+    field.ensure_viewport(width);
     let mut viewport = field.viewport.min(field.value.len());
     if field.cursor < viewport {
         viewport = field.cursor;
@@ -1457,10 +1548,16 @@ mod tests {
     };
 
     use super::{
-        App, Mode, ShellResult, TextField, agent_command, cursor_text, footer_help, fuzzy_score,
-        help_lines_for, is_command_shortcut,
+        App, Mode, PanelLayout, ShellResult, TextField, agent_command, command_scroll, cursor_text,
+        footer_help, fuzzy_score, help_lines_for, is_command_shortcut, panel_border,
+        panel_slot_row,
     };
-    use crate::{config::Config, input::Key, render::fit};
+    use crate::{
+        config::Config,
+        i18n::text,
+        input::Key,
+        render::{CYAN, SELECTED_BG, SELECTED_FG, SHORTCUT, fit},
+    };
 
     #[test]
     fn contiguous_matches_rank_higher() {
@@ -1588,11 +1685,11 @@ mod tests {
         assert_eq!(field.value, "αgamma");
         field.end();
         field.ensure_viewport(3);
-        assert!(cursor_text(&field, true).contains('_'));
+        assert!(cursor_text(&field, true, 3).contains('_'));
     }
 
     #[test]
-    fn manager_direct_selection_and_small_viewport_keep_slot_visible() {
+    fn manager_direct_selection_defers_scroll_to_the_renderer() {
         let sandbox =
             std::env::temp_dir().join(format!("devnav-manager-scroll-{}", std::process::id()));
         fs::create_dir_all(&sandbox).expect("create sandbox");
@@ -1600,8 +1697,89 @@ mod tests {
             .expect("create app");
         app.handle_key(Key::F3).expect("open manager");
         app.handle_key(Key::Char('9')).expect("select slot nine");
-        assert!(matches!(app.mode, Mode::Commands { selected: 8, scroll: 6 }));
+        assert!(matches!(app.mode, Mode::Commands { selected: 8, scroll: 0 }));
+        assert_eq!(command_scroll(8, 0, 3), 6);
         fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn f3_manager_layout_is_centered_and_bounded() {
+        let layout = PanelLayout::new(116, 33, 88, 11);
+        assert_eq!(layout.width, 88);
+        assert_eq!(layout.height, 11);
+        assert_eq!(layout.left, 14);
+        assert_eq!(layout.top, 11);
+    }
+
+    #[test]
+    fn f3_manager_uses_blank_viewport_outside_panel_like_help() {
+        let layout = PanelLayout::new(76, 17, 88, 11);
+        assert!(layout.local_row(0).is_none());
+        assert_eq!(
+            layout.center("x".repeat(layout.width), 76),
+            format!(
+                "{}{}{}",
+                " ".repeat(layout.left),
+                "x".repeat(layout.width),
+                " ".repeat(76 - layout.left - layout.width)
+            )
+        );
+    }
+
+    #[test]
+    fn f3_manager_scrolls_and_keeps_selected_slot_visible() {
+        assert_eq!(command_scroll(8, 0, 3), 6);
+        assert_eq!(command_scroll(0, 6, 3), 0);
+        assert_eq!(command_scroll(4, 3, 9), 0);
+    }
+
+    #[test]
+    fn f3_manager_compacts_to_three_slots_at_42_by_12() {
+        let layout = PanelLayout::new(38, 5, 88, 11);
+        assert_eq!(layout.width, 38);
+        assert_eq!(layout.height, 5);
+        assert_eq!(layout.height - 2, 3);
+    }
+
+    #[test]
+    fn f3_manager_selected_row_matches_normal_selection_ansi() {
+        let row = panel_slot_row(40, "Mayús+1", "Vacío", true);
+        assert!(row.contains(SELECTED_BG));
+        assert!(row.contains(SELECTED_FG));
+        assert!(row.contains(SHORTCUT));
+        assert!(row.contains('›'));
+    }
+
+    #[test]
+    fn f3_manager_border_matches_help_panel_border() {
+        assert!(panel_border(40, "TEST", true).starts_with(CYAN));
+        assert_eq!(panel_border(40, "TEST", true).chars().filter(|ch| *ch == '╭').count(), 1);
+    }
+
+    #[test]
+    fn f3_outer_footer_only_contains_global_actions() {
+        let sandbox = std::env::temp_dir().join(format!("devnav-f3-footer-{}", std::process::id()));
+        fs::create_dir_all(&sandbox).expect("create sandbox");
+        let mut app = App::new(sandbox.clone(), Config::default(), sandbox.join("config.tsv"))
+            .expect("create app");
+        app.handle_key(Key::F3).expect("open manager");
+        assert_eq!(app.footer_line(), "F1 Ayuda  F2 Idioma");
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn f3_empty_slot_is_localized_without_dash_prefix() {
+        assert_eq!(text(crate::i18n::Locale::EsEs, crate::i18n::TextId::Empty), "Vacío");
+        assert_eq!(text(crate::i18n::Locale::EnUs, crate::i18n::TextId::Empty), "Empty");
+    }
+
+    #[test]
+    fn f3_editor_viewport_width_depends_on_modal_width() {
+        let field = TextField::new("abcdefghijklmnopqrstuvwxyz".into());
+        assert!(
+            cursor_text(&field, true, 4).chars().count()
+                < cursor_text(&field, true, 20).chars().count()
+        );
     }
 
     #[test]
