@@ -4,7 +4,8 @@ use crate::{
     config::Config,
     i18n::{
         KeyBinding, KeyToken, Locale, Modifier, TextId, delete_footer, delete_prompt,
-        editor_footer, editor_title, format_binding, manager_footer, shift_range, text,
+        editor_footer, editor_footer_compact, editor_title, format_binding, manager_footer,
+        manager_footer_compact, shift_range, text,
     },
     input::{self, Key},
     model::{DirectoryEntry, ShellResult},
@@ -968,7 +969,11 @@ impl App {
             return panel_border(layout.width, text(self.locale, TextId::ManagerTitle), true);
         }
         if local + 1 == layout.height {
-            return panel_border(layout.width, manager_footer(self.locale), false);
+            return panel_border(
+                layout.width,
+                manager_footer_for(self.locale, layout.width),
+                false,
+            );
         }
         let slot = (scroll + local) as u8;
         let binding = format_binding(
@@ -1003,9 +1008,9 @@ impl App {
             );
         }
         if local + 1 == layout.height {
-            return panel_border(layout.width, editor_footer(self.locale), false);
+            return panel_border(layout.width, editor_footer_for(self.locale, layout.width), false);
         }
-        let field_width = layout.width.saturating_sub(20).max(1);
+        let (_, field_width) = panel_field_dimensions(layout.width);
         match local {
             1 => panel_field_row(
                 layout.width,
@@ -1374,7 +1379,7 @@ fn panel_border(width: usize, label: &str, top: bool) -> String {
 fn panel_border_with_binding(width: usize, binding: &str, title: &str) -> String {
     let label = format!("{binding} · {title}");
     let visible = label.chars().count().min(width.saturating_sub(5));
-    let fill = width.saturating_sub(visible + 4);
+    let fill = width.saturating_sub(visible + 5);
     format!("{CYAN}╭─ {SHORTCUT}{binding}{CYAN} · {title} {}╮{RESET}", "─".repeat(fill))
 }
 
@@ -1389,6 +1394,20 @@ fn command_scroll(selected: usize, scroll: usize, capacity: usize) -> usize {
     }
 }
 
+fn footer_fits(width: usize, footer: &str) -> bool {
+    footer.chars().count() <= width.saturating_sub(5)
+}
+
+fn manager_footer_for(locale: Locale, width: usize) -> &'static str {
+    let wide = manager_footer(locale);
+    if footer_fits(width, wide) { wide } else { manager_footer_compact(locale) }
+}
+
+fn editor_footer_for(locale: Locale, width: usize) -> &'static str {
+    let wide = editor_footer(locale);
+    if footer_fits(width, wide) { wide } else { editor_footer_compact(locale) }
+}
+
 fn panel_text_row(width: usize, text: &str) -> String {
     let content_width = width.saturating_sub(2);
     format!("{FRAME}│{RESET}{}{}│{RESET}", fit(&format!(" {text}"), content_width), FRAME)
@@ -1397,7 +1416,7 @@ fn panel_text_row(width: usize, text: &str) -> String {
 fn panel_binding_row(width: usize, binding: &str, text: &str) -> String {
     let content_width = width.saturating_sub(2);
     let binding_width = 10.min(content_width.saturating_sub(4));
-    let text_width = content_width.saturating_sub(binding_width + 3);
+    let text_width = content_width.saturating_sub(binding_width + 2);
     format!(
         "{FRAME}│{RESET} {SHORTCUT}{}{RESET} {}{FRAME}│{RESET}",
         fit(binding, binding_width),
@@ -1406,13 +1425,13 @@ fn panel_binding_row(width: usize, binding: &str, text: &str) -> String {
 }
 
 fn panel_slot_row(width: usize, binding: &str, text: &str, is_selected: bool) -> String {
-    let available_width = if is_selected { width } else { width.saturating_sub(2) };
+    let available_width = width.saturating_sub(2);
     let binding_width = 10.min(available_width.saturating_sub(4));
     let text_width = available_width.saturating_sub(binding_width + 3);
     let prefix = if is_selected { "›" } else { " " };
     if is_selected {
         format!(
-            "{SELECTED_BG}{SELECTED_FG}{prefix} {SHORTCUT}{}{SELECTED_FG} {}{RESET}",
+            "{FRAME}│{RESET}{SELECTED_BG}{SELECTED_FG}{prefix} {SHORTCUT}{}{SELECTED_FG} {}{RESET}{FRAME}│{RESET}",
             fit(binding, binding_width),
             fit(text, text_width)
         )
@@ -1426,15 +1445,41 @@ fn panel_slot_row(width: usize, binding: &str, text: &str, is_selected: bool) ->
 }
 
 fn panel_field_row(width: usize, label: &str, value: &str, active: bool) -> String {
-    let content_width = width.saturating_sub(2);
-    let label_width = 18.min(content_width.saturating_sub(4));
-    let value_width = content_width.saturating_sub(label_width + 3);
+    let (label_width, value_width) = panel_field_dimensions(width);
     let content = format!(" {}: {}", fit(label, label_width), fit(value, value_width));
     if active {
-        selected(&content, width)
+        format!(
+            "{FRAME}│{RESET}{SELECTED_BG}{SELECTED_FG}{}{RESET}{FRAME}│{RESET}",
+            fit(&content, width.saturating_sub(2))
+        )
     } else {
         format!("{FRAME}│{RESET}{content}{FRAME}│{RESET}")
     }
+}
+
+fn panel_field_dimensions(width: usize) -> (usize, usize) {
+    let content_width = width.saturating_sub(2);
+    let label_width = 18.min(content_width.saturating_sub(4));
+    let value_width = content_width.saturating_sub(label_width + 3);
+    (label_width, value_width)
+}
+
+#[cfg(test)]
+fn visible_width(text: &str) -> usize {
+    let mut width = 0;
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' && chars.next() == Some('[') {
+            for code in chars.by_ref() {
+                if code == 'm' {
+                    break;
+                }
+            }
+        } else {
+            width += 1;
+        }
+    }
+    width
 }
 
 fn cursor_text(field: &TextField, active: bool, width: usize) -> String {
@@ -1549,14 +1594,16 @@ mod tests {
 
     use super::{
         App, Mode, PanelLayout, ShellResult, TextField, agent_command, command_scroll, cursor_text,
-        footer_help, fuzzy_score, help_lines_for, is_command_shortcut, panel_border,
-        panel_slot_row,
+        editor_footer_for, footer_fits, footer_help, fuzzy_score, help_lines_for,
+        is_command_shortcut, manager_footer_for, panel_binding_row, panel_border,
+        panel_border_with_binding, panel_field_dimensions, panel_field_row, panel_slot_row,
+        panel_text_row, visible_width,
     };
     use crate::{
         config::Config,
-        i18n::text,
+        i18n::{delete_footer, delete_prompt, text},
         input::Key,
-        render::{CYAN, SELECTED_BG, SELECTED_FG, SHORTCUT, fit},
+        render::{CYAN, FRAME, RESET, SELECTED_BG, SELECTED_FG, SHORTCUT, fit},
     };
 
     #[test]
@@ -1780,6 +1827,75 @@ mod tests {
             cursor_text(&field, true, 4).chars().count()
                 < cursor_text(&field, true, 20).chars().count()
         );
+    }
+
+    #[test]
+    fn panel_rows_have_exact_visible_width() {
+        let width = 38;
+        let rows = [
+            panel_border(width, "TITLE", true),
+            panel_border_with_binding(width, "Mayús+1", "NUEVO COMANDO"),
+            panel_text_row(width, "content"),
+            panel_binding_row(width, "Mayús+1", "¿Eliminar este comando?"),
+            panel_slot_row(width, "Mayús+1", "Vacío", false),
+            panel_slot_row(width, "Mayús+1", "Vacío", true),
+            panel_field_row(width, "Alias (opcional)", "value", false),
+            panel_field_row(width, "Alias (opcional)", "value", true),
+        ];
+        assert!(rows.iter().all(|row| visible_width(row) == width));
+    }
+
+    #[test]
+    fn selected_manager_row_preserves_side_borders() {
+        let row = panel_slot_row(38, "Mayús+1", "Vacío", true);
+        assert!(row.starts_with(&format!("{FRAME}│")));
+        assert!(row.ends_with(&format!("{FRAME}│{RESET}")));
+    }
+
+    #[test]
+    fn active_editor_field_preserves_side_borders() {
+        let row = panel_field_row(38, "Alias (opcional)", "value", true);
+        assert!(row.starts_with(&format!("{FRAME}│")));
+        assert!(row.ends_with(&format!("{FRAME}│{RESET}")));
+    }
+
+    #[test]
+    fn responsive_footers_fit_without_losing_essential_keys() {
+        for locale in [crate::i18n::Locale::EsEs, crate::i18n::Locale::EnUs] {
+            assert!(footer_fits(88, manager_footer_for(locale, 88)));
+            assert!(footer_fits(38, manager_footer_for(locale, 38)));
+            assert!(footer_fits(88, editor_footer_for(locale, 88)));
+            assert!(footer_fits(38, editor_footer_for(locale, 38)));
+            assert!(footer_fits(38, delete_footer(locale)));
+        }
+        assert!(manager_footer_for(crate::i18n::Locale::EsEs, 38).contains("Enter"));
+        assert!(manager_footer_for(crate::i18n::Locale::EsEs, 38).contains("Supr"));
+        assert!(editor_footer_for(crate::i18n::Locale::EnUs, 38).contains("Tab"));
+    }
+
+    #[test]
+    fn editor_cursor_remains_visible_at_all_positions_and_widths() {
+        for width in [panel_field_dimensions(38).1, panel_field_dimensions(76).1] {
+            let mut field = TextField::new("áβγδεζηθικλμνξοπρστυφχψω".into());
+            let middle =
+                field.value.char_indices().nth(12).map_or(field.value.len(), |(index, _)| index);
+            for cursor in [0, middle, field.value.len()] {
+                field.cursor = cursor.min(field.value.len());
+                assert!(cursor_text(&field, true, width).contains('_'));
+            }
+        }
+    }
+
+    #[test]
+    fn delete_prompt_is_complete_in_both_locales() {
+        assert_eq!(delete_prompt(crate::i18n::Locale::EsEs), "¿Eliminar este comando?");
+        assert_eq!(delete_prompt(crate::i18n::Locale::EnUs), "Remove this command?");
+    }
+
+    #[test]
+    fn f1_layout_regression_keeps_its_original_bounds() {
+        let layout = PanelLayout::new(120, 25, 104, 40);
+        assert_eq!((layout.width, layout.height, layout.left, layout.top), (104, 25, 8, 0));
     }
 
     #[test]
