@@ -53,6 +53,7 @@ pub enum Modifier {
 pub enum TextId {
     Help,
     Language,
+    CustomCommands,
     Navigate,
     Select,
     Open,
@@ -70,6 +71,7 @@ pub enum TextId {
 pub enum Action {
     Help,
     ToggleLanguage,
+    CustomCommands,
     NavigateUp,
     NavigateDown,
     OpenFolder,
