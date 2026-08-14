@@ -58,6 +58,17 @@ impl TextField {
     fn end(&mut self) {
         self.cursor = self.value.len();
     }
+    fn left(&mut self) {
+        if self.cursor > 0 {
+            self.cursor =
+                self.value[..self.cursor].char_indices().next_back().map_or(0, |(index, _)| index);
+        }
+    }
+    fn right(&mut self) {
+        if self.cursor < self.value.len() {
+            self.cursor += self.value[self.cursor..].chars().next().map_or(0, char::len_utf8);
+        }
+    }
 }
 
 pub struct App {
@@ -73,6 +84,7 @@ pub struct App {
     help_return_mode: Option<Mode>,
     commands_return_mode: Option<Mode>,
     message: String,
+    editor_error: Option<String>,
     config: Config,
     config_path: PathBuf,
     renderer: Renderer,
@@ -95,6 +107,7 @@ impl App {
             help_return_mode: None,
             commands_return_mode: None,
             message: String::new(),
+            editor_error: None,
             config,
             config_path,
             renderer: Renderer::new(),
@@ -451,6 +464,7 @@ impl App {
                     alias: TextField::new(alias),
                     command: TextField::new(command),
                 };
+                self.editor_error = None;
             }
             Key::Delete => {
                 let slot = (index + 1) as u8;
@@ -483,7 +497,14 @@ impl App {
                     EditorField::Command => EditorField::Alias,
                 };
             }
-            Key::Enter if !command.value.trim().is_empty() => {
+            Key::Enter if command.value.trim().is_empty() => {
+                self.editor_error = Some(if matches!(self.locale, Locale::EsEs) {
+                    "El comando no puede estar vacío".into()
+                } else {
+                    "Command cannot be empty".into()
+                });
+            }
+            Key::Enter => {
                 let mut next_config = self.config.clone();
                 next_config.set_shortcut(slot, Some(alias.value.clone()), command.value.clone());
                 next_config.save(&self.config_path)?;
@@ -496,10 +517,16 @@ impl App {
                 }
                 .into();
             }
-            Key::Backspace => self.active_field(field, &mut alias, &mut command).backspace(),
+            Key::Backspace => {
+                self.editor_error = None;
+                self.active_field(field, &mut alias, &mut command).backspace();
+            }
+            Key::Left => self.active_field(field, &mut alias, &mut command).left(),
+            Key::Right => self.active_field(field, &mut alias, &mut command).right(),
             Key::Home => self.active_field(field, &mut alias, &mut command).home(),
             Key::End => self.active_field(field, &mut alias, &mut command).end(),
             Key::Char(character) if !character.is_control() => {
+                self.editor_error = None;
                 self.active_field(field, &mut alias, &mut command).insert(character)
             }
             _ => {}
@@ -967,6 +994,7 @@ impl App {
                         if matches!(self.locale, Locale::EsEs) { "Comando" } else { "Command" },
                         cursor_text(command, *field == EditorField::Command)
                     ),
+                    5 => self.editor_error.clone().unwrap_or_default(),
                     6 => format!(
                         "╰─ Tab {} · Enter {} · Esc {} ─╯",
                         if matches!(self.locale, Locale::EsEs) {
@@ -1489,6 +1517,21 @@ mod tests {
         app.handle_key(Key::Enter).expect("delete command");
         assert!(app.config.shortcut(1).is_none());
         assert!(Config::load(&config_path).expect("reload").shortcut(1).is_none());
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn empty_command_is_rejected_with_inline_feedback() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let sandbox = std::env::temp_dir().join(format!("devnav-command-error-{unique}"));
+        fs::create_dir_all(&sandbox).expect("create sandbox");
+        let mut app = App::new(sandbox.clone(), Config::default(), sandbox.join("config.tsv"))
+            .expect("create app");
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Enter).expect("open editor");
+        app.handle_key(Key::Enter).expect("reject empty command");
+        assert!(app.editor_error.is_some());
+        assert!(matches!(app.mode, Mode::CommandEditor { .. }));
         fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 
