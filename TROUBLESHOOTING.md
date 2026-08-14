@@ -12,6 +12,12 @@ Run in PowerShell 7:
 ```powershell
 $PSVersionTable.PSVersion
 Get-Command dev -ErrorAction SilentlyContinue
+Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\DevNav\DevNav.psm1')
+```
+
+If `dev` is available, also check the configured root:
+
+```powershell
 Get-DevRoot
 Test-Path -LiteralPath (Get-DevRoot)
 ```

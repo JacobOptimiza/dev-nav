@@ -73,6 +73,11 @@ No tienen script `postinstall` ni dependencias en runtime: el bootstrap elige el
 instalador oficial x64 o ARM64, verifica su SHA-256 con
 `release-manifest.json`, lo instala y valida la versión final.
 
+Para npm, pnpm y Yarn, el paquete de bootstrap declara Node.js `>=22`. CI lo
+valida con Node 22, 24 y 26; Node 24 es la base de release y Node 26 la vía de
+compatibilidad futura. Bun ejecuta este bootstrap con su propio runtime. Ninguno
+de estos runtimes es necesario después de instalar DevNav.
+
 Después, DevNav se actualiza con `dev update`, no con npm, Bun, pnpm o Yarn. El
 gestor sirve para descubrir e instalar la aplicación; no pasa a ser propietario
 de la instalación.
@@ -240,14 +245,14 @@ pulsar `f` para eliminarla de favoritos. `a` permite mostrarla como
 La ruta de inicio, los favoritos y los alias son locales y se guardan fuera del repositorio en
 `%LOCALAPPDATA%\DevNav\config.tsv`.
 
-## Shortcuts
+## Atajos
 
-Los shortcuts están agrupados por flujo de trabajo. Las acciones más frecuentes
+Los atajos están agrupados por flujo de trabajo. Las acciones más frecuentes
 aparecen primero para que sean fáciles de descubrir y recordar.
 
 ### Navegación y selección
 
-| Shortcut | Acción |
+| Atajo | Acción |
 |---|---|
 | `↑` / `↓` o `j` / `k` | mover la selección |
 | `Enter` | seleccionar la carpeta y volver a PowerShell |
@@ -264,7 +269,7 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 
 ### Agentes
 
-| Shortcut | Acción |
+| Atajo | Acción |
 |---|---|
 | `c` | Codex: abrir una sesión nueva (`codex`) en la carpeta resaltada |
 | `r` | Codex: reanudar la última sesión del repositorio (`codex resume --last`) |
@@ -277,7 +282,7 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 
 ### Organización, búsqueda y acciones
 
-| Shortcut | Acción |
+| Atajo | Acción |
 |---|---|
 | `/` | activar el filtro fuzzy incremental |
 | `f` | añadir o quitar un favorito global |
@@ -394,12 +399,12 @@ Set-DevUpdateCheck $false  # desactivar
 - La configuración local está separada de los archivos reemplazados al actualizar.
 - Binarios de release con checksum SHA-256.
 - Workflows con permisos mínimos y acciones fijadas a commits concretos.
-- Las futuras releases npm usan Trusted Publishing mediante OIDC; no se guarda
+- Las releases npm usan Trusted Publishing mediante OIDC; no se guarda
   ningún `NPM_TOKEN`.
 - Dependabot revisa Cargo y GitHub Actions.
-- `main` está protegida y únicamente los administradores pueden actualizarla.
-- El repositorio público es de solo lectura: permite consultar, clonar y descargar,
-  pero no acepta Issues ni Pull Requests externos.
+- Las vulnerabilidades se notifican mediante GitHub Private Vulnerability
+  Reporting; para trabajo no sensible se usan las plantillas de Issues y Pull
+  Requests.
 
 Consulta [SECURITY.md](SECURITY.md) para informar vulnerabilidades de forma
 privada y [CONTRIBUTING.md](CONTRIBUTING.md) para conocer la política del
@@ -417,7 +422,7 @@ cargo deny check
 Invoke-Pester -Path ./tests/powershell
 ```
 
-El repositorio fija Rust 1.97.1 con `rustfmt` y `clippy`. Los controles de
+El MSRV es Rust 1.97; CI fija Rust 1.97.1 con `rustfmt` y `clippy`. Los controles de
 PowerShell usan el parser nativo, PSScriptAnalyzer 1.25.0 y Pester 6.1.0. Las
 licencias, advisories, registros y versiones duplicadas de dependencias se
 comprueban con `cargo-deny` mediante [deny.toml](deny.toml). CI ejecuta todos

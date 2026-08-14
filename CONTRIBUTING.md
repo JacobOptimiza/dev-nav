@@ -1,12 +1,23 @@
 # Contributing
 
-DevNav is a public, read-only project for inspection, cloning and downloading.
-The maintainer keeps the canonical repository changes internal; external Issues
-and Pull Requests are not part of the current contribution model. Security
+DevNav is a public project. Use the repository's Issue and pull-request
+templates for non-sensitive reports and focused changes. Security
 vulnerabilities must always use private reporting through [SECURITY.md](SECURITY.md).
 
-You may inspect, clone, download, and fork the project under the terms of the MIT
-license. Please keep changes small, focused, and documented.
+You may inspect, clone, download, and fork the project under the terms of the
+MIT license. Keep changes small, focused, documented, and scoped to one
+purpose.
+
+## Development prerequisites
+
+- Windows on x64 or ARM64 and PowerShell 7 or newer.
+- Rust 1.97 or newer (the CI toolchain is pinned to 1.97.1) with MSVC Build
+  Tools for native builds.
+- Node.js only for the npm bootstrap tests. The package declares Node `>=22`;
+  CI tests 22, 24, and 26, with Node 24 as the release baseline.
+
+For new Node.js environments, prefer a currently supported release line. Node
+is never required to run the installed native DevNav application.
 
 Before maintaining a fork or preparing an internal change, run the same quality gates as CI:
 
@@ -21,13 +32,17 @@ Invoke-Pester -Path ./tests/powershell
 node --test "tests/npm/**/*.test.mjs"
 ```
 
+Use a focused branch and pull request, wait for CI, and squash merge only after
+the applicable checks pass. New Actions references must use full commit SHAs.
+
 Do not disclose security vulnerabilities publicly. Report them privately as
 described in [SECURITY.md](SECURITY.md).
 
 ## Releasing
 
 Every channel ships the exact bytes built once by the release workflow: the
-GitHub release is canonical and npm, Scoop and WinGet derive from it. One
+GitHub release is canonical, npm and Scoop derive from it, and the workflow
+also generates the versioned WinGet submission asset. One
 version is shared by `Cargo.toml`, the Git tag, the GitHub release,
 `powershell/DevNav.psd1`, `packaging/npm/package.json` and
 `packaging/scoop/devnav.template.json`; CI and the release workflow abort on any
@@ -40,8 +55,8 @@ multichannel release; the release workflow enforces the floor.
 
 ### npm trusted publishing
 
-Future publishing uses OIDC trusted publishing with staged publishing; no
-`NPM_TOKEN` exists anywhere. The trusted publisher is restricted to repository
+Publishing uses OIDC trusted publishing with staged publishing; no `NPM_TOKEN`
+exists anywhere. The trusted publisher is restricted to repository
 `JacobOptimiza/dev-nav`, workflow `release.yml`, environment `npm-production`,
 and the `npm stage publish` action. The initial v0.10.0 package was published
 manually to establish the package; later releases stage the exact tested

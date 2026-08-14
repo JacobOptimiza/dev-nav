@@ -72,6 +72,11 @@ They have no `postinstall` script or runtime dependencies: the bootstrap selects
 the official x64 or ARM64 installer, verifies its SHA-256 against
 `release-manifest.json`, installs it, and validates the installed version.
 
+For npm, pnpm, and Yarn, the bootstrap package declares Node.js `>=22`. CI
+validates that package on Node 22, 24, and 26; Node 24 is the release baseline
+and Node 26 is the forward-compatibility lane. Bun runs this bootstrap with its
+own runtime. None of these runtimes is required after DevNav is installed.
+
 After installation, update DevNav with `dev update`—not with npm, Bun, pnpm, or
 Yarn. The package runner is a discovery and bootstrap channel; it does not own
 the installed application.
@@ -159,6 +164,7 @@ the folder DevNav opens by default.
 
 Published binaries do not require Rust or Visual Studio. A package runner is
 required only when you choose its bootstrap command.
+Windows PowerShell 5.1, 32-bit Windows, Linux, and macOS are not supported.
 
 ## Why DevNav?
 
@@ -187,6 +193,10 @@ For scripts and coding agents, the equivalent command is:
 Set-DevRoot $HOME
 Get-DevRoot
 ```
+
+For existing setups, `DEV_HOME` remains a fallback until a saved startup
+directory exists; a directory saved with `Ctrl+S` or `Set-DevRoot` takes
+precedence.
 
 ## Global favorites
 
@@ -262,6 +272,17 @@ Use `Set-DevShortcut` for scripts, overwrite a slot by using the same index, or
 remove one with `Remove-DevShortcut -Index 1` (or `dev shortcut 1`). Bindings
 persist locally and appear in the `F1` help panel.
 
+You can also select a repository and pass an optional agent or shell command
+from PowerShell:
+
+```powershell
+dev codex
+dev "git status"
+```
+
+The agent CLIs are optional. DevNav returns the command to PowerShell, so the
+CLI you choose must be installed and available on `PATH`.
+
 ### Language
 
 On the first interactive launch, DevNav detects the first supported language in
@@ -327,8 +348,9 @@ Set-DevUpdateCheck $false  # disable
 - Release binaries and the PowerShell module are verified with SHA-256.
 - Local configuration is excluded from the repository and preserved on updates.
 - GitHub Actions use minimal permissions and commit-pinned actions.
-- Future npm releases use OIDC Trusted Publishing; no `NPM_TOKEN` is stored.
-- The public repository is read-only for external contributors.
+- npm releases use OIDC Trusted Publishing; no `NPM_TOKEN` is stored.
+- Security reports use GitHub Private Vulnerability Reporting; use the issue or
+  pull-request templates for non-sensitive work.
 
 See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the
 [troubleshooting guide](TROUBLESHOOTING.md).
@@ -355,9 +377,9 @@ cargo deny check
 Invoke-Pester -Path ./tests/powershell
 ```
 
-The repository pins Rust 1.97.1 with `rustfmt` and `clippy`. PowerShell quality
-gates use the native parser, PSScriptAnalyzer 1.25.0 and Pester 6.1.0. Dependency
-licenses, advisories, registries and duplicate versions are checked by
+The MSRV is Rust 1.97; CI pins Rust 1.97.1 with `rustfmt` and `clippy`.
+PowerShell quality gates use the native parser, PSScriptAnalyzer 1.25.0 and
+Pester 6.1.0. Dependency licenses, advisories, registries and duplicate versions are checked by
 `cargo-deny` using [deny.toml](deny.toml). CI runs all of these checks.
 
 See the public [roadmap](ROADMAP.md) for planned distribution work.

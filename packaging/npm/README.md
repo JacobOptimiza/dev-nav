@@ -67,7 +67,9 @@ DevNav remains a standalone native application under
 
 - Windows 10/11 on x64 or ARM64.
 - PowerShell 7 (`pwsh`) available on `PATH`.
-- Any of Bun, Node.js (via npm), pnpm, or Yarn to run the bootstrap.
+- Bun, or Node.js `>=22` for npm, pnpm, or Yarn. CI validates the bootstrap on
+  Node 22, 24, and 26; Node 24 is the release baseline. Node is not a DevNav
+  runtime dependency, and Bun uses its own runtime.
 
 ## Links
 

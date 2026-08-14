@@ -17,3 +17,10 @@ Include the affected version, operating system and architecture, reproduction
 steps or a proof of concept, impact, and any relevant logs or configuration
 details (with secrets removed). We will acknowledge a report within seven days
 and keep the reporter informed as we investigate.
+
+## Security controls
+
+CodeQL analyzes Rust and GitHub Actions on pushes to `main` and pull requests.
+OpenSSF Scorecard runs on `main` and publishes its current result through the
+repository badge. These controls complement, but do not replace, private
+vulnerability reporting.
