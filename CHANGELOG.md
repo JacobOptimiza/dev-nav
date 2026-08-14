@@ -5,6 +5,8 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-14
+
 ### Changed
 
 - Render the F3 custom-command manager as a centered modal consistent with the
