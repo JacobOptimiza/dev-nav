@@ -20,9 +20,17 @@ launch coding agents or commands directly in the selected repository.
 Real captures from the native DevNav executable: the navigator, the F1 help
 panel, and the centered F3 custom-command manager.
 
-| Navigator | Help (F1) | Custom commands (F3) |
-|---|---|---|
-| ![DevNav navigator](assets/screenshots/devnav-main.png) | ![DevNav help modal](assets/screenshots/devnav-f1-help.png) | ![DevNav custom-command manager](assets/screenshots/devnav-f3-manager.png) |
+### Navigator
+
+![DevNav navigator](assets/screenshots/devnav-main.png)
+
+### Help — F1
+
+![DevNav help modal](assets/screenshots/devnav-f1-help.png)
+
+### Custom commands — F3
+
+![DevNav custom-command manager](assets/screenshots/devnav-f3-manager.png)
 
 ## Install DevNav
 

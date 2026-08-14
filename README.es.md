@@ -21,9 +21,17 @@ seleccionado.
 Capturas reales del ejecutable nativo de DevNav: el navegador, el panel de
 ayuda F1 y el gestor centrado de comandos personalizados F3.
 
-| Navegador | Ayuda (F1) | Comandos personalizados (F3) |
-|---|---|---|
-| ![Navegador de DevNav](assets/screenshots/devnav-main.png) | ![Modal de ayuda de DevNav](assets/screenshots/devnav-f1-help.png) | ![Gestor de comandos personalizados de DevNav](assets/screenshots/devnav-f3-manager.png) |
+### Navegador
+
+![Navegador de DevNav](assets/screenshots/devnav-main.png)
+
+### Ayuda — F1
+
+![Modal de ayuda de DevNav](assets/screenshots/devnav-f1-help.png)
+
+### Comandos personalizados — F3
+
+![Gestor de comandos personalizados de DevNav](assets/screenshots/devnav-f3-manager.png)
 
 ## Instalar DevNav
 
