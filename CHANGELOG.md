@@ -9,6 +9,7 @@ Versioning.
 
 - Add verified npm CLI bootstrapping, Rust parser fuzzing, and artifact
   attestations for future releases.
+- Publish portable Sigstore build-provenance sidecars with future releases.
 
 ## [0.13.0] - 2026-08-14
 
