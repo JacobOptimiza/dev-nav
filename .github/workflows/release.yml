@@ -3,12 +3,19 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to recover for npm staging (for example v0.11.0)'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: ${{ github.event_name == 'push' }}
     strategy:
       fail-fast: false
       matrix:
@@ -97,6 +104,7 @@ jobs:
             DevNav-scoop-${{ matrix.architecture }}.zip
 
   publish:
+    if: ${{ github.event_name == 'push' }}
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -226,6 +234,7 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag
 
   npm-package:
+    if: ${{ github.event_name == 'push' }}
     needs: publish
     runs-on: windows-latest
     permissions:
@@ -323,7 +332,14 @@ jobs:
             try {
               $output = & $manager.Value
               if ($LASTEXITCODE -ne 0) { throw "$($manager.Key) ephemeral run failed." }
-              if (($output | Out-String).Trim() -ne $version) { throw "$($manager.Key) reported an unexpected version: $output" }
+              $versionLineFound = $false
+              foreach ($line in $output) {
+                if (([string]$line).Trim() -eq $version) {
+                  $versionLineFound = $true
+                  break
+                }
+              }
+              if (-not $versionLineFound) { throw "$($manager.Key) did not emit an exact version line: $output" }
             }
             finally {
               Pop-Location
@@ -336,8 +352,8 @@ jobs:
           if-no-files-found: error
 
   npm-publish:
+    if: ${{ github.event_name == 'push' && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
     needs: npm-package
-    if: ${{ vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: npm-production
     permissions:
@@ -355,6 +371,148 @@ jobs:
           path: npm-package
       - name: Stage the exact tested tarball via OIDC trusted publishing
         working-directory: npm-package
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarball=(jacoboptimiza-devnav-*.tgz)
+          test "${#tarball[@]}" -eq 1
+          npm stage publish "./${tarball[0]}"
+
+  npm-recovery-package:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify requested tag and download canonical release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tagCommit = (git rev-list -n 1 "$env:RECOVERY_TAG^{commit}").Trim()
+          if (-not $tagCommit) { throw "Tag $env:RECOVERY_TAG does not exist." }
+          if ((git rev-parse HEAD).Trim() -ne $tagCommit) { throw 'Checkout is not exactly the requested tag.' }
+          New-Item -ItemType Directory -Path recovery-assets -Force | Out-Null
+          gh release download $env:RECOVERY_TAG --repo $env:GITHUB_REPOSITORY --dir recovery-assets --clobber `
+            --pattern 'DevNavSetup-x64.exe' `
+            --pattern 'DevNavSetup-arm64.exe' `
+            --pattern 'release-manifest.json'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Install a pinned npm CLI
+        run: npm install --global npm@12.0.2
+      - name: Assemble and verify the recovery package
+        shell: pwsh
+        env:
+          RECOVERY_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = $env:RECOVERY_TAG.TrimStart('v')
+          $stage = 'npm-recovery'
+          New-Item -ItemType Directory -Path "$stage\payload" -Force | Out-Null
+          Copy-Item packaging\npm\package.json, packaging\npm\README.md $stage
+          Copy-Item packaging\npm\bin $stage -Recurse
+          Copy-Item LICENSE $stage
+          Copy-Item recovery-assets\DevNavSetup-x64.exe, recovery-assets\DevNavSetup-arm64.exe "$stage\payload"
+          Copy-Item recovery-assets\release-manifest.json $stage
+          $package = Get-Content "$stage\package.json" -Raw | ConvertFrom-Json
+          if ($package.version -ne $version) { throw "package.json version $($package.version) does not match $version." }
+          if ($package.PSObject.Properties['dependencies'] -or $package.PSObject.Properties['devDependencies']) { throw 'Dependencies are forbidden.' }
+          if ($package.PSObject.Properties['scripts'] -and $package.scripts.PSObject.Properties['postinstall']) { throw 'postinstall is forbidden.' }
+          $manifest = Get-Content "$stage\release-manifest.json" -Raw | ConvertFrom-Json
+          if ($manifest.version -ne $version) { throw "release-manifest version $($manifest.version) does not match $version." }
+          foreach ($name in @('installer-x64', 'installer-arm64')) {
+            $entry = $manifest.artifacts.$name
+            $file = Join-Path $stage "payload\$($entry.file)"
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing $($entry.file)." }
+            $actualHash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+            if ($actualHash -ne $entry.sha256.ToUpperInvariant()) { throw "SHA-256 mismatch for $($entry.file)." }
+          }
+      - name: Inspect the recovery tarball before packing
+        working-directory: npm-recovery
+        run: npm pack --dry-run
+      - name: Pack the recovery tarball
+        working-directory: npm-recovery
+        run: npm pack
+      - name: Run the bootstrap unit tests
+        run: node --test "tests/npm/**/*.test.mjs"
+      - name: End-to-end install on x64
+        working-directory: npm-recovery
+        shell: pwsh
+        run: |
+          node bin/devnav.mjs install
+          if ($LASTEXITCODE -ne 0) { throw 'Bootstrap install failed.' }
+      - name: Install pinned package managers
+        shell: pwsh
+        run: |
+          npm install --global --allow-scripts=bun bun@1.3.14 pnpm@11.21.0
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+      - name: Smoke test the recovery tarball
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = "${{ inputs.tag }}".TrimStart('v')
+          $tarball = (Resolve-Path "npm-recovery\jacoboptimiza-devnav-$version.tgz").Path
+          $commands = [ordered]@{
+            'npm'  = { & npx.cmd --yes --package $tarball devnav --version }
+            'bun'  = { & bunx.cmd --bun "@jacoboptimiza/devnav@file:$tarball" --version }
+            'pnpm' = { & pnx.cmd $tarball --version }
+            'yarn' = {
+              & corepack.cmd yarn@4.10.3 dlx `
+                -p "@jacoboptimiza/devnav@file:$tarball" `
+                devnav --version
+            }
+          }
+          foreach ($manager in $commands.GetEnumerator()) {
+            $sandbox = Join-Path $env:RUNNER_TEMP "devnav-recovery-dlx-$($manager.Key)"
+            New-Item -ItemType Directory -Path $sandbox -Force | Out-Null
+            Push-Location $sandbox
+            try {
+              $output = & $manager.Value
+              if ($LASTEXITCODE -ne 0) { throw "$($manager.Key) recovery run failed." }
+              $versionLineFound = $false
+              foreach ($line in $output) {
+                if (([string]$line).Trim() -eq $version) { $versionLineFound = $true; break }
+              }
+              if (-not $versionLineFound) { throw "$($manager.Key) did not emit an exact version line: $output" }
+            }
+            finally { Pop-Location }
+          }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: npm-recovery-${{ inputs.tag }}
+          path: npm-recovery/*.tgz
+          if-no-files-found: error
+
+  npm-recovery-publish:
+    if: ${{ github.event_name == 'workflow_dispatch' && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
+    needs: npm-recovery-package
+    runs-on: ubuntu-latest
+    environment: npm-production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Install a pinned npm CLI
+        run: npm install --global npm@12.0.2
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: npm-recovery-${{ inputs.tag }}
+          path: npm-recovery
+      - name: Stage the exact recovery tarball via OIDC trusted publishing
+        working-directory: npm-recovery
         shell: bash
         run: |
           set -euo pipefail
