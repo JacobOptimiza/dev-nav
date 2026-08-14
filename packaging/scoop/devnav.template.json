@@ -1,5 +1,5 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Native high-performance workspace navigator for PowerShell 7 on Windows.",
   "homepage": "https://github.com/JacobOptimiza/dev-nav",
   "license": "MIT",

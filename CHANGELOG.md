@@ -5,6 +5,8 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-14
+
 ### Added
 
 - Add bilingual English/Spanish TUI text and localized shortcut labels.
