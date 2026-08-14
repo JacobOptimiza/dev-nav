@@ -1,6 +1,6 @@
 {
   "name": "@jacoboptimiza/devnav",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Native high-performance workspace navigator for PowerShell 7 on Windows",
   "license": "MIT",
   "type": "module",
