@@ -78,12 +78,19 @@ jobs:
           New-Item -ItemType File -Path (Join-Path $scoopStage '.devnav-managed-by-scoop') -Force | Out-Null
           Compress-Archive -Path (Join-Path $scoopStage '*') -DestinationPath "DevNav-scoop-${{ matrix.architecture }}.zip" -CompressionLevel Optimal -Force
       - name: Attest built release artifacts
+        id: attest-release-artifacts
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
             ${{ matrix.asset }}
             DevNavSetup-${{ matrix.architecture }}.exe
             DevNav-scoop-${{ matrix.architecture }}.zip
+      - name: Preserve build provenance bundle
+        shell: pwsh
+        run: |
+          Copy-Item "${{ steps.attest-release-artifacts.outputs.bundle-path }}" `
+            "DevNav-build-provenance-${{ matrix.architecture }}.sigstore.json" `
+            -ErrorAction Stop
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.asset }}
@@ -91,6 +98,7 @@ jobs:
             ${{ matrix.asset }}
             DevNavSetup-${{ matrix.architecture }}.exe
             DevNav-scoop-${{ matrix.architecture }}.zip
+            DevNav-build-provenance-${{ matrix.architecture }}.sigstore.json
 
   publish:
     if: ${{ github.event_name == 'push' }}
@@ -203,7 +211,7 @@ jobs:
               }
             }' > release-manifest.json
       - working-directory: artifacts
-        run: sha256sum *.exe *.zip DevNav.psm1 DevNav.psd1 devnav.scoop.json release-manifest.json > SHA256SUMS.txt
+        run: sha256sum *.exe *.zip DevNav-build-provenance-x64.sigstore.json DevNav-build-provenance-arm64.sigstore.json DevNav.psm1 DevNav.psd1 devnav.scoop.json release-manifest.json > SHA256SUMS.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-manifest
@@ -218,6 +226,8 @@ jobs:
             artifacts/*.psm1 \
             artifacts/*.psd1 \
             artifacts/SHA256SUMS.txt \
+            artifacts/DevNav-build-provenance-x64.sigstore.json \
+            artifacts/DevNav-build-provenance-arm64.sigstore.json \
             artifacts/release-manifest.json \
             artifacts/devnav.scoop.json \
             --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag
