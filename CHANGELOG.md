@@ -5,6 +5,18 @@ Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Add bilingual English/Spanish TUI text and localized shortcut labels.
+- Detect the preferred Windows UI language on first launch and request
+  confirmation before asking about startup update checks.
+- Add global `F2` language switching with persisted `es-ES` / `en-US`
+  preferences.
+- Add `dev language`, `dev language es`, `dev language en`,
+  `Get-DevLanguage`, and `Set-DevLanguage`.
+- Standardize the visible shortcut contract as `Shift+...` in English and
+  `Mayús+...` in Spanish, with at most one modifier.
+
 ## [0.10.0] - 2026-08-13
 
 ### Added

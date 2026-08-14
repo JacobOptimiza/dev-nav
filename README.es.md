@@ -198,7 +198,7 @@ principio de la lista, aunque estés navegando por otra ubicación. También se
 muestra el favorito correspondiente al directorio actual, por lo que nunca
 desaparece ninguno al entrar en él.
 
-Los accesos globales se muestran por defecto. Pulsa `Shift+F` (`Mayús+F`) para
+Los accesos globales se muestran por defecto. Pulsa `Mayús+F` para
 ocultarlos o volver a mostrarlos; DevNav conserva esa preferencia entre sesiones.
 Ocultarlos no elimina ningún favorito ni oculta las carpetas reales del
 directorio actual.
@@ -238,6 +238,7 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 | `p` | ir a cualquier ruta absoluta, incluso de otro disco |
 | `Ctrl+S` | guardar la carpeta resaltada como nueva ruta de inicio; requiere confirmación |
 | `F1` | abrir el panel de ayuda con todos los shortcuts y su explicación |
+| `F2` | cambiar entre Español e Inglés |
 
 ### Agentes
 
@@ -246,11 +247,11 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 | `c` | Codex: abrir una sesión nueva (`codex`) en la carpeta resaltada |
 | `r` | Codex: reanudar la última sesión del repositorio (`codex resume --last`) |
 | `d` | abrir Claude Code (`claude`) en la carpeta resaltada |
-| `Shift+D` | reanudar la última sesión de Claude Code del repositorio (`claude --continue`) |
+| `Mayús+D` | reanudar la última sesión de Claude Code del repositorio (`claude --continue`) |
 | `o` | abrir OpenCode (`opencode`) en la carpeta resaltada |
-| `Shift+O` | reanudar la última sesión de OpenCode del repositorio (`opencode --continue`) |
+| `Mayús+O` | reanudar la última sesión de OpenCode del repositorio (`opencode --continue`) |
 | `i` | abrir Kimi Code (`kimi`) en la carpeta resaltada |
-| `Shift+I` | reanudar la última sesión de Kimi Code del repositorio (`kimi --continue`) |
+| `Mayús+I` | reanudar la última sesión de Kimi Code del repositorio (`kimi --continue`) |
 
 ### Organización, búsqueda y acciones
 
@@ -258,12 +259,12 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 |---|---|
 | `/` | activar el filtro fuzzy incremental |
 | `f` | añadir o quitar un favorito global |
-| `Shift+F` | mostrar u ocultar los accesos globales de favoritos; el estado persiste entre sesiones |
+| `Mayús+F` | mostrar u ocultar los accesos globales de favoritos; el estado persiste entre sesiones |
 | `a` | editar el alias de la carpeta resaltada |
 | `e` | escribir y ejecutar un comando en la carpeta resaltada |
 | `u` | refrescar el directorio mostrado |
 | `Ctrl+U` | activar o desactivar la comprobación de actualizaciones al iniciar |
-| `Shift+U` | comprobar y actualizar DevNav a la última versión publicada |
+| `Mayús+U` | comprobar y actualizar DevNav a la última versión publicada |
 | `q` / `Esc` | cancelar y volver a PowerShell |
 
 La barra inferior muestra sólo las acciones esenciales para no saturar la
@@ -275,7 +276,7 @@ comandos de Vim.
 
 ### Comandos personalizados
 
-Asigna comandos a `Shift+1` … `Shift+9` para ejecutarlos en el proyecto
+Asigna comandos a `Mayús+1` … `Mayús+9` para ejecutarlos en el proyecto
 resaltado:
 
 ```powershell
@@ -298,6 +299,25 @@ Los accesos de agentes son opcionales: DevNav devuelve el comando a PowerShell,
 por lo que únicamente necesitas tener instalado y disponible en `PATH` el CLI que
 quieras abrir.
 
+### Idioma
+
+En el primer inicio interactivo, DevNav detecta el primer idioma compatible de
+la lista de idiomas de interfaz preferidos de Windows (`es-*` o `en-*`). Muestra
+una confirmación bilingüe antes de preguntar por las comprobaciones de
+actualizaciones. La elección confirmada se guarda como `es-ES` o `en-US`, por lo
+que solo se pregunta una vez.
+
+Pulsa `F2` en cualquier momento para cambiar de idioma sin perder la carpeta,
+selección, modo, desplazamiento ni texto introducido. Desde PowerShell:
+
+```powershell
+dev language
+dev language en
+dev language es
+```
+
+Los comandos equivalentes del módulo son `Get-DevLanguage` y `Set-DevLanguage`.
+
 ## Actualizar
 
 Desde PowerShell:
@@ -306,7 +326,7 @@ Desde PowerShell:
 dev update
 ```
 
-También puedes pulsar `Shift+U` (`Mayús+U`) dentro de la TUI. DevNav compara la
+También puedes pulsar `Mayús+U` dentro de la TUI. DevNav compara la
 versión instalada con la última release, descarga solo cuando hace falta,
 verifica los archivos con SHA-256 y conserva la configuración local.
 
@@ -420,7 +440,7 @@ y actualiza DevNav. [Ver diagnóstico](TROUBLESHOOTING.es.md#cierre-inesperado-o
 
 ### ¿Cómo actualizo DevNav?
 
-Ejecuta `dev update` desde PowerShell o pulsa `Shift+U` dentro de la TUI. Esto
+Ejecuta `dev update` desde PowerShell o pulsa `Mayús+U` dentro de la TUI. Esto
 también se aplica a instalaciones iniciadas mediante npm, Bun, pnpm o Yarn.
 [Ver pasos](TROUBLESHOOTING.es.md#actualización).
 

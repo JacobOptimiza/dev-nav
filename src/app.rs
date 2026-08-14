@@ -2,6 +2,7 @@ use std::{collections::HashSet, fs, io, path::PathBuf};
 
 use crate::{
     config::Config,
+    i18n::{KeyBinding, KeyToken, Locale, Modifier, format_binding},
     input::{self, Key},
     model::{DirectoryEntry, ShellResult},
     render::{Renderer, fit},
@@ -33,10 +34,12 @@ pub struct App {
     config: Config,
     config_path: PathBuf,
     renderer: Renderer,
+    locale: Locale,
 }
 
 impl App {
     pub fn new(home: PathBuf, config: Config, config_path: PathBuf) -> io::Result<Self> {
+        let locale = config.language().and_then(Locale::from_tag).unwrap_or(Locale::EsEs);
         let mut app = Self {
             current: home.clone(),
             home,
@@ -52,6 +55,7 @@ impl App {
             config,
             config_path,
             renderer: Renderer::new(),
+            locale,
         };
         app.refresh()?;
         Ok(app)
@@ -81,6 +85,10 @@ impl App {
         }
         if matches!(key, Key::F1) {
             self.toggle_help();
+            return Ok(None);
+        }
+        if matches!(key, Key::F2) {
+            self.toggle_language()?;
             return Ok(None);
         }
         match &self.mode {
@@ -141,7 +149,11 @@ impl App {
                             self.scroll = 0;
                             self.refresh()?;
                         } else {
-                            self.message = format!("La ruta no existe: {}", path.display());
+                            self.message = if matches!(self.locale, Locale::EsEs) {
+                                format!("La ruta no existe: {}", path.display())
+                            } else {
+                                format!("Path does not exist: {}", path.display())
+                            };
                             self.input.clear();
                             self.mode = Mode::Normal;
                         }
@@ -169,7 +181,12 @@ impl App {
                         self.input.clear();
                         self.mode = Mode::Normal;
                         self.refresh()?;
-                        self.message = "Alias guardado".into();
+                        self.message = if matches!(self.locale, Locale::EsEs) {
+                            "Alias guardado"
+                        } else {
+                            "Alias saved"
+                        }
+                        .into();
                     }
                     Key::Backspace => {
                         self.input.pop();
@@ -210,11 +227,20 @@ impl App {
                         self.config.save(&self.config_path)?;
                         self.home.clone_from(&target);
                         self.mode = Mode::Normal;
-                        self.message = format!("Ruta de inicio guardada: {}", target.display());
+                        self.message = if matches!(self.locale, Locale::EsEs) {
+                            format!("Ruta de inicio guardada: {}", target.display())
+                        } else {
+                            format!("Startup folder saved: {}", target.display())
+                        };
                     }
                     Key::Escape | Key::Char('q') => {
                         self.mode = Mode::Normal;
-                        self.message = "Cambio de ruta cancelado".into();
+                        self.message = if matches!(self.locale, Locale::EsEs) {
+                            "Cambio de ruta cancelado"
+                        } else {
+                            "Startup folder change cancelled"
+                        }
+                        .into();
                     }
                     _ => {}
                 }
@@ -248,7 +274,12 @@ impl App {
             }
             Key::Char('u') => {
                 self.refresh()?;
-                self.message = "Directorio actualizado".into();
+                self.message = if matches!(self.locale, Locale::EsEs) {
+                    "Directorio actualizado"
+                } else {
+                    "Directory refreshed"
+                }
+                .into();
             }
             Key::Char('U') => return Ok(Some(Some(ShellResult::Update))),
             Key::CtrlU => self.toggle_update_checks()?,
@@ -389,8 +420,14 @@ impl App {
             let enabled = self.config.toggle_favorite(&path);
             self.config.save(&self.config_path)?;
             self.refresh()?;
-            self.message =
-                if enabled { "Añadido a favoritos" } else { "Eliminado de favoritos" }.into();
+            self.message = if matches!(self.locale, Locale::EsEs) {
+                if enabled { "Añadido a favoritos" } else { "Eliminado de favoritos" }
+            } else if enabled {
+                "Added to favorites"
+            } else {
+                "Removed from favorites"
+            }
+            .into();
         }
         Ok(())
     }
@@ -401,19 +438,42 @@ impl App {
         self.selected = 0;
         self.scroll = 0;
         self.refresh()?;
-        self.message =
+        self.message = if matches!(self.locale, Locale::EsEs) {
             if visible { "Favoritos globales visibles" } else { "Favoritos globales ocultos" }
-                .into();
+        } else if visible {
+            "Global favorites visible"
+        } else {
+            "Global favorites hidden"
+        }
+        .into();
         Ok(())
     }
 
     fn toggle_update_checks(&mut self) -> io::Result<()> {
         let enabled = self.config.toggle_update_checks();
         self.config.save(&self.config_path)?;
-        self.message = if enabled {
-            "Comprobación de actualizaciones al iniciar: activada"
+        self.message = if matches!(self.locale, Locale::EsEs) {
+            if enabled {
+                "Comprobación de actualizaciones al iniciar: activada"
+            } else {
+                "Comprobación de actualizaciones al iniciar: desactivada"
+            }
+        } else if enabled {
+            "Startup update checks: enabled"
         } else {
-            "Comprobación de actualizaciones al iniciar: desactivada"
+            "Startup update checks: disabled"
+        }
+        .into();
+        Ok(())
+    }
+
+    fn toggle_language(&mut self) -> io::Result<()> {
+        self.locale = self.locale.other();
+        self.config.set_language(self.locale.tag());
+        self.config.save(&self.config_path)?;
+        self.message = match self.locale {
+            Locale::EsEs => "Idioma: Español",
+            Locale::EnUs => "Language: English",
         }
         .into();
         Ok(())
@@ -497,9 +557,15 @@ impl App {
             "─"
         ));
         let list_header = if self.config.show_favorites() {
-            "★  FAVORITOS VISIBLES · ALIAS / DIRECTORIO"
+            match self.locale {
+                Locale::EsEs => "★  FAVORITOS VISIBLES · ALIAS / DIRECTORIO",
+                Locale::EnUs => "★  FAVORITES VISIBLE · ALIAS / DIRECTORY",
+            }
         } else {
-            "☆  FAVORITOS OCULTOS · Mayús+F para mostrar"
+            match self.locale {
+                Locale::EsEs => "☆  FAVORITOS OCULTOS · Mayús+F para mostrar",
+                Locale::EnUs => "☆  FAVORITES HIDDEN · Shift+F to show",
+            }
         };
         rows.push(format!(
             "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
@@ -507,9 +573,10 @@ impl App {
         ));
         rows.push(format!("\x1b[38;2;90;100;120m├{}┤\x1b[0m", "─".repeat(width.saturating_sub(2))));
 
-        let lines = help_lines(&self.config);
-        let help_layout = matches!(self.mode, Mode::Help)
-            .then(|| HelpLayout::new(inner, list_height, &mut self.help_scroll, lines.clone()));
+        let lines = help_lines_for(&self.config, self.locale);
+        let help_layout = matches!(self.mode, Mode::Help).then(|| {
+            HelpLayout::new(inner, list_height, &mut self.help_scroll, lines.clone(), self.locale)
+        });
         for row_index in 0..list_height {
             let content = if let Some(layout) = &help_layout {
                 layout.render_row(row_index, inner)
@@ -541,21 +608,56 @@ impl App {
         let prompt = match self.mode {
             Mode::Normal => {
                 if self.message.is_empty() {
-                    format!("{} carpetas", self.visible.len())
+                    if matches!(self.locale, Locale::EsEs) {
+                        format!("{} carpetas", self.visible.len())
+                    } else {
+                        format!("{} folders", self.visible.len())
+                    }
                 } else {
                     self.message.clone()
                 }
             }
-            Mode::Help => format!(
-                "Shortcuts · {} acciones disponibles",
-                lines.iter().filter(|line| matches!(line, HelpLine::Shortcut(_, _))).count()
-            ),
+            Mode::Help => {
+                if matches!(self.locale, Locale::EsEs) {
+                    format!(
+                        "Atajos · {} acciones disponibles",
+                        lines
+                            .iter()
+                            .filter(|line| matches!(line, HelpLine::Shortcut(_, _)))
+                            .count()
+                    )
+                } else {
+                    format!(
+                        "Shortcuts · {} actions available",
+                        lines
+                            .iter()
+                            .filter(|line| matches!(line, HelpLine::Shortcut(_, _)))
+                            .count()
+                    )
+                }
+            }
             Mode::Filter => format!("/{}", self.input),
-            Mode::Path => format!("ruta › {}_", self.input),
+            Mode::Path => {
+                if matches!(self.locale, Locale::EsEs) {
+                    format!("ruta › {}_", self.input)
+                } else {
+                    format!("path › {}_", self.input)
+                }
+            }
             Mode::Alias { .. } => format!("alias › {}_", self.input),
-            Mode::Command { .. } => format!("comando › {}_", self.input),
+            Mode::Command { .. } => {
+                if matches!(self.locale, Locale::EsEs) {
+                    format!("comando › {}_", self.input)
+                } else {
+                    format!("command › {}_", self.input)
+                }
+            }
             Mode::ConfirmRoot { ref target } => {
-                format!("¿Guardar como inicio?  {}", target.display())
+                if matches!(self.locale, Locale::EsEs) {
+                    format!("¿Guardar como inicio?  {}", target.display())
+                } else {
+                    format!("Save as startup folder?  {}", target.display())
+                }
             }
         };
         rows.push(format!(
@@ -574,9 +676,9 @@ impl App {
     /// bound slots are visible at a glance; other modes reuse the static copy.
     fn footer_line(&self) -> String {
         let Mode::Normal = &self.mode else {
-            return footer_help(&self.mode).to_string();
+            return footer_help_for(&self.mode, self.locale).to_string();
         };
-        let mut footer = footer_help(&Mode::Normal).to_string();
+        let mut footer = footer_help_for(&Mode::Normal, self.locale).to_string();
         let shortcuts = self.config.configured_shortcuts();
         if shortcuts.is_empty() {
             return footer;
@@ -584,7 +686,11 @@ impl App {
         footer.push_str("  ");
         for (slot, shortcut) in shortcuts {
             use std::fmt::Write as _;
-            let _ = write!(footer, "⇧{slot}");
+            let binding = format_binding(
+                KeyBinding::with_modifier(Modifier::Shift, KeyToken::Char(char::from(b'0' + slot))),
+                self.locale,
+            );
+            let _ = write!(footer, "{binding}");
             if let Some(alias) = shortcut.alias.as_deref().filter(|alias| !alias.is_empty()) {
                 footer.push(' ');
                 footer.push_str(alias);
@@ -602,58 +708,151 @@ enum HelpLine {
     Blank,
 }
 
+#[allow(dead_code)]
 fn help_lines(config: &Config) -> Vec<HelpLine> {
+    help_lines_for(config, Locale::EsEs)
+}
+
+fn help_lines_for(config: &Config, locale: Locale) -> Vec<HelpLine> {
+    let es = matches!(locale, Locale::EsEs);
+    let shift = |key: char| {
+        format_binding(KeyBinding::with_modifier(Modifier::Shift, KeyToken::Char(key)), locale)
+    };
+    let text = |es_text: &'static str, en_text: &'static str| if es { es_text } else { en_text };
     let mut lines: Vec<HelpLine> = vec![
-        HelpLine::Section("NAVEGACIÓN".into()),
-        HelpLine::Shortcut("↑ / ↓ · j / k".into(), "Navegar por las carpetas".into()),
-        HelpLine::Shortcut("→ / l".into(), "Entrar en la carpeta resaltada".into()),
-        HelpLine::Shortcut("← / h / Retroceso".into(), "Volver a la carpeta padre".into()),
-        HelpLine::Shortcut("Enter".into(), "Seleccionar carpeta y volver a PowerShell".into()),
-        HelpLine::Shortcut(".".into(), "Seleccionar la carpeta mostrada".into()),
-        HelpLine::Shortcut("g".into(), "Volver a la ruta de inicio".into()),
-        HelpLine::Shortcut("p".into(), "Abrir cualquier ruta o unidad".into()),
-        HelpLine::Shortcut("Ctrl+S".into(), "Guardar la carpeta resaltada como inicio".into()),
-        HelpLine::Blank,
-        HelpLine::Section("BÚSQUEDA Y ORGANIZACIÓN".into()),
-        HelpLine::Shortcut("/".into(), "Filtrar carpetas mientras escribes".into()),
-        HelpLine::Shortcut("f".into(), "Añadir o quitar un favorito global".into()),
-        HelpLine::Shortcut("Mayús+F".into(), "Mostrar u ocultar los favoritos globales".into()),
-        HelpLine::Shortcut("a".into(), "Crear o editar el alias de la carpeta".into()),
-        HelpLine::Shortcut("u".into(), "Actualizar el directorio actual".into()),
-        HelpLine::Shortcut("Ctrl+U".into(), "Activar o desactivar comprobación al iniciar".into()),
-        HelpLine::Shortcut("Mayús+U".into(), "Actualizar DevNav a la última versión".into()),
-        HelpLine::Blank,
-        HelpLine::Section("AGENTES EN EL REPOSITORIO".into()),
-        HelpLine::Shortcut("c".into(), "Codex: sesión nueva".into()),
-        HelpLine::Shortcut("r".into(), "Codex: última sesión del repositorio".into()),
+        HelpLine::Section(text("NAVEGACIÓN", "NAVIGATION").into()),
         HelpLine::Shortcut(
-            "d / Mayús+D".into(),
-            "Claude Code: sesión nueva / última sesión".into(),
+            "↑ / ↓ · j / k".into(),
+            text("Navegar por las carpetas", "Navigate folders").into(),
         ),
-        HelpLine::Shortcut("o / Mayús+O".into(), "OpenCode: sesión nueva / última sesión".into()),
-        HelpLine::Shortcut("i / Mayús+I".into(), "Kimi: sesión nueva / última sesión".into()),
-        HelpLine::Blank,
-        HelpLine::Section("ACCIONES".into()),
-        HelpLine::Shortcut("e / :".into(), "Ejecutar un comando en la carpeta resaltada".into()),
         HelpLine::Shortcut(
-            "⇧1-⇧9".into(),
-            "Ejecutar un atajo configurado en la carpeta resaltada".into(),
+            "→ / l".into(),
+            text("Entrar en la carpeta resaltada", "Open highlighted folder").into(),
         ),
-        HelpLine::Shortcut("F1".into(), "Abrir o cerrar este panel de ayuda".into()),
-        HelpLine::Shortcut("q / Esc".into(), "Salir de DevNav o cancelar".into()),
+        HelpLine::Shortcut(
+            format!("← / h / {}", format_binding(KeyBinding::plain(KeyToken::Backspace), locale)),
+            text("Volver a la carpeta padre", "Go to parent folder").into(),
+        ),
+        HelpLine::Shortcut(
+            format_binding(KeyBinding::plain(KeyToken::Enter), locale),
+            text(
+                "Seleccionar carpeta y volver a PowerShell",
+                "Select folder and return to PowerShell",
+            )
+            .into(),
+        ),
+        HelpLine::Shortcut(
+            ".".into(),
+            text("Seleccionar la carpeta mostrada", "Select the current folder").into(),
+        ),
+        HelpLine::Shortcut(
+            "g".into(),
+            text("Volver a la ruta de inicio", "Return to startup folder").into(),
+        ),
+        HelpLine::Shortcut(
+            "p".into(),
+            text("Abrir cualquier ruta o unidad", "Open any path or drive").into(),
+        ),
+        HelpLine::Shortcut(
+            format_binding(KeyBinding::with_modifier(Modifier::Ctrl, KeyToken::Char('S')), locale),
+            text(
+                "Guardar la carpeta resaltada como inicio",
+                "Save highlighted folder as startup folder",
+            )
+            .into(),
+        ),
+        HelpLine::Blank,
+        HelpLine::Section(text("BÚSQUEDA Y ORGANIZACIÓN", "SEARCH AND ORGANIZATION").into()),
+        HelpLine::Shortcut(
+            "/".into(),
+            text("Filtrar carpetas mientras escribes", "Filter folders as you type").into(),
+        ),
+        HelpLine::Shortcut(
+            "f".into(),
+            text("Añadir o quitar un favorito global", "Add or remove a global favorite").into(),
+        ),
+        HelpLine::Shortcut(
+            shift('F'),
+            text("Mostrar u ocultar los favoritos globales", "Show or hide global favorites")
+                .into(),
+        ),
+        HelpLine::Shortcut(
+            "a".into(),
+            text("Crear o editar el alias de la carpeta", "Create or edit the folder alias").into(),
+        ),
+        HelpLine::Shortcut(
+            "u".into(),
+            text("Actualizar el directorio actual", "Refresh the current directory").into(),
+        ),
+        HelpLine::Shortcut(
+            format_binding(KeyBinding::with_modifier(Modifier::Ctrl, KeyToken::Char('U')), locale),
+            text(
+                "Activar o desactivar comprobación al iniciar",
+                "Enable or disable startup checks",
+            )
+            .into(),
+        ),
+        HelpLine::Shortcut(
+            shift('U'),
+            text("Actualizar DevNav a la última versión", "Update DevNav to the latest version")
+                .into(),
+        ),
+        HelpLine::Blank,
+        HelpLine::Section(text("AGENTES EN EL REPOSITORIO", "AGENTS IN REPOSITORY").into()),
+        HelpLine::Shortcut("c".into(), text("Codex: sesión nueva", "Codex: new session").into()),
+        HelpLine::Shortcut(
+            "r".into(),
+            text("Codex: última sesión del repositorio", "Codex: resume last session").into(),
+        ),
+        HelpLine::Shortcut(
+            format!("d / {}", shift('D')),
+            text("Claude Code: sesión nueva / última sesión", "Claude Code: new / last session")
+                .into(),
+        ),
+        HelpLine::Shortcut(
+            format!("o / {}", shift('O')),
+            text("OpenCode: sesión nueva / última sesión", "OpenCode: new / last session").into(),
+        ),
+        HelpLine::Shortcut(
+            format!("i / {}", shift('I')),
+            text("Kimi: sesión nueva / última sesión", "Kimi: new / last session").into(),
+        ),
+        HelpLine::Blank,
+        HelpLine::Section(text("ACCIONES", "ACTIONS").into()),
+        HelpLine::Shortcut(
+            "e / :".into(),
+            text(
+                "Ejecutar un comando en la carpeta resaltada",
+                "Run a command in the highlighted folder",
+            )
+            .into(),
+        ),
+        HelpLine::Shortcut(
+            format!("{} … {}", shift('1'), shift('9')),
+            text("Ejecutar un comando personalizado", "Run a configured custom command").into(),
+        ),
+        HelpLine::Shortcut(
+            "F1".into(),
+            text("Abrir o cerrar este panel de ayuda", "Open or close this help").into(),
+        ),
+        HelpLine::Shortcut("F2".into(), text("Cambiar idioma", "Change language").into()),
+        HelpLine::Shortcut(
+            "q / Esc".into(),
+            text("Salir de DevNav o cancelar", "Quit DevNav or cancel").into(),
+        ),
     ];
     // Dynamic section: only configured slots appear, so the panel never lists
     // nine empty entries.
     let shortcuts = config.configured_shortcuts();
     if !shortcuts.is_empty() {
         lines.push(HelpLine::Blank);
-        lines.push(HelpLine::Section("ATAJOS PERSONALIZADOS".into()));
+        lines.push(HelpLine::Section(text("ATAJOS PERSONALIZADOS", "CUSTOM COMMANDS").into()));
         for (slot, shortcut) in shortcuts {
             let description = match shortcut.alias.as_deref().filter(|alias| !alias.is_empty()) {
                 Some(alias) => format!("{alias} → {}", shortcut.command),
                 None => shortcut.command.clone(),
             };
-            lines.push(HelpLine::Shortcut(format!("⇧{slot}"), description));
+            lines.push(HelpLine::Shortcut(shift(char::from(b'0' + slot)), description));
         }
     }
     lines
@@ -665,16 +864,30 @@ struct HelpLayout {
     top: usize,
     start: usize,
     lines: Vec<HelpLine>,
+    locale: Locale,
 }
 
 impl HelpLayout {
-    fn new(inner: usize, list_height: usize, scroll: &mut usize, lines: Vec<HelpLine>) -> Self {
+    fn new(
+        inner: usize,
+        list_height: usize,
+        scroll: &mut usize,
+        lines: Vec<HelpLine>,
+        locale: Locale,
+    ) -> Self {
         let width = inner.min(104);
         let height = list_height.min(lines.len().saturating_add(2));
         let capacity = height.saturating_sub(2);
         let max_scroll = lines.len().saturating_sub(capacity);
         *scroll = (*scroll).min(max_scroll);
-        Self { width, height, top: list_height.saturating_sub(height) / 2, start: *scroll, lines }
+        Self {
+            width,
+            height,
+            top: list_height.saturating_sub(height) / 2,
+            start: *scroll,
+            lines,
+            locale,
+        }
     }
 
     fn render_row(&self, row: usize, outer_width: usize) -> String {
@@ -683,9 +896,24 @@ impl HelpLayout {
         }
         let local = row - self.top;
         let panel = if local == 0 {
-            panel_border(self.width, "SHORTCUTS", true)
+            panel_border(
+                self.width,
+                if matches!(self.locale, Locale::EsEs) {
+                    "ATAJOS DE TECLADO"
+                } else {
+                    "KEYBOARD SHORTCUTS"
+                },
+                true,
+            )
         } else if local + 1 == self.height {
-            panel_border(self.width, "↑↓ DESPLAZAR  ·  F1 / ESC CERRAR", false)
+            panel_border(
+                self.width,
+                match self.locale {
+                    Locale::EsEs => "↑↓ DESPLAZAR · F1 / ESC CERRAR",
+                    Locale::EnUs => "↑↓ SCROLL · F1 / ESC CLOSE",
+                },
+                false,
+            )
         } else {
             render_help_line(
                 self.lines.get(self.start + local - 1).cloned().unwrap_or(HelpLine::Blank),
@@ -729,10 +957,28 @@ fn panel_border(width: usize, label: &str, top: bool) -> String {
     format!("\x1b[38;2;116;199;236m{prefix}{}{right}\x1b[0m", "─".repeat(fill))
 }
 
+#[allow(dead_code)]
 fn footer_help(mode: &Mode) -> &'static str {
+    footer_help_for(mode, Locale::EsEs)
+}
+
+fn footer_help_for(mode: &Mode, locale: Locale) -> &'static str {
+    if matches!(locale, Locale::EnUs) {
+        return match mode {
+            Mode::Normal => {
+                "↑↓ Navigate  Enter Select  → Open  Ctrl+S Home  F1 Help  F2 Language  q Quit"
+            }
+            Mode::Help => "↑↓ Scroll  F1 / Esc Close help",
+            Mode::Filter => "Type to filter  ↑↓ Navigate  Enter Apply  Esc Cancel",
+            Mode::Path => "Type a path  Enter Open  Esc Cancel",
+            Mode::Alias { .. } => "Type an alias  Enter Save  Esc Cancel",
+            Mode::Command { .. } => "Type a command  Enter Run  Esc Cancel",
+            Mode::ConfirmRoot { .. } => "Enter Confirm startup folder  Esc Cancel",
+        };
+    }
     match mode {
         Mode::Normal => {
-            "↑↓ Navegar  Enter Seleccionar  → Abrir  Ctrl+S Guardar inicio  F1 Shortcuts  q Salir"
+            "↑↓ Navegar  Enter Seleccionar  → Abrir  Ctrl+S Inicio  F1 Ayuda  F2 Idioma  q Salir"
         }
         Mode::Help => "↑↓ Desplazar  F1 / Esc Cerrar ayuda",
         Mode::Filter => "Escribe para buscar  ↑↓ Navegar  Enter Aplicar  Esc Cancelar",
@@ -836,10 +1082,28 @@ mod tests {
     fn normal_footer_keeps_help_discoverable_without_overloading_it() {
         let footer = footer_help(&Mode::Normal);
 
-        assert!(footer.contains("Ctrl+S Guardar inicio"));
-        assert!(footer.contains("F1 Shortcuts"));
+        assert!(footer.contains("Ctrl+S Inicio"));
+        assert!(footer.contains("F1 Ayuda"));
         assert!(footer.contains("Enter Seleccionar"));
         assert!(footer.chars().count() < 90);
+    }
+
+    #[test]
+    fn f2_toggles_language_persists_and_keeps_help_open() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let sandbox = std::env::temp_dir().join(format!("devnav-language-app-{unique}"));
+        fs::create_dir_all(&sandbox).expect("create sandbox");
+        let config_path = sandbox.join("config.tsv");
+        let mut config = Config::default();
+        config.set_language("es-ES");
+        let mut app = App::new(sandbox.clone(), config, config_path.clone()).expect("create app");
+        app.handle_key(Key::F1).expect("open help");
+        assert!(matches!(app.mode, Mode::Help));
+        app.handle_key(Key::F2).expect("toggle language");
+        assert!(matches!(app.mode, Mode::Help));
+        assert_eq!(app.locale, crate::i18n::Locale::EnUs);
+        assert_eq!(Config::load(&config_path).expect("load").language(), Some("en-US"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 
     #[test]
@@ -1004,7 +1268,7 @@ mod tests {
         let descriptions: Vec<String> = lines
             .iter()
             .filter_map(|line| match line {
-                super::HelpLine::Shortcut(key, description) if key.starts_with('⇧') => {
+                super::HelpLine::Shortcut(key, description) if key.starts_with("Mayús+") => {
                     Some(description.clone())
                 }
                 _ => None,
@@ -1032,10 +1296,10 @@ mod tests {
         let app = App::new(root, config, sandbox.join("config.tsv")).expect("create app");
         let footer = app.footer_line();
 
-        assert!(footer.contains("⇧1 Dev"));
-        assert!(footer.contains("⇧2"));
+        assert!(footer.contains("Mayús+1 Dev"));
+        assert!(footer.contains("Mayús+2"));
         // Unconfigured slots must not clutter the footer.
-        assert!(!footer.contains("⇧3"));
+        assert!(!footer.contains("Mayús+3"));
         fs::remove_dir_all(sandbox).expect("clean test sandbox");
     }
 }
