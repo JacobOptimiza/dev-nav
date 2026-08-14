@@ -63,6 +63,7 @@ pub enum TextId {
     Update,
     Quit,
     ManagerTitle,
+    DeleteTitle,
     Empty,
     AliasOptional,
     Command,
@@ -81,6 +82,8 @@ pub fn text(locale: Locale, id: TextId) -> &'static str {
     match (locale, id) {
         (Locale::EsEs, TextId::ManagerTitle) => "COMANDOS PERSONALIZADOS",
         (Locale::EnUs, TextId::ManagerTitle) => "CUSTOM COMMANDS",
+        (Locale::EsEs, TextId::DeleteTitle) => "ELIMINAR COMANDO",
+        (Locale::EnUs, TextId::DeleteTitle) => "REMOVE COMMAND",
         (Locale::EsEs, TextId::Empty) => "Vacío",
         (Locale::EnUs, TextId::Empty) => "Empty",
         (Locale::EsEs, TextId::AliasOptional) => "Alias (opcional)",
@@ -124,10 +127,28 @@ pub fn manager_footer(locale: Locale) -> &'static str {
     }
 }
 
+pub fn manager_footer_compact(locale: Locale) -> &'static str {
+    match locale {
+        Locale::EsEs => "↑↓ · Enter · Supr · Esc",
+        Locale::EnUs => "↑↓ · Enter · Del · Esc",
+    }
+}
+
 pub fn editor_footer(locale: Locale) -> &'static str {
     match locale {
         Locale::EsEs => "Tab Cambiar campo · Enter Guardar · Esc Cancelar",
         Locale::EnUs => "Tab Switch field · Enter Save · Esc Cancel",
+    }
+}
+
+pub fn editor_footer_compact(_locale: Locale) -> &'static str {
+    "Tab · Enter · Esc"
+}
+
+pub fn delete_footer(locale: Locale) -> &'static str {
+    match locale {
+        Locale::EsEs => "Enter Confirmar · Esc Cancelar",
+        Locale::EnUs => "Enter Confirm · Esc Cancel",
     }
 }
 
@@ -142,8 +163,8 @@ pub fn editor_title(locale: Locale, is_new: bool) -> &'static str {
 
 pub fn delete_prompt(locale: Locale) -> &'static str {
     match locale {
-        Locale::EsEs => "¿Eliminar",
-        Locale::EnUs => "Remove",
+        Locale::EsEs => "¿Eliminar este comando?",
+        Locale::EnUs => "Remove this command?",
     }
 }
 
