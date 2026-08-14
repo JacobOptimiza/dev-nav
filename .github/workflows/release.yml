@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # pinned action
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # upstream commit
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
@@ -46,13 +46,18 @@ jobs:
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "${{ matrix.asset }}"
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "release-assets/dev.exe"
           Copy-Item "powershell/DevNav.psm1" "release-assets/DevNav.psm1"
-          $expectedInnoSha256 = '4D11E8050B6185E0D49BD9E8CC661A7A59F44959A621D31D11033124C4E8A7B0'
-          $innoInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.1.exe'
-          $innoRoot = Join-Path $env:RUNNER_TEMP 'InnoSetup-6.7.1'
+          $expectedInnoSha256 = if ('${{ matrix.architecture }}' -eq 'x64') {
+            '0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F'
+          } else {
+            'F9671174E0D15BA9B4F6B56564C6AED32EA8DB9C3CB9BF6F2AF0850FE7894F60'
+          }
+          $innoAsset = if ('${{ matrix.architecture }}' -eq 'x64') { 'innosetup-7.1.0-x64.exe' } else { 'innosetup-7.1.0-x86.exe' }
+          $innoInstaller = Join-Path $env:RUNNER_TEMP $innoAsset
+          $innoRoot = Join-Path $env:RUNNER_TEMP 'InnoSetup-7.1.0'
           $downloadedInno = $false
           for ($attempt = 1; $attempt -le 5; $attempt++) {
             try {
-              Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_1/innosetup-6.7.1.exe' -OutFile $innoInstaller -ErrorAction Stop
+              Invoke-WebRequest -Uri "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/$innoAsset" -OutFile $innoInstaller -ErrorAction Stop
               $downloadedInno = $true
               break
             }
@@ -243,7 +248,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Node 24 is the canonical LTS baseline for release and npm
           # publishing; Node 22 stays supported and Node 26 is exercised in CI
@@ -306,7 +311,7 @@ jobs:
         run: |
           npm install --global --allow-scripts=bun bun@1.3.14 pnpm@11.21.0
           corepack enable
-          corepack prepare yarn@4.10.3 --activate
+          corepack prepare yarn@4.18.0 --activate
       - name: Smoke test the documented ephemeral invocations
         shell: pwsh
         run: |
@@ -320,7 +325,7 @@ jobs:
             'bun'  = { & bunx.cmd --bun "@jacoboptimiza/devnav@file:$tarball" --version }
             'pnpm' = { & pnx.cmd $tarball --version }
             'yarn' = {
-              & corepack.cmd yarn@4.10.3 dlx `
+              & corepack.cmd yarn@4.18.0 dlx `
                 -p "@jacoboptimiza/devnav@file:$tarball" `
                 devnav --version
             }
@@ -360,7 +365,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
       - name: Install a pinned npm CLI
@@ -404,7 +409,7 @@ jobs:
             --pattern 'DevNavSetup-x64.exe' `
             --pattern 'DevNavSetup-arm64.exe' `
             --pattern 'release-manifest.json'
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
       - name: Install a pinned npm CLI
@@ -455,7 +460,7 @@ jobs:
         run: |
           npm install --global --allow-scripts=bun bun@1.3.14 pnpm@11.21.0
           corepack enable
-          corepack prepare yarn@4.10.3 --activate
+          corepack prepare yarn@4.18.0 --activate
       - name: Smoke test the recovery tarball
         shell: pwsh
         run: |
@@ -467,7 +472,7 @@ jobs:
             'bun'  = { & bunx.cmd --bun "@jacoboptimiza/devnav@file:$tarball" --version }
             'pnpm' = { & pnx.cmd $tarball --version }
             'yarn' = {
-              & corepack.cmd yarn@4.10.3 dlx `
+              & corepack.cmd yarn@4.18.0 dlx `
                 -p "@jacoboptimiza/devnav@file:$tarball" `
                 devnav --version
             }
@@ -502,7 +507,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
       - name: Install a pinned npm CLI
