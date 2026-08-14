@@ -46,31 +46,6 @@ jobs:
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "${{ matrix.asset }}"
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "release-assets/dev.exe"
           Copy-Item "powershell/DevNav.psm1" "release-assets/DevNav.psm1"
-          $expectedInnoSha256 = if ('${{ matrix.architecture }}' -eq 'x64') {
-            '0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F'
-          } else {
-            'F9671174E0D15BA9B4F6B56564C6AED32EA8DB9C3CB9BF6F2AF0850FE7894F60'
-          }
-          $innoAsset = if ('${{ matrix.architecture }}' -eq 'x64') { 'innosetup-7.1.0-x64.exe' } else { 'innosetup-7.1.0-x86.exe' }
-          $innoInstaller = Join-Path $env:RUNNER_TEMP $innoAsset
-          $innoRoot = Join-Path $env:RUNNER_TEMP 'InnoSetup-7.1.0'
-          $downloadedInno = $false
-          for ($attempt = 1; $attempt -le 5; $attempt++) {
-            try {
-              Invoke-WebRequest -Uri "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/$innoAsset" -OutFile $innoInstaller -ErrorAction Stop
-              $downloadedInno = $true
-              break
-            }
-            catch {
-              if ($attempt -eq 5) { throw }
-              Start-Sleep -Seconds ([Math]::Min($attempt * 2, 10))
-            }
-          }
-          if (-not $downloadedInno) { throw 'Inno Setup download did not complete.' }
-          $actualInnoSha256 = (Get-FileHash $innoInstaller -Algorithm SHA256).Hash
-          if ($actualInnoSha256 -ne $expectedInnoSha256) { throw 'Inno Setup checksum mismatch.' }
-          Start-Process -FilePath $innoInstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$innoRoot" -Wait -NoNewWindow
-          $iscc = Join-Path $innoRoot 'ISCC.exe'
           $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
           git fetch origin main --quiet
           git merge-base --is-ancestor $env:GITHUB_SHA origin/main
@@ -83,9 +58,7 @@ jobs:
           if ($npmPackageVersion -ne $version) { throw "Tag version $version does not match packaging/npm/package.json version $npmPackageVersion." }
           $scoopTemplateVersion = (Get-Content packaging/scoop/devnav.template.json -Raw | ConvertFrom-Json).version
           if ($scoopTemplateVersion -ne $version) { throw "Tag version $version does not match packaging/scoop/devnav.template.json version $scoopTemplateVersion." }
-          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw 'Verified Inno Setup compiler was not found.' }
-          & $iscc "/Qp" "/DMyAppVersion=$version" "/DArchitecture=${{ matrix.architecture }}" "installer\DevNav.iss"
-          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
+          & ./scripts/invoke-inno-compiler.ps1 -Architecture '${{ matrix.architecture }}' -Version $version
           Copy-Item "release-assets/DevNavSetup-${{ matrix.architecture }}.exe" "DevNavSetup-${{ matrix.architecture }}.exe"
           if ([version]$version -le [version]'0.9.7') {
             throw "npm/Scoop channels must not publish v${version}; the first multichannel release must be newer than 0.9.7."

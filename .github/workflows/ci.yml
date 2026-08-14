@@ -124,3 +124,27 @@ jobs:
           finally {
             Pop-Location
           }
+
+  installer-smoke:
+    name: installer smoke (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            architecture: x64
+          - runner: windows-11-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare safe compiler payload
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release-assets -Force | Out-Null
+          Set-Content -Path release-assets\dev.exe -Value 'CI compiler smoke payload'
+      - name: Compile installer with verified Inno Setup
+        shell: pwsh
+        run: ./scripts/invoke-inno-compiler.ps1 -Architecture '${{ matrix.architecture }}' -Version '0.12.0'
