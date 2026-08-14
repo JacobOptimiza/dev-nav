@@ -1,0 +1,21 @@
+[package]
+name = "dev-nav-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.dev-nav]
+path = ".."
+
+[[bin]]
+name = "config_tsv_parser"
+path = "fuzz_targets/config_tsv_parser.rs"
+test = false
+doc = false
+bench = false

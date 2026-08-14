@@ -1,0 +1,31 @@
+name: Install verified npm CLI
+description: Download npm 12.0.2 from the public registry and verify its official SHA-512 integrity before exposing it on PATH.
+
+runs:
+  using: composite
+  steps:
+    - name: Download and verify npm 12.0.2
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $version = '12.0.2'
+        $integrity = 'sha512-uIXokLlBj6FpNUTQX1PmT5pz7BlIN9QlixX+zdaSNHsd0qUXsbDLr50xzY6Sw7cJVr0uzHKDOle0swmPW/p5Qw=='
+        $tarball = 'https://registry.npmjs.org/npm/-/npm-12.0.2.tgz'
+        $root = Join-Path $env:RUNNER_TEMP "devnav-npm-$version"
+        $archive = Join-Path $env:RUNNER_TEMP "npm-$version.tgz"
+
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        Invoke-WebRequest -Uri $tarball -OutFile $archive
+        $actual = 'sha512-' + [Convert]::ToBase64String([Security.Cryptography.SHA512]::HashData([IO.File]::ReadAllBytes($archive)))
+        if ($actual -ne $integrity) {
+          throw "npm $version integrity mismatch: expected $integrity, got $actual"
+        }
+
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        tar -xzf $archive -C $root
+        @"
+        @echo off
+        node "%~dp0package\bin\npm-cli.js" %*
+        "@ | Set-Content -LiteralPath (Join-Path $root 'npm.cmd') -NoNewline
+        $root | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        & (Join-Path $root 'npm.cmd') --version

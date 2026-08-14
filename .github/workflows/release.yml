@@ -29,6 +29,10 @@ jobs:
             asset: dev-windows-aarch64.exe
             architecture: arm64
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -73,6 +77,13 @@ jobs:
           Copy-Item "powershell/DevNav.psd1" (Join-Path $scoopStage 'DevNav.psd1')
           New-Item -ItemType File -Path (Join-Path $scoopStage '.devnav-managed-by-scoop') -Force | Out-Null
           Compress-Archive -Path (Join-Path $scoopStage '*') -DestinationPath "DevNav-scoop-${{ matrix.architecture }}.zip" -CompressionLevel Optimal -Force
+      - name: Attest built release artifacts
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ matrix.asset }}
+            DevNavSetup-${{ matrix.architecture }}.exe
+            DevNav-scoop-${{ matrix.architecture }}.zip
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.asset }}
@@ -227,8 +238,8 @@ jobs:
           # publishing; Node 22 stays supported and Node 26 is exercised in CI
           # for forward compatibility, but release ships on 24.
           node-version: '24'
-      - name: Install a pinned npm CLI
-        run: npm install --global npm@12.0.2
+      - name: Install verified npm CLI
+        uses: ./.github/actions/install-npm-cli
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: artifacts
@@ -338,11 +349,14 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
-      - name: Install a pinned npm CLI
-        run: npm install --global npm@12.0.2
+      - name: Install verified npm CLI
+        uses: ./.github/actions/install-npm-cli
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: npm-package-${{ github.ref_name }}
@@ -385,8 +399,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
-      - name: Install a pinned npm CLI
-        run: npm install --global npm@12.0.2
+      - name: Install verified npm CLI
+        uses: ./.github/actions/install-npm-cli
       - name: Assemble and verify the recovery package
         shell: pwsh
         env:
@@ -480,11 +494,15 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
-      - name: Install a pinned npm CLI
-        run: npm install --global npm@12.0.2
+      - name: Install verified npm CLI
+        uses: ./.github/actions/install-npm-cli
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: npm-recovery-${{ inputs.tag }}

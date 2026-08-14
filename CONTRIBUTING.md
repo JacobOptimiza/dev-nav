@@ -32,6 +32,10 @@ Invoke-Pester -Path ./tests/powershell
 node --test "tests/npm/**/*.test.mjs"
 ```
 
+The repository also fuzzes the `config.tsv` parser with ClusterFuzzLite on
+pull requests that affect its Rust source or fuzzing integration. Fuzzing is a
+supplement to, not a replacement for, the ordinary test suite.
+
 Use a focused branch and pull request, wait for CI, and squash merge only after
 the applicable checks pass. New Actions references must use full commit SHAs.
 
@@ -48,6 +52,10 @@ version is shared by `Cargo.toml`, the Git tag, the GitHub release,
 `packaging/scoop/devnav.template.json`; CI and the release workflow abort on any
 mismatch. npm versions are immutable once public, so treat them with the same
 care as tags.
+
+Future release artifacts receive GitHub build attestations. Consumers can
+verify a downloaded artifact with `gh attestation verify <artifact> -R
+JacobOptimiza/dev-nav`.
 
 The npm and Scoop channels must never publish versions up to and including
 0.9.7 — those releases predate this packaging. v0.10.0 is the first
