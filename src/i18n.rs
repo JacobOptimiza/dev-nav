@@ -90,6 +90,7 @@ pub enum KeyToken {
     Char(char),
     F1,
     F2,
+    F3,
     Enter,
     Escape,
     Up,
@@ -127,6 +128,7 @@ pub fn format_binding(binding: KeyBinding, locale: Locale) -> String {
         KeyToken::Char(value) => value.to_string(),
         KeyToken::F1 => "F1".into(),
         KeyToken::F2 => "F2".into(),
+        KeyToken::F3 => "F3".into(),
         KeyToken::Enter => "Enter".into(),
         KeyToken::Escape => "Esc".into(),
         KeyToken::Up => "↑".into(),
@@ -145,9 +147,10 @@ pub fn format_binding(binding: KeyBinding, locale: Locale) -> String {
 /// testable and future additions cannot silently introduce a chord.
 #[allow(dead_code)]
 pub fn official_bindings() -> &'static [KeyBinding] {
-    const BINDINGS: [KeyBinding; 8] = [
+    const BINDINGS: [KeyBinding; 9] = [
         KeyBinding::plain(KeyToken::F1),
         KeyBinding::plain(KeyToken::F2),
+        KeyBinding::plain(KeyToken::F3),
         KeyBinding::plain(KeyToken::Enter),
         KeyBinding::plain(KeyToken::Escape),
         KeyBinding::with_modifier(Modifier::Ctrl, KeyToken::Char('S')),

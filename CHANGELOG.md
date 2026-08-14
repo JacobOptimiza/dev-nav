@@ -5,6 +5,11 @@ Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Add an interactive `F3` custom-command manager with localized editing,
+  delete confirmation, and atomic configuration persistence.
+
 ## [0.11.0] - 2026-08-14
 
 ### Added

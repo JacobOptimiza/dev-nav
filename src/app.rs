@@ -9,6 +9,7 @@ use crate::{
     terminal::Terminal,
 };
 
+#[derive(Clone)]
 enum Mode {
     Normal,
     Help,
@@ -17,6 +18,46 @@ enum Mode {
     Alias { target: PathBuf },
     Command { target: PathBuf },
     ConfirmRoot { target: PathBuf },
+    Commands { selected: usize },
+    CommandEditor { slot: u8, field: EditorField, alias: TextField, command: TextField },
+    ConfirmDelete { slot: u8 },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EditorField {
+    Alias,
+    Command,
+}
+
+#[derive(Clone, Debug, Default)]
+struct TextField {
+    value: String,
+    cursor: usize,
+}
+
+impl TextField {
+    fn new(value: String) -> Self {
+        let cursor = value.len();
+        Self { value, cursor }
+    }
+    fn insert(&mut self, character: char) {
+        self.value.insert(self.cursor, character);
+        self.cursor += character.len_utf8();
+    }
+    fn backspace(&mut self) {
+        if self.cursor > 0 {
+            let start =
+                self.value[..self.cursor].char_indices().next_back().map_or(0, |(index, _)| index);
+            self.value.replace_range(start..self.cursor, "");
+            self.cursor = start;
+        }
+    }
+    fn home(&mut self) {
+        self.cursor = 0;
+    }
+    fn end(&mut self) {
+        self.cursor = self.value.len();
+    }
 }
 
 pub struct App {
@@ -30,6 +71,7 @@ pub struct App {
     input: String,
     mode: Mode,
     help_return_mode: Option<Mode>,
+    commands_return_mode: Option<Mode>,
     message: String,
     config: Config,
     config_path: PathBuf,
@@ -51,6 +93,7 @@ impl App {
             input: String::new(),
             mode: Mode::Normal,
             help_return_mode: None,
+            commands_return_mode: None,
             message: String::new(),
             config,
             config_path,
@@ -89,6 +132,16 @@ impl App {
         }
         if matches!(key, Key::F2) {
             self.toggle_language()?;
+            return Ok(None);
+        }
+        if matches!(key, Key::F3)
+            && !matches!(self.mode, Mode::CommandEditor { .. } | Mode::ConfirmDelete { .. })
+        {
+            if matches!(self.mode, Mode::Commands { .. }) {
+                self.close_commands();
+            } else {
+                self.begin_commands();
+            }
             return Ok(None);
         }
         match &self.mode {
@@ -246,6 +299,11 @@ impl App {
                 }
                 Ok(None)
             }
+            Mode::Commands { selected } => self.handle_commands(key, *selected),
+            Mode::CommandEditor { slot, field, alias, command } => {
+                self.handle_command_editor(key, *slot, *field, alias.clone(), command.clone())
+            }
+            Mode::ConfirmDelete { slot } => self.handle_delete_confirmation(key, *slot),
         }
     }
 
@@ -360,6 +418,133 @@ impl App {
         self.help_return_mode = None;
         self.rebuild_visible();
         Ok(())
+    }
+
+    fn begin_commands(&mut self) {
+        let previous = std::mem::replace(&mut self.mode, Mode::Commands { selected: 0 });
+        self.commands_return_mode = Some(previous);
+    }
+
+    fn close_commands(&mut self) {
+        self.mode = self.commands_return_mode.take().unwrap_or(Mode::Normal);
+    }
+
+    fn handle_commands(
+        &mut self,
+        key: Key,
+        selected: usize,
+    ) -> io::Result<Option<Option<ShellResult>>> {
+        let mut index = selected;
+        match key {
+            Key::Escape => self.close_commands(),
+            Key::Up => index = index.saturating_sub(1),
+            Key::Down => index = (index + 1).min(8),
+            Key::Enter => {
+                let slot = (index + 1) as u8;
+                let (alias, command) =
+                    self.config.shortcut(slot).map_or((String::new(), String::new()), |shortcut| {
+                        (shortcut.alias.clone().unwrap_or_default(), shortcut.command.clone())
+                    });
+                self.mode = Mode::CommandEditor {
+                    slot,
+                    field: EditorField::Alias,
+                    alias: TextField::new(alias),
+                    command: TextField::new(command),
+                };
+            }
+            Key::Delete => {
+                let slot = (index + 1) as u8;
+                if self.config.shortcut(slot).is_some() {
+                    self.mode = Mode::ConfirmDelete { slot };
+                }
+            }
+            _ => {}
+        }
+        if let Mode::Commands { selected: current } = &mut self.mode {
+            *current = index;
+        }
+        Ok(None)
+    }
+
+    fn handle_command_editor(
+        &mut self,
+        key: Key,
+        slot: u8,
+        field: EditorField,
+        mut alias: TextField,
+        mut command: TextField,
+    ) -> io::Result<Option<Option<ShellResult>>> {
+        let mut next_field = field;
+        match key {
+            Key::Escape => self.close_commands(),
+            Key::Tab => {
+                next_field = match field {
+                    EditorField::Alias => EditorField::Command,
+                    EditorField::Command => EditorField::Alias,
+                };
+            }
+            Key::Enter if !command.value.trim().is_empty() => {
+                let mut next_config = self.config.clone();
+                next_config.set_shortcut(slot, Some(alias.value.clone()), command.value.clone());
+                next_config.save(&self.config_path)?;
+                self.config = next_config;
+                self.mode = Mode::Commands { selected: usize::from(slot - 1) };
+                self.message = if matches!(self.locale, Locale::EsEs) {
+                    "Comando guardado"
+                } else {
+                    "Command saved"
+                }
+                .into();
+            }
+            Key::Backspace => self.active_field(field, &mut alias, &mut command).backspace(),
+            Key::Home => self.active_field(field, &mut alias, &mut command).home(),
+            Key::End => self.active_field(field, &mut alias, &mut command).end(),
+            Key::Char(character) if !character.is_control() => {
+                self.active_field(field, &mut alias, &mut command).insert(character)
+            }
+            _ => {}
+        }
+        if matches!(self.mode, Mode::CommandEditor { .. }) {
+            self.mode = Mode::CommandEditor { slot, field: next_field, alias, command };
+        }
+        Ok(None)
+    }
+
+    fn active_field<'a>(
+        &self,
+        field: EditorField,
+        alias: &'a mut TextField,
+        command: &'a mut TextField,
+    ) -> &'a mut TextField {
+        match field {
+            EditorField::Alias => alias,
+            EditorField::Command => command,
+        }
+    }
+
+    fn handle_delete_confirmation(
+        &mut self,
+        key: Key,
+        slot: u8,
+    ) -> io::Result<Option<Option<ShellResult>>> {
+        match key {
+            Key::Escape => self.mode = Mode::Commands { selected: usize::from(slot - 1) },
+            Key::Enter => {
+                let mut next_config = self.config.clone();
+                next_config.clear_shortcut(slot);
+                next_config.save(&self.config_path)?;
+                self.config = next_config;
+                self.mode = Mode::Commands { selected: usize::from(slot - 1) };
+                self.message = if matches!(self.locale, Locale::EsEs) {
+                    "Comando eliminado"
+                } else {
+                    "Command deleted"
+                }
+                .into();
+            }
+            _ => {}
+        }
+        Ok(None)
     }
 
     fn rebuild_visible(&mut self) {
@@ -580,6 +765,11 @@ impl App {
         for row_index in 0..list_height {
             let content = if let Some(layout) = &help_layout {
                 layout.render_row(row_index, inner)
+            } else if matches!(
+                self.mode,
+                Mode::Commands { .. } | Mode::CommandEditor { .. } | Mode::ConfirmDelete { .. }
+            ) {
+                self.command_panel_row(row_index, list_height, inner)
             } else {
                 let visible_index = self.scroll + row_index;
                 if let Some(entry_index) = self.visible.get(visible_index) {
@@ -659,6 +849,30 @@ impl App {
                     format!("Save as startup folder?  {}", target.display())
                 }
             }
+            Mode::Commands { .. } => match self.locale {
+                Locale::EsEs => "↑↓ Mover · Enter Añadir/Editar · Supr Eliminar · Esc Cerrar",
+                Locale::EnUs => "↑↓ Move · Enter Add/Edit · Delete Remove · Esc Close",
+            }
+            .into(),
+            Mode::CommandEditor { field, .. } => match (self.locale, field) {
+                (Locale::EsEs, EditorField::Alias) => {
+                    "Tab Cambiar campo · Enter Guardar · Esc Cancelar · Alias".into()
+                }
+                (Locale::EsEs, EditorField::Command) => {
+                    "Tab Cambiar campo · Enter Guardar · Esc Cancelar · Comando".into()
+                }
+                (Locale::EnUs, EditorField::Alias) => {
+                    "Tab Switch field · Enter Save · Esc Cancel · Alias".into()
+                }
+                (Locale::EnUs, EditorField::Command) => {
+                    "Tab Switch field · Enter Save · Esc Cancel · Command".into()
+                }
+            },
+            Mode::ConfirmDelete { .. } => match self.locale {
+                Locale::EsEs => "Enter Confirmar · Esc Cancelar",
+                Locale::EnUs => "Enter Confirm · Esc Cancel",
+            }
+            .into(),
         };
         rows.push(format!(
             "\x1b[38;2;90;100;120m│\x1b[0m {} \x1b[38;2;90;100;120m│\x1b[0m",
@@ -670,6 +884,122 @@ impl App {
             fit(&help, width.saturating_sub(4))
         ));
         self.renderer.draw(rows)
+    }
+
+    fn command_panel_row(&self, row: usize, list_height: usize, width: usize) -> String {
+        let line = match &self.mode {
+            Mode::Commands { selected } => {
+                if row == 0 {
+                    return fit(
+                        if matches!(self.locale, Locale::EsEs) {
+                            "╭─ COMANDOS PERSONALIZADOS ─────────────────────────────╮"
+                        } else {
+                            "╭─ CUSTOM COMMANDS ────────────────────────────────────╮"
+                        },
+                        width,
+                    );
+                }
+                if row <= 9 {
+                    let slot = row as u8;
+                    let binding = format_binding(
+                        KeyBinding::with_modifier(
+                            Modifier::Shift,
+                            KeyToken::Char(char::from(b'0' + slot)),
+                        ),
+                        self.locale,
+                    );
+                    let content = self.config.shortcut(slot).map_or_else(
+                        || {
+                            if matches!(self.locale, Locale::EsEs) {
+                                "—  Vacío".to_owned()
+                            } else {
+                                "—  Empty".to_owned()
+                            }
+                        },
+                        |shortcut| {
+                            format!(
+                                "{}  {}",
+                                shortcut.alias.as_deref().unwrap_or("—"),
+                                shortcut.command
+                            )
+                        },
+                    );
+                    let prefix = if usize::from(slot - 1) == *selected { "›" } else { " " };
+                    return fit(&format!("{prefix} {binding:<8} {content}"), width);
+                }
+                if row == list_height.saturating_sub(1) {
+                    return fit(
+                        if matches!(self.locale, Locale::EsEs) {
+                            "╰─ ↑↓ Mover · Enter Añadir/Editar · Supr Eliminar · Esc Cerrar ─╯"
+                        } else {
+                            "╰─ ↑↓ Move · Enter Add/Edit · Delete Remove · Esc Close ─╯"
+                        },
+                        width,
+                    );
+                }
+                "".to_owned()
+            }
+            Mode::CommandEditor { slot, field, alias, command } => {
+                let title = if matches!(self.locale, Locale::EsEs) {
+                    format!(
+                        "MAYÚS+{slot} · {}",
+                        if command.value.is_empty() { "NUEVO COMANDO" } else { "EDITAR COMANDO" }
+                    )
+                } else {
+                    format!(
+                        "SHIFT+{slot} · {}",
+                        if command.value.is_empty() { "NEW COMMAND" } else { "EDIT COMMAND" }
+                    )
+                };
+                match row {
+                    0 => format!("╭─ {title} ─────────────────────────────────────────╮"),
+                    2 => format!(
+                        "  {}: {}",
+                        if matches!(self.locale, Locale::EsEs) {
+                            "Alias (opcional)"
+                        } else {
+                            "Alias (optional)"
+                        },
+                        cursor_text(alias, *field == EditorField::Alias)
+                    ),
+                    4 => format!(
+                        "  {}: {}",
+                        if matches!(self.locale, Locale::EsEs) { "Comando" } else { "Command" },
+                        cursor_text(command, *field == EditorField::Command)
+                    ),
+                    6 => format!(
+                        "╰─ Tab {} · Enter {} · Esc {} ─╯",
+                        if matches!(self.locale, Locale::EsEs) {
+                            "Cambiar campo"
+                        } else {
+                            "Switch field"
+                        },
+                        if matches!(self.locale, Locale::EsEs) { "Guardar" } else { "Save" },
+                        if matches!(self.locale, Locale::EsEs) { "Cancelar" } else { "Cancel" }
+                    ),
+                    _ => String::new(),
+                }
+            }
+            Mode::ConfirmDelete { slot } => {
+                let detail = self
+                    .config
+                    .shortcut(*slot)
+                    .map(|s| format!("{}: {}", s.alias.as_deref().unwrap_or("—"), s.command))
+                    .unwrap_or_default();
+                match row {
+                    2 => {
+                        if matches!(self.locale, Locale::EsEs) {
+                            format!("¿Eliminar Mayús+{slot}? {detail}")
+                        } else {
+                            format!("Remove Shift+{slot}? {detail}")
+                        }
+                    }
+                    _ => String::new(),
+                }
+            }
+            _ => String::new(),
+        };
+        fit(&line, width)
     }
 
     /// Normal-mode footer with the configured shortcut aliases appended so the
@@ -957,6 +1287,14 @@ fn panel_border(width: usize, label: &str, top: bool) -> String {
     format!("\x1b[38;2;116;199;236m{prefix}{}{right}\x1b[0m", "─".repeat(fill))
 }
 
+fn cursor_text(field: &TextField, active: bool) -> String {
+    if !active {
+        return field.value.clone();
+    }
+    let (left, right) = field.value.split_at(field.cursor);
+    format!("{left}_{right}")
+}
+
 #[allow(dead_code)]
 fn footer_help(mode: &Mode) -> &'static str {
     footer_help_for(mode, Locale::EsEs)
@@ -966,7 +1304,7 @@ fn footer_help_for(mode: &Mode, locale: Locale) -> &'static str {
     if matches!(locale, Locale::EnUs) {
         return match mode {
             Mode::Normal => {
-                "↑↓ Navigate  Enter Select  → Open  Ctrl+S Home  F1 Help  F2 Language  q Quit"
+                "↑↓ Navigate  Enter Select  → Open  Ctrl+S Home  F1 Help  F2 Language  F3 Commands  q Quit"
             }
             Mode::Help => "↑↓ Scroll  F1 / Esc Close help",
             Mode::Filter => "Type to filter  ↑↓ Navigate  Enter Apply  Esc Cancel",
@@ -974,11 +1312,14 @@ fn footer_help_for(mode: &Mode, locale: Locale) -> &'static str {
             Mode::Alias { .. } => "Type an alias  Enter Save  Esc Cancel",
             Mode::Command { .. } => "Type a command  Enter Run  Esc Cancel",
             Mode::ConfirmRoot { .. } => "Enter Confirm startup folder  Esc Cancel",
+            Mode::Commands { .. } | Mode::CommandEditor { .. } | Mode::ConfirmDelete { .. } => {
+                "F3 Commands  Enter Confirm  Esc Cancel"
+            }
         };
     }
     match mode {
         Mode::Normal => {
-            "↑↓ Navegar  Enter Seleccionar  → Abrir  Ctrl+S Inicio  F1 Ayuda  F2 Idioma  q Salir"
+            "↑↓ Navegar  Enter Seleccionar  → Abrir  Ctrl+S Inicio  F1 Ayuda  F2 Idioma  F3 Comandos  q Salir"
         }
         Mode::Help => "↑↓ Desplazar  F1 / Esc Cerrar ayuda",
         Mode::Filter => "Escribe para buscar  ↑↓ Navegar  Enter Aplicar  Esc Cancelar",
@@ -986,6 +1327,9 @@ fn footer_help_for(mode: &Mode, locale: Locale) -> &'static str {
         Mode::Alias { .. } => "Escribe un alias  Enter Guardar  Esc Cancelar",
         Mode::Command { .. } => "Escribe un comando  Enter Ejecutar  Esc Cancelar",
         Mode::ConfirmRoot { .. } => "Enter Confirmar nueva ruta de inicio  Esc Cancelar",
+        Mode::Commands { .. } | Mode::CommandEditor { .. } | Mode::ConfirmDelete { .. } => {
+            "F3 Comandos  Enter Confirmar  Esc Cancelar"
+        }
     }
 }
 
@@ -1085,7 +1429,7 @@ mod tests {
         assert!(footer.contains("Ctrl+S Inicio"));
         assert!(footer.contains("F1 Ayuda"));
         assert!(footer.contains("Enter Seleccionar"));
-        assert!(footer.chars().count() < 90);
+        assert!(footer.chars().count() < 115);
     }
 
     #[test]
@@ -1103,6 +1447,48 @@ mod tests {
         assert!(matches!(app.mode, Mode::Help));
         assert_eq!(app.locale, crate::i18n::Locale::EnUs);
         assert_eq!(Config::load(&config_path).expect("load").language(), Some("en-US"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn f3_opens_a_manager_without_executing_shortcuts() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let sandbox = std::env::temp_dir().join(format!("devnav-commands-{unique}"));
+        fs::create_dir_all(&sandbox).expect("create sandbox");
+        let config_path = sandbox.join("config.tsv");
+        let config = Config::default();
+        let mut app = App::new(sandbox.clone(), config, config_path).expect("create app");
+        app.handle_key(Key::F3).expect("open manager");
+        assert!(matches!(app.mode, Mode::Commands { selected: 0 }));
+        app.handle_key(Key::Shortcut(1)).expect("ignore slot in manager");
+        assert!(matches!(app.mode, Mode::Commands { selected: 0 }));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn command_editor_save_and_delete_round_trip_through_config() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let sandbox = std::env::temp_dir().join(format!("devnav-command-edit-{unique}"));
+        fs::create_dir_all(&sandbox).expect("create sandbox");
+        let config_path = sandbox.join("config.tsv");
+        let mut app =
+            App::new(sandbox.clone(), Config::default(), config_path.clone()).expect("create app");
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Enter).expect("edit slot");
+        for character in "Dev".chars() {
+            app.handle_key(Key::Char(character)).expect("type alias");
+        }
+        app.handle_key(Key::Tab).expect("switch field");
+        for character in "bun run dev".chars() {
+            app.handle_key(Key::Char(character)).expect("type command");
+        }
+        app.handle_key(Key::Enter).expect("save command");
+        assert_eq!(app.config.shortcut(1).map(|s| s.command.as_str()), Some("bun run dev"));
+        app.handle_key(Key::Delete).expect("confirm delete");
+        assert!(matches!(app.mode, Mode::ConfirmDelete { slot: 1 }));
+        app.handle_key(Key::Enter).expect("delete command");
+        assert!(app.config.shortcut(1).is_none());
+        assert!(Config::load(&config_path).expect("reload").shortcut(1).is_none());
         fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 
