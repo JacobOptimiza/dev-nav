@@ -2,17 +2,18 @@
 
 ## Supported versions
 
-Only the latest published release receives security fixes.
+Security fixes are provided for the latest stable DevNav release line. The
+currently supported release is `0.12.x` (latest: `0.12.0`). Please update to
+the latest release before reporting an issue against an older version.
 
 ## Reporting a vulnerability
 
-Do not disclose suspected vulnerabilities in a public issue. Use GitHub's
-private vulnerability reporting feature in the Security tab of this repository.
-Include the affected version, reproduction steps, impact, and any suggested
-mitigation. Reports will be acknowledged as soon as reasonably possible.
+Please use [GitHub Private Vulnerability Reporting](https://github.com/JacobOptimiza/dev-nav/security/advisories/new)
+to report security vulnerabilities privately. Do not open a public issue for a
+sensitive vulnerability or disclose it publicly before we have had a chance to
+respond.
 
-DevNav does not require credentials. Normal navigation performs no network
-requests; the optional startup release check contacts only the public GitHub API
-after consent, and explicit updates download release assets exclusively from this
-GitHub repository. Every downloaded asset is verified against its published
-SHA-256 checksum before installation.
+Include the affected version, operating system and architecture, reproduction
+steps or a proof of concept, impact, and any relevant logs or configuration
+details (with secrets removed). We will acknowledge a report within seven days
+and keep the reporter informed as we investigate.
