@@ -2,7 +2,10 @@ use std::{collections::HashSet, fs, io, path::PathBuf};
 
 use crate::{
     config::Config,
-    i18n::{KeyBinding, KeyToken, Locale, Modifier, TextId, format_binding, text},
+    i18n::{
+        KeyBinding, KeyToken, Locale, Modifier, TextId, delete_prompt, editor_footer, editor_title,
+        format_binding, manager_footer, shift_range, text,
+    },
     input::{self, Key},
     model::{DirectoryEntry, ShellResult},
     render::{Renderer, fit},
@@ -493,6 +496,7 @@ impl App {
             Key::Delete => {
                 let slot = (index + 1) as u8;
                 if self.config.shortcut(slot).is_some() {
+                    self.editor_error = None;
                     self.mode = Mode::ConfirmDelete { slot };
                 }
             }
@@ -553,6 +557,7 @@ impl App {
                     return Ok(None);
                 }
                 self.config = next_config;
+                self.editor_error = None;
                 self.mode = Mode::Commands {
                     selected: usize::from(slot - 1),
                     scroll: usize::from(slot - 1).saturating_sub(6),
@@ -618,6 +623,7 @@ impl App {
                     return Ok(None);
                 }
                 self.config = next_config;
+                self.editor_error = None;
                 self.mode = Mode::Commands {
                     selected: usize::from(slot - 1),
                     scroll: usize::from(slot - 1).saturating_sub(6),
@@ -932,24 +938,10 @@ impl App {
                 }
             }
             Mode::Commands { .. } => match self.locale {
-                Locale::EsEs => "↑↓ Mover · Enter Añadir/Editar · Supr Eliminar · Esc Cerrar",
-                Locale::EnUs => "↑↓ Move · Enter Add/Edit · Delete Remove · Esc Close",
+                Locale::EsEs | Locale::EnUs => manager_footer(self.locale),
             }
             .into(),
-            Mode::CommandEditor { field, .. } => match (self.locale, field) {
-                (Locale::EsEs, EditorField::Alias) => {
-                    "Tab Cambiar campo · Enter Guardar · Esc Cancelar · Alias".into()
-                }
-                (Locale::EsEs, EditorField::Command) => {
-                    "Tab Cambiar campo · Enter Guardar · Esc Cancelar · Comando".into()
-                }
-                (Locale::EnUs, EditorField::Alias) => {
-                    "Tab Switch field · Enter Save · Esc Cancel · Alias".into()
-                }
-                (Locale::EnUs, EditorField::Command) => {
-                    "Tab Switch field · Enter Save · Esc Cancel · Command".into()
-                }
-            },
+            Mode::CommandEditor { .. } => editor_footer(self.locale).into(),
             Mode::ConfirmDelete { .. } => match self.locale {
                 Locale::EsEs => "Enter Confirmar · Esc Cancelar",
                 Locale::EnUs => "Enter Confirm · Esc Cancel",
@@ -1011,29 +1003,21 @@ impl App {
                     return fit(&format!("{prefix} {binding:<8} {content}"), width);
                 }
                 if row == list_height.saturating_sub(1) {
-                    return fit(
-                        if matches!(self.locale, Locale::EsEs) {
-                            "╰─ ↑↓ Mover · Enter Añadir/Editar · Supr Eliminar · Esc Cerrar ─╯"
-                        } else {
-                            "╰─ ↑↓ Move · Enter Add/Edit · Delete Remove · Esc Close ─╯"
-                        },
-                        width,
-                    );
+                    let footer = format!("╰─ {} ─╯", manager_footer(self.locale));
+                    return fit(&footer, width);
                 }
                 "".to_owned()
             }
             Mode::CommandEditor { slot, field, alias, command } => {
-                let title = if matches!(self.locale, Locale::EsEs) {
-                    format!(
-                        "MAYÚS+{slot} · {}",
-                        if command.value.is_empty() { "NUEVO COMANDO" } else { "EDITAR COMANDO" }
-                    )
-                } else {
-                    format!(
-                        "SHIFT+{slot} · {}",
-                        if command.value.is_empty() { "NEW COMMAND" } else { "EDIT COMMAND" }
-                    )
-                };
+                let binding = format_binding(
+                    KeyBinding::with_modifier(
+                        Modifier::Shift,
+                        KeyToken::Char(char::from(b'0' + *slot)),
+                    ),
+                    self.locale,
+                );
+                let title =
+                    format!("{binding} · {}", editor_title(self.locale, command.value.is_empty()));
                 match row {
                     0 => format!("╭─ {title} ─────────────────────────────────────────╮"),
                     2 => format!(
@@ -1047,16 +1031,7 @@ impl App {
                         cursor_text(command, *field == EditorField::Command)
                     ),
                     5 => self.editor_error.clone().unwrap_or_default(),
-                    6 => format!(
-                        "╰─ Tab {} · Enter {} · Esc {} ─╯",
-                        if matches!(self.locale, Locale::EsEs) {
-                            "Cambiar campo"
-                        } else {
-                            "Switch field"
-                        },
-                        if matches!(self.locale, Locale::EsEs) { "Guardar" } else { "Save" },
-                        if matches!(self.locale, Locale::EsEs) { "Cancelar" } else { "Cancel" }
-                    ),
+                    6 => format!("╰─ {} ─╯", editor_footer(self.locale)),
                     _ => String::new(),
                 }
             }
@@ -1070,9 +1045,9 @@ impl App {
                     3 => self.editor_error.clone().unwrap_or_default(),
                     2 => {
                         if matches!(self.locale, Locale::EsEs) {
-                            format!("¿Eliminar Mayús+{slot}? {detail}")
+                            format!("{} Mayús+{slot}? {detail}", delete_prompt(self.locale))
                         } else {
-                            format!("Remove Shift+{slot}? {detail}")
+                            format!("{} Shift+{slot}? {detail}", delete_prompt(self.locale))
                         }
                     }
                     _ => String::new(),
@@ -1239,7 +1214,7 @@ fn help_lines_for(config: &Config, locale: Locale) -> Vec<HelpLine> {
             .into(),
         ),
         HelpLine::Shortcut(
-            format!("{}–{}", shift('1'), shift('9')),
+            shift_range(locale),
             text("Ejecutar un comando personalizado", "Run a configured custom command").into(),
         ),
         HelpLine::Shortcut(
@@ -1635,7 +1610,10 @@ mod tests {
         let joined = lines.iter().map(|line| format!("{line:?}")).collect::<String>();
         assert!(joined.contains("F3"));
         assert!(!joined.contains('\u{2026}'));
-        assert!(joined.contains("Mayús+1–Mayús+9"));
+        assert!(joined.contains("Mayús+1–9"));
+        let english = help_lines_for(&Config::default(), crate::i18n::Locale::EnUs);
+        let english_text = english.iter().map(|line| format!("{line:?}")).collect::<String>();
+        assert!(english_text.contains("Shift+1–9"));
     }
 
     #[test]

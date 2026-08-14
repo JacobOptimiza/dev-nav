@@ -109,6 +109,44 @@ pub fn text(locale: Locale, id: TextId) -> &'static str {
     }
 }
 
+pub fn shift_range(locale: Locale) -> String {
+    let prefix = match locale {
+        Locale::EsEs => "Mayús",
+        Locale::EnUs => "Shift",
+    };
+    format!("{prefix}+1–9")
+}
+
+pub fn manager_footer(locale: Locale) -> &'static str {
+    match locale {
+        Locale::EsEs => "↑↓ Mover · Enter Añadir/Editar · Supr Eliminar · Esc Cerrar",
+        Locale::EnUs => "↑↓ Move · Enter Add/Edit · Delete Remove · Esc Close",
+    }
+}
+
+pub fn editor_footer(locale: Locale) -> &'static str {
+    match locale {
+        Locale::EsEs => "Tab Cambiar campo · Enter Guardar · Esc Cancelar",
+        Locale::EnUs => "Tab Switch field · Enter Save · Esc Cancel",
+    }
+}
+
+pub fn editor_title(locale: Locale, is_new: bool) -> &'static str {
+    match (locale, is_new) {
+        (Locale::EsEs, true) => "NUEVO COMANDO",
+        (Locale::EsEs, false) => "EDITAR COMANDO",
+        (Locale::EnUs, true) => "NEW COMMAND",
+        (Locale::EnUs, false) => "EDIT COMMAND",
+    }
+}
+
+pub fn delete_prompt(locale: Locale) -> &'static str {
+    match locale {
+        Locale::EsEs => "¿Eliminar",
+        Locale::EnUs => "Remove",
+    }
+}
+
 /// Canonical actions. UI layers should describe these actions rather than
 /// inventing independent key labels.
 #[allow(dead_code)]
