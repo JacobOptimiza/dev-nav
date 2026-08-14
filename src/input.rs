@@ -11,6 +11,11 @@ const VK_RETURN: u16 = 0x0D;
 const VK_ESCAPE: u16 = 0x1B;
 const VK_F1: u16 = 0x70;
 const VK_F2: u16 = 0x71;
+const VK_F3: u16 = 0x72;
+const VK_DELETE: u16 = 0x2E;
+const VK_HOME: u16 = 0x24;
+const VK_END: u16 = 0x23;
+const VK_TAB: u16 = 0x09;
 const VK_LEFT: u16 = 0x25;
 const VK_UP: u16 = 0x26;
 const VK_RIGHT: u16 = 0x27;
@@ -27,6 +32,11 @@ pub enum Key {
     Escape,
     F1,
     F2,
+    F3,
+    Tab,
+    Delete,
+    Home,
+    End,
     CtrlC,
     CtrlS,
     CtrlU,
@@ -107,6 +117,11 @@ fn map_key(event: windows_sys::Win32::System::Console::KEY_EVENT_RECORD) -> Key 
         VK_ESCAPE => Key::Escape,
         VK_F1 => Key::F1,
         VK_F2 => Key::F2,
+        VK_F3 => Key::F3,
+        VK_DELETE => Key::Delete,
+        VK_HOME => Key::Home,
+        VK_END => Key::End,
+        VK_TAB => Key::Tab,
         _ => char::from_u32(u32::from(unsafe { event.uChar.UnicodeChar }))
             .filter(|character| !character.is_control())
             .map_or(Key::Unknown, Key::Char),
@@ -124,7 +139,7 @@ fn shortcut_slot(virtual_key: u16) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Key, VK_DOWN, VK_ESCAPE, VK_F1, VK_F2, VK_UP, map_key};
+    use super::{Key, VK_DOWN, VK_ESCAPE, VK_F1, VK_F2, VK_F3, VK_UP, map_key};
     use windows_sys::Win32::System::Console::KEY_EVENT_RECORD;
     use windows_sys::Win32::System::Console::{LEFT_CTRL_PRESSED, SHIFT_PRESSED};
 
@@ -144,6 +159,7 @@ mod tests {
         assert_eq!(map_key(key_event(VK_ESCAPE)), Key::Escape);
         assert_eq!(map_key(key_event(VK_F1)), Key::F1);
         assert_eq!(map_key(key_event(VK_F2)), Key::F2);
+        assert_eq!(map_key(key_event(VK_F3)), Key::F3);
     }
 
     #[test]

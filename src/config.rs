@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env, fs, io,
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -148,7 +149,7 @@ impl Config {
             output.push_str(&encode(&shortcut.command));
             output.push('\n');
         }
-        fs::write(path, output)
+        save_atomic(path, output.as_bytes())
     }
 
     pub fn is_favorite(&self, path: &Path) -> bool {
@@ -260,6 +261,62 @@ impl Config {
         let mut slots: Vec<_> = self.shortcuts.iter().map(|(index, slot)| (*index, slot)).collect();
         slots.sort_by_key(|(index, _)| *index);
         slots
+    }
+}
+
+/// Writes a complete payload and replaces the old configuration atomically.
+fn save_atomic(path: &Path, payload: &[u8]) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let temp = path.with_extension(format!("tmp-{}", std::process::id()));
+    let write_result = (|| -> io::Result<()> {
+        let mut file = fs::File::create(&temp)?;
+        file.write_all(payload)?;
+        file.sync_all()?;
+        Ok(())
+    })();
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(&temp);
+        return Err(error);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
+        if !path.exists() {
+            let result = fs::rename(&temp, path);
+            if result.is_err() {
+                let _ = fs::remove_file(&temp);
+            }
+            return result;
+        }
+        let replaced: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+        let replacement: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
+        let result = unsafe {
+            ReplaceFileW(
+                replaced.as_ptr(),
+                replacement.as_ptr(),
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+        if result == 0 {
+            let error = io::Error::last_os_error();
+            let _ = fs::remove_file(&temp);
+            return Err(error);
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let result = fs::rename(&temp, path);
+        if result.is_err() {
+            let _ = fs::remove_file(&temp);
+        }
+        result
     }
 }
 

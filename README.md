@@ -216,13 +216,18 @@ Press `F1` at any time for the complete, scrollable help panel.
 | `Shift+U` | Check for and install a DevNav update |
 | `F1` | Open or close the shortcuts panel |
 | `F2` | Switch between English and Español |
+| `F3` | Open the custom-command manager |
 | `q` / `Esc` | Exit or cancel |
 
 `:` remains available as a Vim-style alias for `e`.
 
 ### Custom commands
 
-Bind commands to `Shift+1` … `Shift+9` and run them in the highlighted project:
+Bind commands to `Shift+1–9` and run them in the highlighted project:
+
+Press `F3` to add, edit, or remove slots interactively. `Enter` saves an edit,
+`Tab` switches between alias and command, and `Esc` cancels without changing
+the configuration.
 
 ```powershell
 dev shortcut 1 "Dev" "bun run dev"

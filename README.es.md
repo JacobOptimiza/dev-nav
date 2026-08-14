@@ -239,6 +239,7 @@ aparecen primero para que sean fáciles de descubrir y recordar.
 | `Ctrl+S` | guardar la carpeta resaltada como nueva ruta de inicio; requiere confirmación |
 | `F1` | abrir el panel de ayuda con todos los shortcuts y su explicación |
 | `F2` | cambiar entre Español e Inglés |
+| `F3` | abrir el gestor de comandos personalizados |
 
 ### Agentes
 
@@ -276,8 +277,11 @@ comandos de Vim.
 
 ### Comandos personalizados
 
-Asigna comandos a `Mayús+1` … `Mayús+9` para ejecutarlos en el proyecto
+Asigna comandos a `Mayús+1–9` para ejecutarlos en el proyecto
 resaltado:
+
+Pulsa `F3` para añadir, editar o eliminar slots. `Enter` guarda, `Tab` cambia
+entre alias y comando y `Esc` cancela sin modificar la configuración.
 
 ```powershell
 dev shortcut 1 "Dev" "bun run dev"

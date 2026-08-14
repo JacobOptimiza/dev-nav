@@ -53,6 +53,7 @@ pub enum Modifier {
 pub enum TextId {
     Help,
     Language,
+    CustomCommands,
     Navigate,
     Select,
     Open,
@@ -61,6 +62,89 @@ pub enum TextId {
     ToggleFavorites,
     Update,
     Quit,
+    ManagerTitle,
+    Empty,
+    AliasOptional,
+    Command,
+    Save,
+    Cancel,
+    Delete,
+    ConfirmDelete,
+    SaveError,
+    DeleteError,
+    CommandSaved,
+    CommandDeleted,
+    ManageCommands,
+}
+
+pub fn text(locale: Locale, id: TextId) -> &'static str {
+    match (locale, id) {
+        (Locale::EsEs, TextId::ManagerTitle) => "COMANDOS PERSONALIZADOS",
+        (Locale::EnUs, TextId::ManagerTitle) => "CUSTOM COMMANDS",
+        (Locale::EsEs, TextId::Empty) => "Vacío",
+        (Locale::EnUs, TextId::Empty) => "Empty",
+        (Locale::EsEs, TextId::AliasOptional) => "Alias (opcional)",
+        (Locale::EnUs, TextId::AliasOptional) => "Alias (optional)",
+        (Locale::EsEs, TextId::Command) => "Comando",
+        (Locale::EnUs, TextId::Command) => "Command",
+        (Locale::EsEs, TextId::Save) => "Guardar",
+        (Locale::EnUs, TextId::Save) => "Save",
+        (Locale::EsEs, TextId::Cancel) => "Cancelar",
+        (Locale::EnUs, TextId::Cancel) => "Cancel",
+        (Locale::EsEs, TextId::Delete) => "Eliminar",
+        (Locale::EnUs, TextId::Delete) => "Delete",
+        (Locale::EsEs, TextId::ConfirmDelete) => "¿Eliminar comando?",
+        (Locale::EnUs, TextId::ConfirmDelete) => "Remove command?",
+        (Locale::EsEs, TextId::SaveError) => "No se pudo guardar",
+        (Locale::EnUs, TextId::SaveError) => "Could not save",
+        (Locale::EsEs, TextId::DeleteError) => "No se pudo eliminar",
+        (Locale::EnUs, TextId::DeleteError) => "Could not delete",
+        (Locale::EsEs, TextId::CommandSaved) => "Comando guardado",
+        (Locale::EnUs, TextId::CommandSaved) => "Command saved",
+        (Locale::EsEs, TextId::CommandDeleted) => "Comando eliminado",
+        (Locale::EnUs, TextId::CommandDeleted) => "Command deleted",
+        (Locale::EsEs, TextId::ManageCommands) => "Gestionar comandos personalizados",
+        (Locale::EnUs, TextId::ManageCommands) => "Manage custom commands",
+        _ => "",
+    }
+}
+
+pub fn shift_range(locale: Locale) -> String {
+    let prefix = match locale {
+        Locale::EsEs => "Mayús",
+        Locale::EnUs => "Shift",
+    };
+    format!("{prefix}+1–9")
+}
+
+pub fn manager_footer(locale: Locale) -> &'static str {
+    match locale {
+        Locale::EsEs => "↑↓ Mover · Enter Añadir/Editar · Supr Eliminar · Esc Cerrar",
+        Locale::EnUs => "↑↓ Move · Enter Add/Edit · Delete Remove · Esc Close",
+    }
+}
+
+pub fn editor_footer(locale: Locale) -> &'static str {
+    match locale {
+        Locale::EsEs => "Tab Cambiar campo · Enter Guardar · Esc Cancelar",
+        Locale::EnUs => "Tab Switch field · Enter Save · Esc Cancel",
+    }
+}
+
+pub fn editor_title(locale: Locale, is_new: bool) -> &'static str {
+    match (locale, is_new) {
+        (Locale::EsEs, true) => "NUEVO COMANDO",
+        (Locale::EsEs, false) => "EDITAR COMANDO",
+        (Locale::EnUs, true) => "NEW COMMAND",
+        (Locale::EnUs, false) => "EDIT COMMAND",
+    }
+}
+
+pub fn delete_prompt(locale: Locale) -> &'static str {
+    match locale {
+        Locale::EsEs => "¿Eliminar",
+        Locale::EnUs => "Remove",
+    }
 }
 
 /// Canonical actions. UI layers should describe these actions rather than
@@ -70,6 +154,7 @@ pub enum TextId {
 pub enum Action {
     Help,
     ToggleLanguage,
+    CustomCommands,
     NavigateUp,
     NavigateDown,
     OpenFolder,
@@ -90,6 +175,7 @@ pub enum KeyToken {
     Char(char),
     F1,
     F2,
+    F3,
     Enter,
     Escape,
     Up,
@@ -127,6 +213,7 @@ pub fn format_binding(binding: KeyBinding, locale: Locale) -> String {
         KeyToken::Char(value) => value.to_string(),
         KeyToken::F1 => "F1".into(),
         KeyToken::F2 => "F2".into(),
+        KeyToken::F3 => "F3".into(),
         KeyToken::Enter => "Enter".into(),
         KeyToken::Escape => "Esc".into(),
         KeyToken::Up => "↑".into(),
@@ -145,9 +232,10 @@ pub fn format_binding(binding: KeyBinding, locale: Locale) -> String {
 /// testable and future additions cannot silently introduce a chord.
 #[allow(dead_code)]
 pub fn official_bindings() -> &'static [KeyBinding] {
-    const BINDINGS: [KeyBinding; 8] = [
+    const BINDINGS: [KeyBinding; 9] = [
         KeyBinding::plain(KeyToken::F1),
         KeyBinding::plain(KeyToken::F2),
+        KeyBinding::plain(KeyToken::F3),
         KeyBinding::plain(KeyToken::Enter),
         KeyBinding::plain(KeyToken::Escape),
         KeyBinding::with_modifier(Modifier::Ctrl, KeyToken::Char('S')),
