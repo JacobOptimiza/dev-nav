@@ -10,10 +10,19 @@
 
 **English** | [Español](README.es.md)
 
-![DevNav terminal interface](assets/devnav-preview.svg)
+![Animated DevNav terminal interface](assets/demo/devnav.gif)
 
 Jump between projects, fuzzy-search workspaces, save favorites and aliases, and
 launch coding agents or commands directly in the selected repository.
+
+## TUI preview
+
+Real captures from the native DevNav executable: the navigator, the F1 help
+panel, and the centered F3 custom-command manager.
+
+| Navigator | Help (F1) | Custom commands (F3) |
+|---|---|---|
+| ![DevNav navigator](assets/screenshots/devnav-main.png) | ![DevNav help modal](assets/screenshots/devnav-f1-help.png) | ![DevNav custom-command manager](assets/screenshots/devnav-f3-manager.png) |
 
 ## Install DevNav
 
@@ -225,9 +234,12 @@ Press `F1` at any time for the complete, scrollable help panel.
 
 Bind commands to `Shift+1–9` and run them in the highlighted project:
 
-Press `F3` to add, edit, or remove slots interactively. `Enter` saves an edit,
-`Tab` switches between alias and command, and `Esc` cancels without changing
-the configuration.
+Press `F3` to open the centered manager. It has nine `Shift+1–9` slots; use
+`↑` / `↓` to move or `1–9` to select a slot directly. `Enter` adds or edits,
+and `Delete` asks for removal confirmation. In the editor, `Tab` switches
+between Alias and Command, `Enter` saves, and `Esc` cancels. `F2` changes the
+language without losing the manager state or editor draft. `Shift+1–9` execute
+their commands only from the normal navigator, never while managing slots.
 
 ```powershell
 dev shortcut 1 "Dev" "bun run dev"

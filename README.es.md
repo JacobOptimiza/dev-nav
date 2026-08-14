@@ -10,11 +10,20 @@
 
 [English](README.md) | **Español**
 
-![Interfaz de terminal de DevNav](assets/devnav-preview.svg)
+![Interfaz animada de terminal de DevNav](assets/demo/devnav.gif)
 
 Salta entre proyectos, filtra espacios de trabajo, guarda favoritos y alias, y
 abre agentes de programación o ejecuta comandos directamente en el repositorio
 seleccionado.
+
+## Vista previa de la TUI
+
+Capturas reales del ejecutable nativo de DevNav: el navegador, el panel de
+ayuda F1 y el gestor centrado de comandos personalizados F3.
+
+| Navegador | Ayuda (F1) | Comandos personalizados (F3) |
+|---|---|---|
+| ![Navegador de DevNav](assets/screenshots/devnav-main.png) | ![Modal de ayuda de DevNav](assets/screenshots/devnav-f1-help.png) | ![Gestor de comandos personalizados de DevNav](assets/screenshots/devnav-f3-manager.png) |
 
 ## Instalar DevNav
 
@@ -280,8 +289,13 @@ comandos de Vim.
 Asigna comandos a `Mayús+1–9` para ejecutarlos en el proyecto
 resaltado:
 
-Pulsa `F3` para añadir, editar o eliminar slots. `Enter` guarda, `Tab` cambia
-entre alias y comando y `Esc` cancela sin modificar la configuración.
+Pulsa `F3` para abrir el gestor/modal centrado. Tiene nueve slots
+`Mayús+1–9`: usa `↑` / `↓` para mover la selección o `1–9` para elegir un slot
+directamente. `Enter` añade o edita y `Supr` pide confirmación para borrar. En
+el editor, `Tab` cambia entre Alias y Comando, `Enter` guarda y `Esc` cancela.
+`F2` cambia el idioma sin perder el estado del gestor ni el borrador. Las
+combinaciones `Mayús+1–9` ejecutan comandos únicamente desde el navegador
+normal, nunca mientras gestionas slots.
 
 ```powershell
 dev shortcut 1 "Dev" "bun run dev"
