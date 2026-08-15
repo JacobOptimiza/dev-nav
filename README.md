@@ -3,22 +3,31 @@
 **Fast native workspace navigation for PowerShell 7 on Windows.**
 
 [![CI](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml/badge.svg)](https://github.com/JacobOptimiza/dev-nav/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/JacobOptimiza/dev-nav)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
+[![CodeQL](https://github.com/JacobOptimiza/dev-nav/actions/workflows/codeql.yml/badge.svg)](https://github.com/JacobOptimiza/dev-nav/actions/workflows/codeql.yml)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14088/badge)](https://www.bestpractices.dev/projects/14088)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/JacobOptimiza/dev-nav/badge)](https://scorecard.dev/viewer/?uri=github.com/JacobOptimiza/dev-nav)
 [![Windows](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-0078D4)](https://github.com/JacobOptimiza/dev-nav/releases/latest)
 [![PowerShell 7+](https://img.shields.io/badge/PowerShell-7%2B-5391FE?logo=powershell&logoColor=white)](https://learn.microsoft.com/powershell/)
 [![Rust 1.97+](https://img.shields.io/badge/Rust-1.97%2B-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/tools/install)
-[![CodeQL](https://github.com/JacobOptimiza/dev-nav/actions/workflows/codeql.yml/badge.svg)](https://github.com/JacobOptimiza/dev-nav/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/JacobOptimiza/dev-nav/badge)](https://scorecard.dev/viewer/?uri=github.com/JacobOptimiza/dev-nav)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14088/badge)](https://www.bestpractices.dev/projects/14088)
 [![npm](https://img.shields.io/npm/v/@jacoboptimiza/devnav?logo=npm)](https://www.npmjs.com/package/@jacoboptimiza/devnav)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **English** | [Español](README.es.md)
 
-![Animated DevNav terminal interface](assets/demo/devnav.gif)
+DevNav is a native workspace navigator for developers who live in PowerShell and work across multiple repositories. Fuzzy-find a project, jump into it, and launch the agent or command you need without breaking terminal flow.
 
-Jump between projects, fuzzy-search workspaces, save favorites and aliases, and
-launch coding agents or commands directly in the selected repository.
+## Why DevNav
+
+Working across many repositories creates friction beyond typing `cd`: remembering paths, switching context, finding the right workspace, and repeating setup before real work starts.
+
+DevNav turns that overhead into a fast, repeatable workflow:
+
+- **Find and jump instantly** — fuzzy-search projects instead of navigating directory trees or remembering paths.
+- **Reduce context switching** — favorites, aliases, and custom commands keep frequent work one action away.
+- **Start ready to work** — launch coding agents or commands directly in the selected repository, already in the right context.
+- **Stay fast and lightweight** — the core is native Rust, designed for a responsive terminal workflow with no extra runtime required after installation.
+
+![Animated DevNav terminal interface](assets/demo/devnav.gif)
 
 ## TUI preview
 
