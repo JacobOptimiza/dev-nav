@@ -15,12 +15,11 @@ $startMarker = '# >>> DevNav >>>'
 $endMarker = '# <<< DevNav <<<'
 $importLine = "Import-Module '$($ModulePath.Replace("'", "''"))'"
 $block = @($startMarker, $importLine, $endMarker)
-$content = if (Test-Path -LiteralPath $profilePath -PathType Leaf) {
-    @(Get-Content -LiteralPath $profilePath)
-}
-else {
-    @()
-}
+$content = @(
+    if (Test-Path -LiteralPath $profilePath -PathType Leaf) {
+        Get-Content -LiteralPath $profilePath
+    }
+)
 
 $start = [Array]::IndexOf($content, $startMarker)
 $end = [Array]::IndexOf($content, $endMarker)
