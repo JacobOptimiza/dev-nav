@@ -611,6 +611,84 @@ Describe 'DevNav updater lifecycle' {
         Copy-Item (Join-Path $sourceRoot 'DevNav.psm1') (Join-Path $installRoot 'DevNav.psm1')
     }
 
+    It 'requests the latest GitHub release with the expected updater headers' {
+        $global:DevNavLatestReleaseRequest = $null
+        $global:DevNavLatestReleaseResponse = [pscustomobject]@{ tag_name = 'v9.8.7' }
+        try {
+            $result = $devModule.Invoke({
+                Mock Invoke-RestMethod {
+                    param($Uri, $ConnectionTimeoutSeconds, $Headers)
+                    $global:DevNavLatestReleaseRequest = [pscustomobject]@{
+                        Uri = $Uri
+                        TimeoutSec = $ConnectionTimeoutSeconds
+                        Headers = $Headers
+                    }
+                    $global:DevNavLatestReleaseResponse
+                }
+                Get-DevLatestRelease -TimeoutSeconds 7
+            })
+            $result | Should -Be $global:DevNavLatestReleaseResponse
+            $global:DevNavLatestReleaseRequest.Uri | Should -Be 'https://api.github.com/repos/JacobOptimiza/dev-nav/releases/latest'
+            $global:DevNavLatestReleaseRequest.TimeoutSec | Should -Be 7
+            $global:DevNavLatestReleaseRequest.Headers.Accept | Should -Be 'application/vnd.github+json'
+            $global:DevNavLatestReleaseRequest.Headers.'User-Agent' | Should -Be 'DevNav-Updater'
+            $devModule.Invoke({ Should -Invoke Invoke-RestMethod -Times 1 -Scope It })
+        }
+        finally {
+            Remove-Variable DevNavLatestReleaseRequest, DevNavLatestReleaseResponse -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'returns true from a saved enabled update-check preference without prompting' {
+        $configPath = Join-Path $testLocalAppData 'DevNav\config.tsv'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+        Set-Content -LiteralPath $configPath -Value "check_updates`ttrue" -Encoding utf8NoBOM
+        $global:DevNavPreferenceCalls = @{ ReadHost = 0; WriteHost = 0; Language = 0; SetConfig = 0 }
+        try {
+            $result = $devModule.Invoke({
+                Mock Read-Host { $global:DevNavPreferenceCalls.ReadHost++ }
+                Mock Write-Host { $global:DevNavPreferenceCalls.WriteHost++ }
+                Mock Get-DevLanguage { $global:DevNavPreferenceCalls.Language++ }
+                Mock Set-DevConfigValue { $global:DevNavPreferenceCalls.SetConfig++ }
+                Initialize-DevUpdateCheckPreference
+            })
+            $result | Should -BeTrue
+            $global:DevNavPreferenceCalls.ReadHost | Should -Be 0
+            $global:DevNavPreferenceCalls.WriteHost | Should -Be 0
+            $global:DevNavPreferenceCalls.Language | Should -Be 0
+            $global:DevNavPreferenceCalls.SetConfig | Should -Be 0
+        }
+        finally {
+            Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavPreferenceCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'returns false from a saved disabled update-check preference without prompting' {
+        $configPath = Join-Path $testLocalAppData 'DevNav\config.tsv'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+        Set-Content -LiteralPath $configPath -Value "check_updates`tfalse" -Encoding utf8NoBOM
+        $global:DevNavPreferenceCalls = @{ ReadHost = 0; WriteHost = 0; Language = 0; SetConfig = 0 }
+        try {
+            $result = $devModule.Invoke({
+                Mock Read-Host { $global:DevNavPreferenceCalls.ReadHost++ }
+                Mock Write-Host { $global:DevNavPreferenceCalls.WriteHost++ }
+                Mock Get-DevLanguage { $global:DevNavPreferenceCalls.Language++ }
+                Mock Set-DevConfigValue { $global:DevNavPreferenceCalls.SetConfig++ }
+                Initialize-DevUpdateCheckPreference
+            })
+            $result | Should -BeFalse
+            $global:DevNavPreferenceCalls.ReadHost | Should -Be 0
+            $global:DevNavPreferenceCalls.WriteHost | Should -Be 0
+            $global:DevNavPreferenceCalls.Language | Should -Be 0
+            $global:DevNavPreferenceCalls.SetConfig | Should -Be 0
+        }
+        finally {
+            Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavPreferenceCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'updates an identical module and leaves no staging files' {
         $devModule.Invoke({
             Mock Get-DevInstalledVersion { $global:DevNavTestPreviousVersion }
@@ -807,6 +885,29 @@ Describe 'DevNav updater lifecycle' {
         })
         $global:DevNavDownloadAttempts | Should -Be 3
         Test-Path -LiteralPath $downloadPath | Should -BeFalse
+    }
+
+    It 'reports the English error after all download attempts fail' {
+        $downloadPath = Join-Path $testLocalAppData 'failed-en.bin'
+        $global:DevNavEnglishDownloadAttempts = 0
+        $global:DevNavEnglishDownloadPath = $downloadPath
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Start-Sleep {}
+                Mock Invoke-WebRequest {
+                    $global:DevNavEnglishDownloadAttempts++
+                    throw [System.Net.WebException]::new('simulated transport failure')
+                }
+                { Invoke-DevDownload -Uri 'https://example.test/failed-en.bin' -OutFile $global:DevNavEnglishDownloadPath -Attempts 2 } | Should -Throw "Could not download 'https://example.test/failed-en.bin' after 2 attempts: simulated transport failure"
+            })
+            $global:DevNavEnglishDownloadAttempts | Should -Be 2
+            $devModule.Invoke({ Should -Invoke Start-Sleep -Times 1 -Scope It })
+            Test-Path -LiteralPath $downloadPath | Should -BeFalse
+        }
+        finally {
+            Remove-Variable DevNavEnglishDownloadAttempts, DevNavEnglishDownloadPath -Scope Global -ErrorAction SilentlyContinue
+        }
     }
 }
 
