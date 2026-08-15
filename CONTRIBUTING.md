@@ -36,6 +36,15 @@ The repository also fuzzes the `config.tsv` parser with ClusterFuzzLite on
 pull requests that affect its Rust source or fuzzing integration. Fuzzing is a
 supplement to, not a replacement for, the ordinary test suite.
 
+## Testing policy
+
+Major new functionality must include appropriate automated tests for its new
+behavior. Bug fixes must include regression tests when reasonably practical.
+Add or update the applicable existing suite for the component you change:
+Rust, PowerShell/Pester, or the npm bootstrap. All applicable tests must pass
+in CI before merge. Documentation-only changes and changes that do not alter
+behavior do not need new tests.
+
 Use a focused branch and pull request, wait for CI, and squash merge only after
 the applicable checks pass. New Actions references must use full commit SHAs.
 
