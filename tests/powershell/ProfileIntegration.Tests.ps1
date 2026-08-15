@@ -9,13 +9,16 @@ BeforeAll {
         [pscustomobject]@{ Exists = $false; Hash = $null }
     }
     Set-Item Function:\global:Invoke-ProfileIntegrationRegression {
-        param([switch] $Install, [string] $ModulePath)
-        $arguments = @{ Install = $Install; ModulePath = $ModulePath }
+        param([switch] $Install, [switch] $Uninstall, [string] $ModulePath)
+        $arguments = @{ ModulePath = $ModulePath }
+        if ($Install) { $arguments.Install = $true }
+        if ($Uninstall) { $arguments.Uninstall = $true }
         & $global:profileIntegrationScriptPath @arguments
         [pscustomobject]@{
             Content = @($global:profileSetContent)
             Encoding = $global:profileSetEncoding
             NewItemPaths = @($global:profileNewItemPaths)
+            RemovedPaths = @($global:profileRemovedPaths)
         }
     }
 }
@@ -40,6 +43,7 @@ Describe 'ProfileIntegration.ps1 regression behavior' {
         $global:profileSetContent = $null
         $global:profileSetEncoding = $null
         $global:profileNewItemPaths = [System.Collections.Generic.List[string]]::new()
+        $global:profileRemovedPaths = [System.Collections.Generic.List[string]]::new()
 
         Mock Test-Path {
             param($LiteralPath, $PathType)
@@ -61,7 +65,26 @@ Describe 'ProfileIntegration.ps1 regression behavior' {
             $global:profileSetContent = @($Value | ForEach-Object { $_ })
             $global:profileSetEncoding = $Encoding
         }
-        Mock Remove-Item { param($LiteralPath) }
+        Mock Remove-Item {
+            param($LiteralPath)
+            [void] $global:profileRemovedPaths.Add($LiteralPath)
+        }
+    }
+
+    It 'rejects invocation when neither mode is selected' {
+        { Invoke-ProfileIntegrationRegression -ModulePath 'C:\DevNav.psm1' } |
+            Should -Throw 'Specify exactly one of -Install or -Uninstall.'
+        Should -Invoke New-Item -Times 0 -Scope It
+        Should -Invoke Set-Content -Times 0 -Scope It
+        Should -Invoke Remove-Item -Times 0 -Scope It
+    }
+
+    It 'rejects invocation when both modes are selected' {
+        { Invoke-ProfileIntegrationRegression -Install -Uninstall -ModulePath 'C:\DevNav.psm1' } |
+            Should -Throw 'Specify exactly one of -Install or -Uninstall.'
+        Should -Invoke New-Item -Times 0 -Scope It
+        Should -Invoke Set-Content -Times 0 -Scope It
+        Should -Invoke Remove-Item -Times 0 -Scope It
     }
 
     It 'installs successfully when the profile does not exist' {
@@ -99,5 +122,79 @@ Describe 'ProfileIntegration.ps1 regression behavior' {
         $result.Content | Should -Contain 'line after'
         @($result.Content | Where-Object { $_ -eq '# >>> DevNav >>>' }).Count | Should -Be 1
         @($result.Content | Where-Object { $_ -eq '# <<< DevNav <<<' }).Count | Should -Be 1
+    }
+
+    It 'replaces an existing DevNav block during installation' {
+        $global:profileExistingContent = @(
+            'user content before',
+            '# >>> DevNav >>>',
+            "Import-Module 'old.psm1'",
+            '# <<< DevNav <<<',
+            'user content after'
+        )
+        $result = Invoke-ProfileIntegrationRegression -Install -ModulePath "C:\Program Files\DevNav\new's.psm1"
+
+        $result.Content | Should -Contain 'user content before'
+        $result.Content | Should -Contain 'user content after'
+        $result.Content | Should -Contain "Import-Module 'C:\Program Files\DevNav\new''s.psm1'"
+        $result.Content | Should -Not -Contain "Import-Module 'old.psm1'"
+        @($result.Content | Where-Object { $_ -eq '# >>> DevNav >>>' }).Count | Should -Be 1
+        @($result.Content | Where-Object { $_ -eq '# <<< DevNav <<<' }).Count | Should -Be 1
+    }
+
+    It 'uninstalls a DevNav block while preserving unrelated profile content' {
+        $global:profileExistingContent = @(
+            'before',
+            '# >>> DevNav >>>',
+            "Import-Module 'DevNav.psm1'",
+            '# <<< DevNav <<<',
+            'after'
+        )
+        $result = Invoke-ProfileIntegrationRegression -Uninstall -ModulePath 'C:\DevNav.psm1'
+
+        $result.Content | Should -Contain 'before'
+        $result.Content | Should -Contain 'after'
+        $result.Content | Should -Not -Contain '# >>> DevNav >>>'
+        $result.Content | Should -Not -Contain '# <<< DevNav <<<'
+        Should -Invoke Set-Content -Times 1 -Scope It
+        Should -Invoke Remove-Item -Times 0 -Scope It
+    }
+
+    It 'uninstalls a DevNav block at the start while preserving following content' {
+        $global:profileExistingContent = @(
+            '# >>> DevNav >>>',
+            "Import-Module 'DevNav.psm1'",
+            '# <<< DevNav <<<',
+            'after'
+        )
+        $result = Invoke-ProfileIntegrationRegression -Uninstall -ModulePath 'C:\DevNav.psm1'
+
+        $result.Content | Should -Be 'after'
+        Should -Invoke Set-Content -Times 1 -Scope It
+    }
+
+    It 'uninstalls a DevNav block at the end while preserving preceding content' {
+        $global:profileExistingContent = @(
+            'before',
+            '# >>> DevNav >>>',
+            "Import-Module 'DevNav.psm1'",
+            '# <<< DevNav <<<'
+        )
+        $result = Invoke-ProfileIntegrationRegression -Uninstall -ModulePath 'C:\DevNav.psm1'
+
+        $result.Content | Should -Be 'before'
+        Should -Invoke Set-Content -Times 1 -Scope It
+    }
+
+    It 'preserves a malformed marker pair according to current semantics' {
+        $global:profileExistingContent = @(
+            '# >>> DevNav >>>',
+            'user content'
+        )
+        $result = Invoke-ProfileIntegrationRegression -Uninstall -ModulePath 'C:\DevNav.psm1'
+
+        $result.Content | Should -Contain '# >>> DevNav >>>'
+        $result.Content | Should -Contain 'user content'
+        Should -Invoke Set-Content -Times 1 -Scope It
     }
 }
