@@ -117,6 +117,76 @@ Describe 'DevNav updater lifecycle' {
         Get-ChildItem $installRoot -Filter '*.bak' | Should -BeNullOrEmpty
     }
 
+    It 'downloads x64 release assets only from canonical GitHub URLs' {
+        $global:DevNavDownloadUris = [System.Collections.Generic.List[string]]::new()
+        $devModule.Invoke({
+            Mock Get-DevInstalledVersion { $global:DevNavTestPreviousVersion }
+            Mock Get-DevLatestRelease { $global:DevNavTestRelease }
+            Mock Invoke-WebRequest {
+                $global:DevNavDownloadUris.Add($Uri)
+                Copy-Item (Join-Path $global:DevNavTestSourceRoot ([IO.Path]::GetFileName(([uri]$Uri).AbsolutePath))) $OutFile
+            }
+            Update-DevNavigator -Confirm:$false
+        })
+        $expectedBase = "https://github.com/JacobOptimiza/dev-nav/releases/download/v$($global:DevNavTestRelease.tag_name.TrimStart('v'))"
+        $global:DevNavDownloadUris | Should -Be @(
+            "$expectedBase/dev-windows-x86_64.exe",
+            "$expectedBase/DevNav.psm1",
+            "$expectedBase/SHA256SUMS.txt"
+        )
+    }
+
+    It 'constructs the canonical ARM64 release asset URL' {
+        $devModule.Invoke({
+            Get-DevReleaseAssetUrl -Tag 'v0.13.0' -AssetName 'dev-windows-aarch64.exe'
+        }) | Should -Be 'https://github.com/JacobOptimiza/dev-nav/releases/download/v0.13.0/dev-windows-aarch64.exe'
+    }
+
+    It 'rejects a release tag outside the supported vMAJOR.MINOR.PATCH format before downloading' {
+        $invalidRelease = [pscustomobject]@{
+            tag_name = 'v0.13.0-preview'
+            assets = $global:DevNavTestRelease.assets
+        }
+        $global:DevNavInvalidRelease = $invalidRelease
+        $global:DevNavDownloadAttempted = $false
+        $devModule.Invoke({
+            Mock Get-DevInstalledVersion { $global:DevNavTestPreviousVersion }
+            Mock Get-DevLatestRelease { $global:DevNavInvalidRelease }
+            Mock Invoke-WebRequest { $global:DevNavDownloadAttempted = $true }
+            { Update-DevNavigator -Confirm:$false } | Should -Throw '*tag no compatible*'
+        })
+        $global:DevNavDownloadAttempted | Should -BeFalse
+    }
+
+    It 'ignores malicious metadata URLs and never constructs a download for an unallowlisted asset' {
+        $global:DevNavDownloadUris = [System.Collections.Generic.List[string]]::new()
+        $maliciousRelease = [pscustomobject]@{
+            tag_name = $global:DevNavTestRelease.tag_name
+            assets = @(
+                [pscustomobject]@{name = 'dev-windows-x86_64.exe'; browser_download_url = 'https://evil.example/payload.exe'},
+                [pscustomobject]@{name = 'DevNav.psm1'; browser_download_url = 'http://github.com/DevNav.psm1'},
+                [pscustomobject]@{name = 'SHA256SUMS.txt'; browser_download_url = 'https://github.com.evil.example/SHA256SUMS.txt'},
+                [pscustomobject]@{name = 'payload.exe'; browser_download_url = 'https://github.com/other/repo/releases/download/v9.9.9/payload.exe'}
+            )
+        }
+        $global:DevNavMaliciousRelease = $maliciousRelease
+        $devModule.Invoke({
+            Mock Get-DevInstalledVersion { $global:DevNavTestPreviousVersion }
+            Mock Get-DevLatestRelease { $global:DevNavMaliciousRelease }
+            Mock Invoke-WebRequest {
+                $global:DevNavDownloadUris.Add($Uri)
+                Copy-Item (Join-Path $global:DevNavTestSourceRoot ([IO.Path]::GetFileName(([uri]$Uri).AbsolutePath))) $OutFile
+            }
+            Update-DevNavigator -Confirm:$false
+            { Get-DevReleaseAssetUrl -Tag 'v0.13.0' -AssetName 'payload.exe' } | Should -Throw '*no está permitido*'
+        })
+        $global:DevNavDownloadUris | Should -Not -Contain 'https://evil.example/payload.exe'
+        $global:DevNavDownloadUris | Should -Not -Contain 'http://github.com/DevNav.psm1'
+        $global:DevNavDownloadUris | Should -Not -Contain 'https://github.com.evil.example/SHA256SUMS.txt'
+        $global:DevNavDownloadUris | Should -Not -Match 'other/repo|payload.exe'
+        @($global:DevNavDownloadUris | Where-Object { $_ -notmatch '^https://github\.com/JacobOptimiza/dev-nav/releases/download/v\d+\.\d+\.\d+/(dev-windows-x86_64\.exe|DevNav\.psm1|SHA256SUMS\.txt)$' }).Count | Should -Be 0
+    }
+
     It 'marks restart required when the module changes' {
         Add-Content -LiteralPath (Join-Path $sourceRoot 'DevNav.psm1') -Value "`n# update marker"
         $moduleHash = (Get-FileHash (Join-Path $sourceRoot 'DevNav.psm1') -Algorithm SHA256).Hash
