@@ -150,10 +150,12 @@ Describe 'install.ps1 release bootstrap behavior' {
     }
 
     It 'builds from source with a discovered Cargo executable' {
-        $locationBefore = (Get-Location).Path
+        $originalCallerLocation = (Get-Location).Path
+        $isolatedCallerPath = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-caller-{0}" -f [guid]::NewGuid().ToString('N'))
+        [System.IO.Directory]::CreateDirectory($isolatedCallerPath) | Out-Null
         $cargoShimPath = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-cargo-{0}.cmd" -f [guid]::NewGuid().ToString('N'))
         $cargoLogPath = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-cargo-{0}.log" -f [guid]::NewGuid().ToString('N'))
-        $cargoShim = "@echo off`r`n>>`"$cargoLogPath`" echo %*`r`nexit /b 0`r`n"
+        $cargoShim = "@echo off`r`n>>`"$cargoLogPath`" echo %CD%^|%*`r`nexit /b 0`r`n"
         [System.IO.File]::WriteAllText($cargoShimPath, $cargoShim)
 
         try {
@@ -162,14 +164,25 @@ Describe 'install.ps1 release bootstrap behavior' {
                 param($LiteralPath, $PathType)
                 return $LiteralPath -eq $cargoShimPath
             }
-            Mock Push-Location { param($Path) }
-            Mock Pop-Location { }
+            Set-Location -LiteralPath $isolatedCallerPath
+            $locationBefore = (Get-Location).Path
+            $locationBefore | Should -Be $isolatedCallerPath
+            $locationBefore | Should -Not -Be $repositoryRoot
 
             & $installScriptPath -BuildFromSource -ModifyProfile:$false
 
+            $locationAfter = (Get-Location).Path
+            $locationAfter | Should -Be $locationBefore
             $cargoInvocations = [System.IO.File]::ReadAllLines($cargoLogPath)
-            $cargoInvocations | Should -Be @('test', 'build --release')
+            $cargoInvocations | Should -Be @(
+                "$repositoryRoot|test",
+                "$repositoryRoot|build --release"
+            )
             Should -Invoke Get-Command -ParameterFilter { $Name -eq 'cargo' } -Times 1 -Scope It
+            $cargoInvocations[0].Split('|', 2)[0] | Should -Be $repositoryRoot
+            $cargoInvocations[0].Split('|', 2)[1] | Should -Be 'test'
+            $cargoInvocations[1].Split('|', 2)[0] | Should -Be $repositoryRoot
+            $cargoInvocations[1].Split('|', 2)[1] | Should -Be 'build --release'
             $global:installCopyRecords.LiteralPath | Should -Be @(
                 (Join-Path $repositoryRoot 'target\release\dev.exe'),
                 (Join-Path $repositoryRoot 'powershell\DevNav.psm1')
@@ -179,14 +192,23 @@ Describe 'install.ps1 release bootstrap behavior' {
                 "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\DevNav.psm1"
             )
             $global:installCopyRecords.Force | Should -Be @($true, $true)
+            $global:installImportRecords.Count | Should -Be 1
             $global:installImportRecords.Name | Should -Be "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\DevNav.psm1"
+            $global:installImportRecords.Force | Should -BeTrue
             $global:installDownloadUris.Count | Should -Be 0
-            (Get-Location).Path | Should -Be $locationBefore
+            Should -Invoke Test-Path -ParameterFilter { $LiteralPath -eq $PROFILE } -Times 0 -Scope It
+            Should -Invoke Get-Content -ParameterFilter { $LiteralPath -eq $PROFILE } -Times 0 -Scope It
+            Should -Invoke Add-Content -ParameterFilter { $LiteralPath -eq $PROFILE } -Times 0 -Scope It
+            $global:installNewItemPaths | Where-Object { $_ -eq (Split-Path -Parent $PROFILE) } | Should -BeNullOrEmpty
         }
         finally {
+            Set-Location -LiteralPath $originalCallerLocation
             if ([System.IO.File]::Exists($cargoShimPath)) { [System.IO.File]::Delete($cargoShimPath) }
             if ([System.IO.File]::Exists($cargoLogPath)) { [System.IO.File]::Delete($cargoLogPath) }
+            if ([System.IO.Directory]::Exists($isolatedCallerPath)) { [System.IO.Directory]::Delete($isolatedCallerPath, $true) }
         }
+
+        (Get-Location).Path | Should -Be $originalCallerLocation
     }
 
     It 'fails when the executable checksum entry is missing' {
