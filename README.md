@@ -29,9 +29,6 @@ DevNav turns that overhead into a fast, repeatable workflow:
 
 ![Animated DevNav terminal interface](assets/demo/devnav.gif)
 
-Jump between projects, fuzzy-search workspaces, save favorites and aliases, and
-launch coding agents or commands directly in the selected repository.
-
 ## TUI preview
 
 Real captures from the native DevNav executable: the navigator, the F1 help

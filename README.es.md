@@ -29,10 +29,6 @@ DevNav convierte ese esfuerzo en un flujo rápido y repetible:
 
 ![Interfaz animada de terminal de DevNav](assets/demo/devnav.gif)
 
-Salta entre proyectos, filtra espacios de trabajo, guarda favoritos y alias, y
-abre agentes de programación o ejecuta comandos directamente en el repositorio
-seleccionado.
-
 ## Vista previa de la TUI
 
 Capturas reales del ejecutable nativo de DevNav: el navegador, el panel de
