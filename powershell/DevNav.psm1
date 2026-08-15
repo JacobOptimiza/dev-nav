@@ -141,6 +141,35 @@ function Get-DevLatestRelease {
     }
 }
 
+function Get-DevReleaseTag {
+    param([Parameter(Mandatory)][string] $Tag)
+
+    if ($Tag -notmatch '^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$') {
+        throw "La release publicada tiene un tag no compatible: $Tag"
+    }
+    return $Tag
+}
+
+function Get-DevReleaseAssetUrl {
+    param(
+        [Parameter(Mandatory)][string] $Tag,
+        [Parameter(Mandatory)][string] $AssetName
+    )
+
+    $allowedAssets = @(
+        'dev-windows-x86_64.exe',
+        'dev-windows-aarch64.exe',
+        'DevNav.psm1',
+        'SHA256SUMS.txt'
+    )
+    if ($AssetName -notin $allowedAssets) {
+        throw "El asset de release no está permitido: $AssetName"
+    }
+
+    $releaseTag = Get-DevReleaseTag -Tag $Tag
+    return "https://github.com/$script:DevNavRepository/releases/download/$releaseTag/$AssetName"
+}
+
 function Invoke-DevDownload {
     [CmdletBinding()]
     param(
@@ -212,7 +241,8 @@ function Invoke-DevStartupUpdateCheck {
     try {
         $installedVersion = Get-DevInstalledVersion
         $release = Get-DevLatestRelease -TimeoutSeconds 5
-        $latestText = ([string]$release.tag_name).TrimStart('v')
+        $releaseTag = Get-DevReleaseTag -Tag ([string]$release.tag_name)
+        $latestText = $releaseTag.Substring(1)
         $latestVersion = [version]$latestText
     }
     catch {
@@ -367,7 +397,8 @@ function Update-DevNavigator {
         Write-Host 'Comprobando la última versión publicada...'
     }
     $release = Get-DevLatestRelease
-    $latestText = ([string]$release.tag_name).TrimStart('v')
+    $releaseTag = Get-DevReleaseTag -Tag ([string]$release.tag_name)
+    $latestText = $releaseTag.Substring(1)
     $latestVersion = [version]$latestText
     if ((Get-DevLanguage) -eq 'en-US') { Write-Host "Latest published: v$latestText" }
     else { Write-Host "Última publicada: v$latestText" }
@@ -396,7 +427,7 @@ function Update-DevNavigator {
     foreach ($assetName in $requiredAssets) {
         $asset = $releaseAssets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
         if (-not $asset) { throw "La release v$latestText no contiene $assetName." }
-        $downloads[$assetName] = $asset.browser_download_url
+        $downloads[$assetName] = Get-DevReleaseAssetUrl -Tag $releaseTag -AssetName $assetName
     }
 
     $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-update-{0}" -f [guid]::NewGuid().ToString('N'))
