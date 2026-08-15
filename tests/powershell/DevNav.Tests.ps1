@@ -42,6 +42,152 @@ Describe 'DevNav PowerShell module' {
     }
 }
 
+Describe 'DevNav executable and installed version resolution' {
+    It 'prefers the installed DevNav executable when present' {
+        $moduleDirectory = Split-Path -Parent $modulePath
+        $expectedInstalledExecutable = Join-Path $moduleDirectory 'dev.exe'
+        $expectedDevelopmentExecutable = [System.IO.Path]::GetFullPath((Join-Path $moduleDirectory '..\target\release\dev.exe'))
+        $global:DevNavExpectedInstalledExecutable = $expectedInstalledExecutable
+        $global:DevNavExpectedDevelopmentExecutable = $expectedDevelopmentExecutable
+        $global:DevNavTestPathRecords = [System.Collections.Generic.List[object]]::new()
+        try {
+            $result = $devModule.Invoke({
+                Mock Test-Path {
+                    param($LiteralPath, $PathType)
+                    [void] $global:DevNavTestPathRecords.Add([pscustomobject]@{ LiteralPath = $LiteralPath; PathType = $PathType })
+                    $LiteralPath -eq $global:DevNavExpectedInstalledExecutable
+                }
+                Get-DevExecutable
+            })
+
+            $result | Should -Be $expectedInstalledExecutable
+            @($global:DevNavTestPathRecords).Count | Should -Be 2
+            $global:DevNavTestPathRecords[0].LiteralPath | Should -Be $expectedInstalledExecutable
+            $global:DevNavTestPathRecords[0].PathType | Should -Be 'Leaf'
+            $global:DevNavTestPathRecords[1].LiteralPath | Should -Be $expectedInstalledExecutable
+            $global:DevNavTestPathRecords[1].PathType | Should -Be 'Leaf'
+        }
+        finally {
+            Remove-Variable DevNavExpectedInstalledExecutable, DevNavExpectedDevelopmentExecutable, DevNavTestPathRecords -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'falls back to the development executable when the installed executable is absent' {
+        $moduleDirectory = Split-Path -Parent $modulePath
+        $expectedInstalledExecutable = Join-Path $moduleDirectory 'dev.exe'
+        $expectedDevelopmentExecutable = [System.IO.Path]::GetFullPath((Join-Path $moduleDirectory '..\target\release\dev.exe'))
+        $global:DevNavExpectedInstalledExecutable = $expectedInstalledExecutable
+        $global:DevNavExpectedDevelopmentExecutable = $expectedDevelopmentExecutable
+        $global:DevNavTestPathRecords = [System.Collections.Generic.List[object]]::new()
+        try {
+            $result = $devModule.Invoke({
+                Mock Test-Path {
+                    param($LiteralPath, $PathType)
+                    [void] $global:DevNavTestPathRecords.Add([pscustomobject]@{ LiteralPath = $LiteralPath; PathType = $PathType })
+                    $LiteralPath -eq $global:DevNavExpectedDevelopmentExecutable
+                }
+                Get-DevExecutable
+            })
+
+            $result | Should -Be $expectedDevelopmentExecutable
+            @($global:DevNavTestPathRecords).Count | Should -Be 2
+            $global:DevNavTestPathRecords[0].LiteralPath | Should -Be $expectedInstalledExecutable
+            $global:DevNavTestPathRecords[0].PathType | Should -Be 'Leaf'
+            $global:DevNavTestPathRecords[1].LiteralPath | Should -Be $expectedDevelopmentExecutable
+            $global:DevNavTestPathRecords[1].PathType | Should -Be 'Leaf'
+        }
+        finally {
+            Remove-Variable DevNavExpectedInstalledExecutable, DevNavExpectedDevelopmentExecutable, DevNavTestPathRecords -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports an English error when no DevNav executable exists' {
+        $moduleDirectory = Split-Path -Parent $modulePath
+        $global:DevNavExpectedInstalledExecutable = Join-Path $moduleDirectory 'dev.exe'
+        $global:DevNavExpectedDevelopmentExecutable = [System.IO.Path]::GetFullPath((Join-Path $moduleDirectory '..\target\release\dev.exe'))
+        try {
+            $devModule.Invoke({
+                Mock Test-Path { $false }
+                Mock Get-DevLanguage { 'en-US' }
+                { Get-DevExecutable } | Should -Throw 'dev.exe was not found. Run install.ps1 from the DevNav repository root.'
+            })
+        }
+        finally {
+            Remove-Variable DevNavExpectedInstalledExecutable, DevNavExpectedDevelopmentExecutable -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports a Spanish error when no DevNav executable exists' {
+        $moduleDirectory = Split-Path -Parent $modulePath
+        $global:DevNavExpectedInstalledExecutable = Join-Path $moduleDirectory 'dev.exe'
+        $global:DevNavExpectedDevelopmentExecutable = [System.IO.Path]::GetFullPath((Join-Path $moduleDirectory '..\target\release\dev.exe'))
+        try {
+            $devModule.Invoke({
+                Mock Test-Path { $false }
+                Mock Get-DevLanguage { 'es-ES' }
+                { Get-DevExecutable } | Should -Throw 'No se encuentra dev.exe. Ejecuta install.ps1 desde la raíz de DevNav.'
+            })
+        }
+        finally {
+            Remove-Variable DevNavExpectedInstalledExecutable, DevNavExpectedDevelopmentExecutable -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'parses a valid installed DevNav version from a controlled executable' {
+        $shimPath = Join-Path ([System.IO.Path]::GetTempPath()) ('devnav-version-' + [guid]::NewGuid().ToString('N') + '.cmd')
+        $logPath = Join-Path ([System.IO.Path]::GetTempPath()) ('devnav-version-' + [guid]::NewGuid().ToString('N') + '.log')
+        $global:DevNavTestVersionShim = $shimPath
+        try {
+            @("@echo off", "echo %*>>`"$logPath`"", 'echo dev-nav 1.2.3', 'exit /b 0') | Set-Content -LiteralPath $shimPath -Encoding ascii
+            $result = $devModule.Invoke({
+                Mock Get-DevExecutable { $global:DevNavTestVersionShim }
+                Get-DevInstalledVersion
+            })
+
+            $result | Should -Be ([version]'1.2.3')
+            (Get-Content -LiteralPath $logPath -Raw).Trim() | Should -Be '--version'
+        }
+        finally {
+            Remove-Item -LiteralPath $shimPath, $logPath -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavTestVersionShim -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'rejects invalid installed DevNav version output' {
+        $shimPath = Join-Path ([System.IO.Path]::GetTempPath()) ('devnav-version-' + [guid]::NewGuid().ToString('N') + '.cmd')
+        $global:DevNavTestVersionShim = $shimPath
+        try {
+            @('@echo off', 'echo dev-nav invalid', 'exit /b 0') | Set-Content -LiteralPath $shimPath -Encoding ascii
+            $devModule.Invoke({
+                Mock Get-DevExecutable { $global:DevNavTestVersionShim }
+                Mock Get-DevLanguage { 'en-US' }
+                { Get-DevInstalledVersion } | Should -Throw 'Unable to determine the installed DevNav version.'
+            })
+        }
+        finally {
+            Remove-Item -LiteralPath $shimPath -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavTestVersionShim -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'rejects a nonzero installed DevNav version command' {
+        $shimPath = Join-Path ([System.IO.Path]::GetTempPath()) ('devnav-version-' + [guid]::NewGuid().ToString('N') + '.cmd')
+        $global:DevNavTestVersionShim = $shimPath
+        try {
+            @('@echo off', 'echo dev-nav 1.2.3', 'exit /b 7') | Set-Content -LiteralPath $shimPath -Encoding ascii
+            $devModule.Invoke({
+                Mock Get-DevExecutable { $global:DevNavTestVersionShim }
+                Mock Get-DevLanguage { 'es-ES' }
+                { Get-DevInstalledVersion } | Should -Throw 'No se pudo determinar la versión instalada de DevNav.'
+            })
+        }
+        finally {
+            Remove-Item -LiteralPath $shimPath -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavTestVersionShim -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 Describe 'DevNav updater lifecycle' {
     BeforeAll {
         $sourceRoot = Join-Path $testLocalAppData 'update-source'
