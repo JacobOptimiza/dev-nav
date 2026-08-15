@@ -188,6 +188,264 @@ Describe 'DevNav executable and installed version resolution' {
     }
 }
 
+Describe 'DevNav configuration and deterministic language behavior' {
+    BeforeEach {
+        $configPath = Join-Path $testLocalAppData 'DevNav\config.tsv'
+        Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'returns null when the requested configuration does not exist' {
+        $result = $devModule.Invoke({ Get-DevConfigValue -Name 'language' })
+        $result | Should -BeNullOrEmpty
+    }
+
+    It 'returns null when the requested key is absent from an existing configuration' {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+        "root`tC:\fixture" | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+        $result = $devModule.Invoke({ Get-DevConfigValue -Name 'language' })
+        $result | Should -BeNullOrEmpty
+    }
+
+    It 'reads only the requested configuration value' {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+        @("root`tC:\fixture", "language`tes-ES", "check_updates`ttrue") | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+        $result = $devModule.Invoke({ Get-DevConfigValue -Name 'language' })
+        $result | Should -Be 'es-ES'
+    }
+
+    It 'upserts a configuration value without losing unrelated entries' {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+        @("root`tC:\fixture", "language`tes-ES", "check_updates`tfalse") | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+        $devModule.Invoke({ Set-DevConfigValue -Name 'language' -Value 'en-US' -Confirm:$false })
+        $lines = @(Get-Content -LiteralPath $configPath)
+        @($lines | Where-Object { $_ -eq "language`ten-US" }).Count | Should -Be 1
+        @($lines | Where-Object { $_ -eq "language`tes-ES" }).Count | Should -Be 0
+        $lines | Should -Contain "root`tC:\fixture"
+        $lines | Should -Contain "check_updates`tfalse"
+    }
+
+    It 'honors WhatIf when setting a configuration value' {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+        @("root`tC:\fixture", "language`tes-ES") | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+        $before = [System.IO.File]::ReadAllText($configPath)
+        $devModule.Invoke({ Set-DevConfigValue -Name 'language' -Value 'en-US' -WhatIf })
+        [System.IO.File]::ReadAllText($configPath) | Should -Be $before
+    }
+
+    It 'returns a saved supported DevNav language' {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+        "language`tes-ES" | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+        $devModule.Invoke({ Get-DevLanguage }) | Should -Be 'es-ES'
+    }
+
+    It 'treats an unsupported saved language as unset' {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+        "language`tfr-FR" | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+        $devModule.Invoke({ Get-DevLanguage }) | Should -BeNullOrEmpty
+    }
+
+    It 'canonicalizes en to en-US and invokes the DevNav CLI' {
+        $global:DevNavLanguageCliArguments = [System.Collections.Generic.List[object]]::new()
+        $global:DevNavLanguageMessages = [System.Collections.Generic.List[string]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Invoke-DevCli { [void] $global:DevNavLanguageCliArguments.Add(@($Arguments)); 0 }
+                Mock Write-Host { [void] $global:DevNavLanguageMessages.Add([string]$Object) }
+                Set-DevLanguage -Language en -Confirm:$false
+            })
+            @($global:DevNavLanguageCliArguments).Count | Should -Be 1
+            @($global:DevNavLanguageCliArguments[0]) | Should -Be @('--set-language', 'en-US')
+            $global:DevNavLanguageMessages | Should -Contain 'Language: English (en-US)'
+        }
+        finally {
+            Remove-Variable DevNavLanguageCliArguments, DevNavLanguageMessages -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'canonicalizes es to es-ES and invokes the DevNav CLI' {
+        $global:DevNavLanguageCliArguments = [System.Collections.Generic.List[object]]::new()
+        $global:DevNavLanguageMessages = [System.Collections.Generic.List[string]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Invoke-DevCli { [void] $global:DevNavLanguageCliArguments.Add(@($Arguments)); 0 }
+                Mock Write-Host { [void] $global:DevNavLanguageMessages.Add([string]$Object) }
+                Set-DevLanguage -Language es -Confirm:$false
+            })
+            @($global:DevNavLanguageCliArguments).Count | Should -Be 1
+            @($global:DevNavLanguageCliArguments[0]) | Should -Be @('--set-language', 'es-ES')
+            $global:DevNavLanguageMessages | Should -Contain 'Idioma: Español (es-ES)'
+        }
+        finally {
+            Remove-Variable DevNavLanguageCliArguments, DevNavLanguageMessages -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports an English error when saving the language fails' {
+        $devModule.Invoke({
+            Mock Invoke-DevCli { 9 }
+            { Set-DevLanguage -Language en -Confirm:$false } | Should -Throw "Could not save language 'en-US'."
+        })
+    }
+
+    It 'reports a Spanish error when saving the language fails' {
+        $devModule.Invoke({
+            Mock Invoke-DevCli { 9 }
+            { Set-DevLanguage -Language es -Confirm:$false } | Should -Throw "No se pudo guardar el idioma 'es-ES'."
+        })
+    }
+
+    It 'honors WhatIf when setting the DevNav language' {
+        $global:DevNavLanguageCliCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Invoke-DevCli { $global:DevNavLanguageCliCalls++; 0 }
+                Mock Write-Host {}
+                Set-DevLanguage -Language en -WhatIf
+            })
+            $global:DevNavLanguageCliCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavLanguageCliCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'persists enabled startup update checks with the English confirmation' {
+        $global:DevNavLanguageMessages = [System.Collections.Generic.List[string]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Write-Host { [void] $global:DevNavLanguageMessages.Add([string]$Object) }
+                Set-DevUpdateCheck -Enabled $true -Confirm:$false
+            })
+            (Get-Content -LiteralPath $configPath) | Should -Contain "check_updates`ttrue"
+            $global:DevNavLanguageMessages | Should -Contain 'Startup update checks: enabled.'
+        }
+        finally {
+            Remove-Variable DevNavLanguageMessages -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'persists disabled startup update checks with the Spanish confirmation' {
+        $global:DevNavLanguageMessages = [System.Collections.Generic.List[string]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'es-ES' }
+                Mock Write-Host { [void] $global:DevNavLanguageMessages.Add([string]$Object) }
+                Set-DevUpdateCheck -Enabled $false -Confirm:$false
+            })
+            (Get-Content -LiteralPath $configPath) | Should -Contain "check_updates`tfalse"
+            $global:DevNavLanguageMessages | Should -Contain 'Comprobación de actualizaciones al iniciar: desactivada.'
+        }
+        finally {
+            Remove-Variable DevNavLanguageMessages -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'honors WhatIf when changing startup update checks' {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $configPath) -Force | Out-Null
+        "check_updates`tfalse" | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
+        $before = [System.IO.File]::ReadAllText($configPath)
+        $devModule.Invoke({
+            Mock Get-DevLanguage { 'en-US' }
+            Mock Write-Host {}
+            Set-DevUpdateCheck -Enabled $true -WhatIf
+        })
+        [System.IO.File]::ReadAllText($configPath) | Should -Be $before
+    }
+
+    It 'prefers a supported native system language detection result' {
+        $shimPath = Join-Path ([System.IO.Path]::GetTempPath()) ('devnav-language-' + [guid]::NewGuid().ToString('N') + '.cmd')
+        $logPath = Join-Path ([System.IO.Path]::GetTempPath()) ('devnav-language-' + [guid]::NewGuid().ToString('N') + '.log')
+        $global:DevNavLanguageShim = $shimPath
+        try {
+            @('@echo off', "echo %*>>`"$logPath`"", 'echo es-ES', 'exit /b 0') | Set-Content -LiteralPath $shimPath -Encoding ascii
+            $result = $devModule.Invoke({
+                Mock Get-DevInstalledVersion { [version]'0.10.0' }
+                Mock Get-DevExecutable { $global:DevNavLanguageShim }
+                Mock Get-UICulture { throw 'UI culture should not be consulted after supported native detection.' }
+                Get-DevSystemLanguage
+            })
+            $result | Should -Be 'es-ES'
+            (Get-Content -LiteralPath $logPath -Raw).Trim() | Should -Be '--detect-language'
+        }
+        finally {
+            Remove-Item -LiteralPath $shimPath, $logPath -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavLanguageShim -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'falls back to Spanish UI culture when native detection is unsupported' {
+        $shimPath = Join-Path ([System.IO.Path]::GetTempPath()) ('devnav-language-' + [guid]::NewGuid().ToString('N') + '.cmd')
+        $logPath = Join-Path ([System.IO.Path]::GetTempPath()) ('devnav-language-' + [guid]::NewGuid().ToString('N') + '.log')
+        $global:DevNavLanguageShim = $shimPath
+        try {
+            @('@echo off', "echo %*>>`"$logPath`"", 'echo fr-FR', 'exit /b 0') | Set-Content -LiteralPath $shimPath -Encoding ascii
+            $result = $devModule.Invoke({
+                Mock Get-DevInstalledVersion { [version]'0.10.0' }
+                Mock Get-DevExecutable { $global:DevNavLanguageShim }
+                Mock Get-UICulture { [pscustomobject]@{ Name = 'es-MX' } }
+                Get-DevSystemLanguage
+            })
+            $result | Should -Be 'es-ES'
+            (Get-Content -LiteralPath $logPath -Raw).Trim() | Should -Be '--detect-language'
+        }
+        finally {
+            Remove-Item -LiteralPath $shimPath, $logPath -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavLanguageShim -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'skips native language detection for DevNav versions older than 0.10.0' {
+        $global:DevNavExecutableCalls = 0
+        try {
+            $result = $devModule.Invoke({
+                Mock Get-DevInstalledVersion { [version]'0.9.9' }
+                Mock Get-DevExecutable { $global:DevNavExecutableCalls++; 'unused' }
+                Mock Get-UICulture { [pscustomobject]@{ Name = 'en-GB' } }
+                Get-DevSystemLanguage
+            })
+            $result | Should -Be 'en-US'
+            $global:DevNavExecutableCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavExecutableCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'defaults to en-US for an unsupported Windows UI culture' {
+        $global:DevNavExecutableCalls = 0
+        try {
+            $result = $devModule.Invoke({
+                Mock Get-DevInstalledVersion { [version]'0.9.9' }
+                Mock Get-DevExecutable { $global:DevNavExecutableCalls++; 'unused' }
+                Mock Get-UICulture { [pscustomobject]@{ Name = 'fr-FR' } }
+                Get-DevSystemLanguage
+            })
+            $result | Should -Be 'en-US'
+            $global:DevNavExecutableCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavExecutableCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'defaults to en-US when system language detection throws' {
+        $global:DevNavVerboseMessages = [System.Collections.Generic.List[string]]::new()
+        try {
+            $result = $devModule.Invoke({
+                Mock Get-DevInstalledVersion { throw 'simulated detection failure' }
+                Mock Write-Verbose { [void] $global:DevNavVerboseMessages.Add([string]$Message) }
+                Get-DevSystemLanguage
+            })
+            $result | Should -Be 'en-US'
+            ($global:DevNavVerboseMessages -join "`n") | Should -Match 'System language detection failed:.*simulated detection failure'
+        }
+        finally {
+            Remove-Variable DevNavVerboseMessages -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 Describe 'DevNav updater lifecycle' {
     BeforeAll {
         $sourceRoot = Join-Path $testLocalAppData 'update-source'
