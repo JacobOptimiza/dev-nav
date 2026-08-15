@@ -857,3 +857,173 @@ Describe 'DevNav shortcut commands' {
         $lines | Should -Contain "shortcut`t2`t100%25 dev`techo `"hi there`""
     }
 }
+
+Describe 'DevNav shortcut failure and confirmation behavior' {
+    It 'does not invoke the CLI when clearing a shortcut with WhatIf' {
+        $global:DevNavShortcutCliCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Invoke-DevCli { $global:DevNavShortcutCliCalls++; 0 }
+                Set-DevShortcut -Index 3 -Clear -WhatIf
+            })
+            $global:DevNavShortcutCliCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavShortcutCliCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports the English error when clearing a shortcut fails' {
+        $global:DevNavShortcutCliArguments = [System.Collections.Generic.List[object]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Invoke-DevCli {
+                    [void]$global:DevNavShortcutCliArguments.Add(@($Arguments))
+                    7
+                }
+                { Set-DevShortcut -Index 3 -Clear -Confirm:$false } | Should -Throw 'Could not remove shortcut 3 (dev.exe exited with 7).'
+            })
+            @($global:DevNavShortcutCliArguments).Count | Should -Be 1
+            @($global:DevNavShortcutCliArguments[0]) | Should -Be @('--clear-shortcut', '3')
+        }
+        finally {
+            Remove-Variable DevNavShortcutCliArguments -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports the Spanish error when clearing a shortcut fails' {
+        $devModule.Invoke({
+            Mock Get-DevLanguage { 'es-ES' }
+            Mock Invoke-DevCli { 7 }
+            { Set-DevShortcut -Index 3 -Clear -Confirm:$false } | Should -Throw 'No se pudo eliminar el atajo 3 (dev.exe salió con 7).'
+        })
+    }
+
+    It 'reports the English confirmation when clearing succeeds' {
+        $global:DevNavShortcutCliArguments = [System.Collections.Generic.List[object]]::new()
+        $global:DevNavShortcutMessages = [System.Collections.Generic.List[string]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Invoke-DevCli {
+                    [void]$global:DevNavShortcutCliArguments.Add(@($Arguments))
+                    0
+                }
+                Mock Write-Host { [void]$global:DevNavShortcutMessages.Add([string]$Object) }
+                Set-DevShortcut -Index 3 -Clear -Confirm:$false
+            })
+            @($global:DevNavShortcutCliArguments).Count | Should -Be 1
+            @($global:DevNavShortcutCliArguments[0]) | Should -Be @('--clear-shortcut', '3')
+            $global:DevNavShortcutMessages | Should -Contain 'Shortcut 3 removed.'
+        }
+        finally {
+            Remove-Variable DevNavShortcutCliArguments, DevNavShortcutMessages -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'rejects a whitespace-only shortcut command in English' {
+        $global:DevNavShortcutCliCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Invoke-DevCli { $global:DevNavShortcutCliCalls++; 0 }
+                { Set-DevShortcut -Index 3 -Command '   ' -Confirm:$false } | Should -Throw 'Specify the shortcut command, or use -Clear to remove it.'
+            })
+            $global:DevNavShortcutCliCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavShortcutCliCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'rejects a whitespace-only shortcut command in Spanish' {
+        $global:DevNavShortcutCliCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'es-ES' }
+                Mock Invoke-DevCli { $global:DevNavShortcutCliCalls++; 0 }
+                { Set-DevShortcut -Index 3 -Command "`t  " -Confirm:$false } | Should -Throw 'Debes indicar el comando del atajo, o usar -Clear para eliminarlo.'
+            })
+            $global:DevNavShortcutCliCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavShortcutCliCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'does not invoke the CLI when binding a shortcut with WhatIf' {
+        $global:DevNavShortcutCliCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Invoke-DevCli { $global:DevNavShortcutCliCalls++; 0 }
+                Set-DevShortcut -Index 4 -Command 'cargo test' -Alias 'Tests' -WhatIf
+            })
+            $global:DevNavShortcutCliCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavShortcutCliCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports the English error when saving a shortcut fails' {
+        $global:DevNavShortcutCliArguments = [System.Collections.Generic.List[object]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Invoke-DevCli {
+                    [void]$global:DevNavShortcutCliArguments.Add(@($Arguments))
+                    9
+                }
+                { Set-DevShortcut -Index 4 -Command 'cargo test' -Confirm:$false } | Should -Throw 'Could not save shortcut 4 (dev.exe exited with 9).'
+            })
+            @($global:DevNavShortcutCliArguments).Count | Should -Be 1
+            @($global:DevNavShortcutCliArguments[0]) | Should -Be @('--set-shortcut', '4', 'cargo test')
+            @($global:DevNavShortcutCliArguments[0]) | Should -Not -Contain '--alias'
+        }
+        finally {
+            Remove-Variable DevNavShortcutCliArguments -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports the Spanish error when saving a shortcut fails' {
+        $global:DevNavShortcutCliArguments = [System.Collections.Generic.List[object]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'es-ES' }
+                Mock Invoke-DevCli {
+                    [void]$global:DevNavShortcutCliArguments.Add(@($Arguments))
+                    9
+                }
+                { Set-DevShortcut -Index 4 -Alias 'Pruebas' -Command 'cargo test' -Confirm:$false } | Should -Throw 'No se pudo guardar el atajo 4 (dev.exe salió con 9).'
+            })
+            @($global:DevNavShortcutCliArguments).Count | Should -Be 1
+            @($global:DevNavShortcutCliArguments[0]) | Should -Be @('--set-shortcut', '4', 'cargo test', '--alias', 'Pruebas')
+        }
+        finally {
+            Remove-Variable DevNavShortcutCliArguments -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports the English confirmation when saving succeeds' {
+        $global:DevNavShortcutCliArguments = [System.Collections.Generic.List[object]]::new()
+        $global:DevNavShortcutMessages = [System.Collections.Generic.List[string]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Invoke-DevCli {
+                    [void]$global:DevNavShortcutCliArguments.Add(@($Arguments))
+                    0
+                }
+                Mock Write-Host { [void]$global:DevNavShortcutMessages.Add([string]$Object) }
+                Set-DevShortcut -Index 4 -Command 'cargo test' -Confirm:$false
+            })
+            @($global:DevNavShortcutCliArguments).Count | Should -Be 1
+            @($global:DevNavShortcutCliArguments[0]) | Should -Be @('--set-shortcut', '4', 'cargo test')
+            $global:DevNavShortcutMessages | Should -Contain 'Shortcut 4 saved: cargo test'
+        }
+        finally {
+            Remove-Variable DevNavShortcutCliArguments, DevNavShortcutMessages -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+}
