@@ -149,6 +149,46 @@ Describe 'install.ps1 release bootstrap behavior' {
         $global:installProfileAdds.Count | Should -Be 0
     }
 
+    It 'builds from source with a discovered Cargo executable' {
+        $locationBefore = (Get-Location).Path
+        $cargoShimPath = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-cargo-{0}.cmd" -f [guid]::NewGuid().ToString('N'))
+        $cargoLogPath = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-cargo-{0}.log" -f [guid]::NewGuid().ToString('N'))
+        $cargoShim = "@echo off`r`n>>`"$cargoLogPath`" echo %*`r`nexit /b 0`r`n"
+        [System.IO.File]::WriteAllText($cargoShimPath, $cargoShim)
+
+        try {
+            Mock Get-Command { [pscustomobject]@{ Source = $cargoShimPath } }
+            Mock Test-Path {
+                param($LiteralPath, $PathType)
+                return $LiteralPath -eq $cargoShimPath
+            }
+            Mock Push-Location { param($Path) }
+            Mock Pop-Location { }
+
+            & $installScriptPath -BuildFromSource -ModifyProfile:$false
+
+            $cargoInvocations = [System.IO.File]::ReadAllLines($cargoLogPath)
+            $cargoInvocations | Should -Be @('test', 'build --release')
+            Should -Invoke Get-Command -ParameterFilter { $Name -eq 'cargo' } -Times 1 -Scope It
+            $global:installCopyRecords.LiteralPath | Should -Be @(
+                (Join-Path $repositoryRoot 'target\release\dev.exe'),
+                (Join-Path $repositoryRoot 'powershell\DevNav.psm1')
+            )
+            $global:installCopyRecords.Destination | Should -Be @(
+                "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\dev.exe",
+                "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\DevNav.psm1"
+            )
+            $global:installCopyRecords.Force | Should -Be @($true, $true)
+            $global:installImportRecords.Name | Should -Be "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\DevNav.psm1"
+            $global:installDownloadUris.Count | Should -Be 0
+            (Get-Location).Path | Should -Be $locationBefore
+        }
+        finally {
+            if ([System.IO.File]::Exists($cargoShimPath)) { [System.IO.File]::Delete($cargoShimPath) }
+            if ([System.IO.File]::Exists($cargoLogPath)) { [System.IO.File]::Delete($cargoLogPath) }
+        }
+    }
+
     It 'fails when the executable checksum entry is missing' {
         Mock Get-Content {
             param($LiteralPath, $Raw)
