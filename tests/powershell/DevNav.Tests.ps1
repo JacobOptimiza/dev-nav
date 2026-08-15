@@ -42,6 +42,111 @@ Describe 'DevNav PowerShell module' {
     }
 }
 
+Describe 'DevNav root fallback and validation behavior' {
+    BeforeEach {
+        $configPath = Join-Path $testLocalAppData 'DevNav\config.tsv'
+        Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'uses DEV_HOME when no startup root is configured' {
+        $fallbackPath = Join-Path $testLocalAppData 'dev-home-fallback'
+        New-Item -ItemType Directory -Path $fallbackPath -Force | Out-Null
+        $previousDevHome = [System.Environment]::GetEnvironmentVariable('DEV_HOME', 'Process')
+        try {
+            $env:DEV_HOME = $fallbackPath
+            $result = $devModule.Invoke({
+                Mock Get-DevConfigValue { $null }
+                Get-DevRoot
+            })
+            $result | Should -Be $fallbackPath
+        }
+        finally {
+            if ($null -eq $previousDevHome) { Remove-Item Env:DEV_HOME -ErrorAction SilentlyContinue }
+            else { $env:DEV_HOME = $previousDevHome }
+            Remove-Item -LiteralPath $fallbackPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'falls back to HOME when no startup root or DEV_HOME is configured' {
+        $previousDevHome = [System.Environment]::GetEnvironmentVariable('DEV_HOME', 'Process')
+        try {
+            Remove-Item Env:DEV_HOME -ErrorAction SilentlyContinue
+            $result = $devModule.Invoke({
+                Mock Get-DevConfigValue { $null }
+                Get-DevRoot
+            })
+            $result | Should -Be $HOME
+        }
+        finally {
+            if ($null -eq $previousDevHome) { Remove-Item Env:DEV_HOME -ErrorAction SilentlyContinue }
+            else { $env:DEV_HOME = $previousDevHome }
+        }
+    }
+
+    It 'rejects a startup root that resolves to a file' {
+        $filePath = Join-Path $testLocalAppData ('root-file-' + [guid]::NewGuid().ToString('N') + '.txt')
+        New-Item -ItemType File -Path $filePath -Force | Out-Null
+        $resolvedPath = (Resolve-Path -LiteralPath $filePath).Path
+        $global:DevNavRootFile = $filePath
+        $global:DevNavRootResolved = $resolvedPath
+        $global:DevNavRootPersistCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Set-DevConfigValue { $global:DevNavRootPersistCalls++ }
+                { Set-DevRoot -Path $global:DevNavRootFile -Confirm:$false } | Should -Throw "La ruta no es una carpeta: $global:DevNavRootResolved"
+            })
+            $global:DevNavRootPersistCalls | Should -Be 0
+        }
+        finally {
+            Remove-Item -LiteralPath $filePath -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavRootFile, DevNavRootResolved, DevNavRootPersistCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'does not persist the startup root with WhatIf' {
+        $directoryPath = Join-Path $testLocalAppData ('root-whatif-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $directoryPath -Force | Out-Null
+        $global:DevNavRootWhatIf = $directoryPath
+        $global:DevNavRootPersistCalls = 0
+        $global:DevNavRootConfirmationCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Set-DevConfigValue { $global:DevNavRootPersistCalls++ }
+                Mock Write-Host { $global:DevNavRootConfirmationCalls++ }
+                Set-DevRoot -Path $global:DevNavRootWhatIf -WhatIf
+            })
+            $global:DevNavRootPersistCalls | Should -Be 0
+            $global:DevNavRootConfirmationCalls | Should -Be 0
+        }
+        finally {
+            Remove-Item -LiteralPath $directoryPath -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavRootWhatIf, DevNavRootPersistCalls, DevNavRootConfirmationCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports the English confirmation when saving the startup root' {
+        $directoryPath = Join-Path $testLocalAppData ('root-english-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $directoryPath -Force | Out-Null
+        $resolvedPath = (Resolve-Path -LiteralPath $directoryPath).Path
+        $global:DevNavRootDirectory = $directoryPath
+        $global:DevNavRootMessages = [System.Collections.Generic.List[string]]::new()
+        try {
+            $devModule.Invoke({
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Write-Host { [void]$global:DevNavRootMessages.Add([string]$Object) }
+                Set-DevRoot -Path $global:DevNavRootDirectory -Confirm:$false
+            })
+            $global:DevNavRootMessages | Should -Contain "Startup folder saved: $resolvedPath"
+            $devModule.Invoke({ Get-DevRoot }) | Should -Be $resolvedPath
+            (Split-Path -Parent $configPath) | Should -Be (Join-Path $testLocalAppData 'DevNav')
+        }
+        finally {
+            Remove-Item -LiteralPath $directoryPath -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Variable DevNavRootDirectory, DevNavRootMessages -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 Describe 'DevNav executable and installed version resolution' {
     It 'prefers the installed DevNav executable when present' {
         $moduleDirectory = Split-Path -Parent $modulePath
