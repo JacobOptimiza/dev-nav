@@ -24,11 +24,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The Rust extractor runs on Windows because the crate is
-          # Windows-only (windows_sys / console APIs); extraction quality is
-          # significantly better against the real target platform.
+          # Rust runs the buildless extractor (build-mode: none). It was tried
+          # on windows-latest in #43 with no extraction improvement (9/10
+          # files with macro-expansion errors on both platforms), so the
+          # simpler Ubuntu lane is kept. The residual is documented in
+          # SECURITY.md.
           - language: rust
-            os: windows-latest
+            os: ubuntu-latest
             build-mode: none
           - language: actions
             os: ubuntu-latest
@@ -41,12 +43,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Install Rust toolchain
-        if: matrix.language == 'rust'
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # upstream commit
-        with:
-          toolchain: 1.97.1
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7

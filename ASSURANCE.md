@@ -63,10 +63,11 @@ pushes to `main` and pull requests.
 **Evidence.** `.github/workflows/codeql.yml`; results upload to
 security/code-scanning.
 
-**Residual limitation.** Rust extraction runs in `build-mode: none`, which
-cannot expand macros; a residual set of extraction errors remains for
-macro-heavy files. A green CodeQL run is therefore not evidence of
-extraction-clean analysis; see SECURITY.md for the current residual.
+**Residual limitation.** Rust extraction runs the buildless extractor
+(`build-mode: none`) and currently reports 9 of 10 files with macro-expansion
+diagnostics; running the lane on `windows-latest` was tried and did not reduce
+them. A green CodeQL run is therefore not evidence of extraction-clean
+analysis.
 
 ## Fuzzing
 

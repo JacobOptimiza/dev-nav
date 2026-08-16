@@ -21,11 +21,14 @@ and keep the reporter informed as we investigate.
 ## Security controls
 
 CodeQL analyzes Rust, GitHub Actions and JavaScript/TypeScript on pushes to
-`main` and pull requests. The Rust lane runs on Windows (the only supported
-target platform) in `build-mode: none`; because that mode does not compile the
-crate, macro-heavy Rust files can still produce extraction diagnostics, which
-are tracked rather than hidden. OpenSSF Scorecard runs on `main` and publishes
-its current result through the repository badge.
+`main` and pull requests. The Rust lane uses the buildless extractor
+(`build-mode: none`) on Ubuntu; it was tried on `windows-latest` with no
+extraction improvement, so the simpler lane is kept. Because buildless
+extraction does not compile the crate, 9 of the 10 Rust files currently
+produce macro-expansion diagnostics (`matches!`, `format!`, …); this residual
+is an extractor limitation, is tracked rather than hidden, and a green CodeQL
+run is not evidence of extraction-clean Rust analysis. OpenSSF Scorecard runs
+on `main` and publishes its current result through the repository badge.
 
 Additional automated controls:
 
