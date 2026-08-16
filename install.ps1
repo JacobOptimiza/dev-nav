@@ -15,6 +15,7 @@ $projectRoot = $PSScriptRoot
 $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\DevNav'
 $installedExecutable = Join-Path $installRoot 'dev.exe'
 $installedModule = Join-Path $installRoot 'DevNav.psm1'
+$installedDebugSymbols = Join-Path $installRoot 'dev.pdb'
 $sourceModule = $null
 $sourceDebugSymbols = $null
 $temporaryDownload = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.exe" -f [guid]::NewGuid().ToString('N'))
@@ -41,6 +42,10 @@ try {
         }
         Push-Location $projectRoot
         try {
+            # A dev.pdb left over from an earlier build must never be mistaken
+            # for symbols of the executable built now; only a PDB produced by
+            # this build is installed below.
+            Remove-Item -LiteralPath (Join-Path $projectRoot 'target\release\dev.pdb') -Force -ErrorAction SilentlyContinue
             & $cargoExecutable test
             if ($LASTEXITCODE -ne 0) { throw 'cargo test ha fallado.' }
             & $cargoExecutable build --release
@@ -81,11 +86,15 @@ try {
         $sourceModule = $temporaryModule
     }
 
+    # Symbols from a previous installation never survive next to a newly
+    # installed executable: a fresh PDB is copied right after when the current
+    # build produced one; the release channel ships no symbols at all.
+    Remove-Item -LiteralPath $installedDebugSymbols -Force -ErrorAction SilentlyContinue
     Copy-Item -LiteralPath $sourceExecutable -Destination $installedExecutable -Force
     # Preserve debugging information requested through the standard build
     # configuration (e.g. CARGO_PROFILE_RELEASE_DEBUG); absent by default.
     if ($BuildFromSource -and (Test-Path -LiteralPath $sourceDebugSymbols -PathType Leaf)) {
-        Copy-Item -LiteralPath $sourceDebugSymbols -Destination (Join-Path $installRoot 'dev.pdb') -Force
+        Copy-Item -LiteralPath $sourceDebugSymbols -Destination $installedDebugSymbols -Force
     }
     Copy-Item -LiteralPath $sourceModule -Destination $installedModule -Force
 }
