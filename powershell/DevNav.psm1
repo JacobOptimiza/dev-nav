@@ -354,6 +354,15 @@ function Remove-DevShortcut {
     Set-DevShortcut -Index $Index -Clear -Confirm:$false
 }
 
+function Resolve-DevShortcutUsageError {
+    # Single source for the `dev shortcut` usage contract so the dispatch
+    # entry points cannot drift apart.
+    if ((Get-DevLanguage) -eq 'en-US') {
+        throw "Usage: dev shortcut <1..9> [alias] <command>`nTo remove: dev shortcut <1..9>"
+    }
+    throw "Uso: dev shortcut <1..9> [alias] <comando>`nPara eliminar: dev shortcut <1..9>"
+}
+
 function Invoke-DevShortcutCommand {
     # Parses the `dev shortcut <args>` form. Kept separate from
     # Invoke-DevNavigator so the parsing is unit-testable in isolation.
@@ -363,11 +372,7 @@ function Invoke-DevShortcutCommand {
         1 { Remove-DevShortcut -Index $Items[0] }
         2 { Set-DevShortcut -Index $Items[0] -Command $Items[1] }
         3 { Set-DevShortcut -Index $Items[0] -Alias $Items[1] -Command $Items[2] }
-        default {
-            if ((Get-DevLanguage) -eq 'en-US') { throw "Usage: dev shortcut <1..9> [alias] <command>`nTo remove: dev shortcut <1..9>" }
-            if ((Get-DevLanguage) -eq 'en-US') { throw "Usage: dev shortcut <1..9> [alias] <command>`nTo remove: dev shortcut <1..9>" }
-            throw "Uso: dev shortcut <1..9> [alias] <comando>`nPara eliminar: dev shortcut <1..9>"
-        }
+        default { Resolve-DevShortcutUsageError }
     }
 }
 
@@ -547,9 +552,7 @@ function Invoke-DevNavigator {
     if ($Command.Count -ge 1 -and $Command[0] -eq 'shortcut') {
         $items = @($Command | Select-Object -Skip 1)
         if ($items.Count -eq 0) {
-            if ((Get-DevLanguage) -eq 'en-US') { throw "Usage: dev shortcut <1..9> [alias] <command>`nTo remove: dev shortcut <1..9>" }
-            if ((Get-DevLanguage) -eq 'en-US') { throw "Usage: dev shortcut <1..9> [alias] <command>`nTo remove: dev shortcut <1..9>" }
-            throw "Uso: dev shortcut <1..9> [alias] <comando>`nPara eliminar: dev shortcut <1..9>"
+            Resolve-DevShortcutUsageError
         }
         Invoke-DevShortcutCommand -Items $items
         return
