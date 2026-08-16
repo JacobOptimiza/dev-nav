@@ -1475,3 +1475,207 @@ Describe 'DevNav navigator early dispatch behavior' {
         $global:DevNavNavigatorWarnings | Should -Contain 'DevNav se ha actualizado. Reinicia PowerShell para cargar el módulo actualizado.'
     }
 }
+
+Describe 'DevNav navigator native result dispatch behavior' {
+    BeforeAll {
+        $nativeModule = Get-Module -Name DevNav | Select-Object -First 1
+        $nativeModulePath = $nativeModule.Path
+        $nativeFixtureRoot = Join-Path $testLocalAppData ('navigator-native-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $nativeFixtureRoot -Force | Out-Null
+        $nativeShimPath = Join-Path $nativeFixtureRoot 'devnav-shim.cmd'
+        $nativeShimScript = Join-Path $nativeFixtureRoot 'devnav-shim.ps1'
+        $nativeArgsLog = Join-Path $nativeFixtureRoot 'args.log'
+        $nativeResultDirectory = Join-Path $nativeFixtureRoot 'selected'
+        New-Item -ItemType Directory -Path $nativeResultDirectory -Force | Out-Null
+        $nativeShimTemplate = @'
+param([string[]]$Args)
+if ($env:DEVNAV_NATIVE_ARGS_LOG) {
+    [System.IO.File]::WriteAllText($env:DEVNAV_NATIVE_ARGS_LOG, [string]::Join("`n", $Args))
+}
+$resultIndex = [array]::IndexOf($Args, '--result')
+if ($resultIndex -ge 0 -and $env:DEVNAV_NATIVE_RESULT_BASE64) {
+    $content = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:DEVNAV_NATIVE_RESULT_BASE64))
+    [System.IO.File]::WriteAllText($Args[$resultIndex + 1], $content)
+}
+exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
+'@
+        Set-Content -LiteralPath $nativeShimScript -Value $nativeShimTemplate -Encoding utf8NoBOM
+        Set-Content -LiteralPath $nativeShimPath -Value "@echo off`r`npwsh -NoProfile -ExecutionPolicy Bypass -File `"%~dp0devnav-shim.ps1`" %*`r`n" -Encoding ascii
+        function Assert-NativeInvocation {
+            $invocation = @(Get-Content -LiteralPath $nativeArgsLog)
+            $invocation | Should -Contain '--root'
+            $rootIndex = [array]::IndexOf($invocation, '--root')
+            $invocation[$rootIndex + 1] | Should -Be $nativeFixtureRoot
+            $resultIndex = [array]::IndexOf($invocation, '--result')
+            $resultIndex | Should -BeGreaterOrEqual 0
+            $resultPath = $invocation[$resultIndex + 1]
+            (Test-Path -LiteralPath $resultPath) | Should -BeFalse
+            return $resultPath
+        }
+    }
+
+    BeforeEach {
+        Get-Module -Name DevNav | Remove-Module -Force -ErrorAction SilentlyContinue
+        Import-Module $nativeModulePath -Force
+        $nativeModule = Get-Module -Name DevNav | Select-Object -First 1
+        $env:DEVNAV_NATIVE_ARGS_LOG = $nativeArgsLog
+        $env:DEVNAV_NATIVE_EXIT_CODE = '0'
+        $global:DevNavNativeShim = $nativeShimPath
+        $global:DevNavNativeRoot = $nativeFixtureRoot
+        Remove-Item -LiteralPath $nativeArgsLog -Force -ErrorAction SilentlyContinue
+        Remove-Item Env:DEVNAV_NATIVE_RESULT_BASE64 -ErrorAction SilentlyContinue
+        $global:DevNavNativeCalls = [System.Collections.Generic.List[string]]::new()
+        $global:DevNavNativeResultFile = $null
+    }
+
+    AfterEach {
+        Remove-Item Env:DEVNAV_NATIVE_ARGS_LOG, Env:DEVNAV_NATIVE_EXIT_CODE, Env:DEVNAV_NATIVE_RESULT_BASE64 -ErrorAction SilentlyContinue
+        Remove-Variable DevNavNativeCalls, DevNavNativeResultFile, DevNavNativeShim, DevNavNativeRoot -Scope Global -ErrorAction SilentlyContinue
+        Get-Module -Name DevNav | Remove-Module -Force -ErrorAction SilentlyContinue
+        Import-Module $nativeModulePath -Force
+        $nativeModule = Get-Module -Name DevNav | Select-Object -First 1
+    }
+
+    AfterAll {
+        Remove-Item -LiteralPath $nativeFixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'returns cleanly when the native navigator exits with a nonzero code' {
+        $env:DEVNAV_NATIVE_EXIT_CODE = '7'
+        $result = $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { throw 'Set-Location should not run' }
+            function Invoke-Expression { throw 'Invoke-Expression should not run' }
+            Invoke-DevNavigator
+        })
+        $result | Should -BeNullOrEmpty
+        Assert-NativeInvocation | Should -Not -BeNullOrEmpty
+    }
+
+    It 'returns cleanly when the native navigator creates no result file' {
+        $result = $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { throw 'Set-Location should not run' }
+            function Invoke-Expression { throw 'Invoke-Expression should not run' }
+            Invoke-DevNavigator
+        })
+        $result | Should -BeNullOrEmpty
+        Assert-NativeInvocation | Should -Not -BeNullOrEmpty
+    }
+
+    It 'reports the English error for an invalid native result' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('invalid'))
+        $global:DevNavNativeLanguage = 'en-US'
+        try {
+            $nativeModule.Invoke({
+                function Initialize-DevLanguage { 'en-US' }
+                function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+                function Get-DevRoot { $global:DevNavNativeRoot }
+                function Get-DevExecutable { $global:DevNavNativeShim }
+                function Get-DevLanguage { $global:DevNavNativeLanguage }
+                { Invoke-DevNavigator } | Should -Throw 'DevNav returned an invalid result.'
+            })
+            Assert-NativeInvocation | Should -Not -BeNullOrEmpty
+        }
+        finally { Remove-Variable DevNavNativeLanguage -Scope Global -ErrorAction SilentlyContinue }
+    }
+
+    It 'reports the Spanish error for an invalid native result' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('invalid'))
+        $global:DevNavNativeLanguage = 'es-ES'
+        try {
+            $nativeModule.Invoke({
+                function Initialize-DevLanguage { 'es-ES' }
+                function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+                function Get-DevRoot { $global:DevNavNativeRoot }
+                function Get-DevExecutable { $global:DevNavNativeShim }
+                function Get-DevLanguage { $global:DevNavNativeLanguage }
+                { Invoke-DevNavigator } | Should -Throw 'DevNav devolvió un resultado no válido.'
+            })
+            Assert-NativeInvocation | Should -Not -BeNullOrEmpty
+        }
+        finally { Remove-Variable DevNavNativeLanguage -Scope Global -ErrorAction SilentlyContinue }
+    }
+
+    It 'dispatches an update result without changing location' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("update`0$nativeResultDirectory"))
+        $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Update-DevNavigator { $global:DevNavNativeCalls.Add('update') }
+            function Set-Location { throw 'Set-Location should not run' }
+            Invoke-DevNavigator
+        })
+        $global:DevNavNativeCalls | Should -Be @('update')
+        Assert-NativeInvocation | Should -Not -BeNullOrEmpty
+    }
+
+    It 'navigates to a normal result without evaluating a command' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("navigate`0$nativeResultDirectory"))
+        $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
+            function Invoke-Expression { throw 'Invoke-Expression should not run' }
+            Invoke-DevNavigator
+        })
+        $global:DevNavNativeCalls | Should -Be @("location:$nativeResultDirectory")
+        Assert-NativeInvocation | Should -Not -BeNullOrEmpty
+    }
+
+    It 'evaluates the command returned by the native result' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("exec`0$nativeResultDirectory`0cargo test"))
+        $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
+            function Invoke-Expression { param($Command) $global:DevNavNativeCalls.Add("command:$Command") }
+            Invoke-DevNavigator
+        })
+        $global:DevNavNativeCalls | Should -Contain 'command:cargo test'
+        Assert-NativeInvocation | Should -Not -BeNullOrEmpty
+    }
+
+    It 'prefers an explicit command over the native result command' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("exec`0$nativeResultDirectory`0embedded command"))
+        $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
+            function Invoke-Expression { param($Command) $global:DevNavNativeCalls.Add("command:$Command") }
+            Invoke-DevNavigator git status
+        })
+        $global:DevNavNativeCalls | Should -Contain 'command:git status'
+        $global:DevNavNativeCalls | Should -Not -Contain 'command:embedded command'
+        Assert-NativeInvocation | Should -Not -BeNullOrEmpty
+    }
+
+    It 'does not evaluate an empty or whitespace native command' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("exec`0$nativeResultDirectory`0   "))
+        $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
+            function Invoke-Expression { param($Command) $global:DevNavNativeCalls.Add("command:$Command") }
+            Invoke-DevNavigator '   '
+        })
+        @($global:DevNavNativeCalls | Where-Object { $_ -like 'command:*' }).Count | Should -Be 0
+        Assert-NativeInvocation | Should -Not -BeNullOrEmpty
+    }
+}
