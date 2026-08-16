@@ -177,14 +177,6 @@ Los binarios publicados no requieren Rust ni Visual Studio. Solo necesitas un
 gestor de paquetes si eliges su comando de bootstrap. Windows PowerShell 5.1,
 Windows de 32 bits, Linux y macOS no están soportados.
 
-## ¿Por qué DevNav?
-
-- Arranca directamente en el espacio de trabajo que elijas.
-- Mantiene disponibles todos tus favoritos mientras navegas entre unidades.
-- Abre agentes o ejecuta comandos en el repositorio resaltado.
-- Devuelve correctamente los cambios de directorio a la sesión actual.
-- Es una aplicación nativa para Windows, centrada en teclado y sin telemetría.
-
 ## Primer inicio: elegir la ruta de inicio
 
 La **ruta de inicio** es la carpeta que contiene tus repositorios o aquella que
@@ -415,11 +407,23 @@ Set-DevUpdateCheck $false  # desactivar
   Reporting; para trabajo no sensible se usan las plantillas de Issues y Pull
   Requests.
 
-Consulta [SECURITY.md](SECURITY.md) para informar vulnerabilidades de forma
-privada y [CONTRIBUTING.md](CONTRIBUTING.md) para conocer la política del
-repositorio.
+Consulta [SECURITY.md](SECURITY.md) para la política y las expectativas de
+seguridad, [ARCHITECTURE.md](ARCHITECTURE.md) para los componentes y límites de
+confianza, [ASSURANCE.md](ASSURANCE.md) para el assurance case basado en
+evidencia, [CONTRIBUTING.md](CONTRIBUTING.md) para la política de desarrollo y
+la [guía de troubleshooting](TROUBLESHOOTING.es.md) para diagnósticos.
 
-## Desarrollo
+## Compilar desde fuente
+
+Requiere Rust estable y MSVC Build Tools:
+
+```powershell
+git clone https://github.com/JacobOptimiza/dev-nav.git
+Set-Location dev-nav
+.\install.ps1 -BuildFromSource
+```
+
+Controles de desarrollo:
 
 ```powershell
 cargo fmt --all -- --check
@@ -427,18 +431,22 @@ cargo check --workspace --all-targets
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo deny check
+cargo llvm-cov --workspace --json --output-path target/llvm-cov-export.json
+python scripts/rust-production-coverage.py target/llvm-cov-export.json --threshold 80
+python -m unittest discover -s tests/coverage
 ./scripts/validate-powershell.ps1
-Invoke-Pester -Path ./tests/powershell
+./scripts/invoke-pester-coverage.ps1
+node --test "tests/npm/**/*.test.mjs"
+./scripts/invoke-npm-coverage.ps1
 ```
 
-El MSRV es Rust 1.97; CI fija Rust 1.97.1 con `rustfmt` y `clippy`. Los controles de
-PowerShell usan el parser nativo, PSScriptAnalyzer 1.25.0 y Pester 6.1.0. Las
-licencias, advisories, registros y versiones duplicadas de dependencias se
-comprueban con `cargo-deny` mediante [deny.toml](deny.toml). CI ejecuta todos
-estos controles.
+El MSRV es Rust 1.97; CI fija Rust 1.97.1 con `rustfmt` y `clippy`.
+Los controles de PowerShell usan el parser nativo, PSScriptAnalyzer 1.25.0 y
+Pester 6.1.0. Las licencias, advisories, registros y versiones duplicadas de
+dependencias se comprueban con `cargo-deny` mediante [deny.toml](deny.toml).
+CI ejecuta todos estos controles.
 
-Consulta el [roadmap público](ROADMAP.md) para conocer el trabajo de distribución
-planificado.
+Consulta el [roadmap público](ROADMAP.md) para conocer el trabajo planificado.
 
 ## FAQ
 

@@ -5,6 +5,20 @@ and the public Scoop bucket.
 Release payloads are checksum-verified with SHA-256; checksums verify integrity
 and are not digital signatures.
 
+## Planning horizon
+
+This roadmap covers the next 12 months from its current revision. During that
+horizon DevNav intends to keep Windows x64 and ARM64 as the supported
+platforms, maintain the native Rust + PowerShell architecture, preserve the
+GitHub Release, npm-bootstrap and Scoop distribution paths, pursue public
+WinGet catalog availability, and continue improving quality and security
+controls without rewriting published release history.
+
+During the same horizon DevNav does not plan to claim Linux or macOS support,
+replace the native core with a JavaScript runtime, or make package runners own
+updates after installation. Linux/WSL remains an evaluation item rather than a
+committed deliverable.
+
 ## Current maintenance and quality baseline
 
 - [x] Rust, PowerShell and npm bootstrap test suites green in CI on pushes to

@@ -176,89 +176,125 @@ Published binaries do not require Rust or Visual Studio. A package runner is
 required only when you choose its bootstrap command.
 Windows PowerShell 5.1, 32-bit Windows, Linux, and macOS are not supported.
 
-## Why DevNav?
-
-- Starts directly in your chosen workspace.
-- Keeps every favorite available while you navigate across drives.
-- Opens coding agents or runs commands in the highlighted repository.
-- Returns directory changes to the current PowerShell session correctly.
-- Runs as a native, keyboard-first Windows application with no telemetry.
-
 ## First run: choose your startup directory
 
-The startup directory is the folder containing your repositories, or any folder
-you want DevNav to show on launch.
+The **startup directory** is the folder that contains your repositories, or any
+folder you want DevNav to show whenever you run `dev`. The recommended setup
+does not require commands or editing files:
 
 1. Run `dev`. On the first interactive launch only, choose whether DevNav may
-   silently check for new releases at startup; this never installs without asking.
-2. A fresh installation opens at `$HOME`. Navigate with `↑`, `↓`, and `→`.
-   Press `p` to enter any absolute path or drive.
+   silently check for new releases at startup; it never installs anything
+   without asking.
+2. A fresh installation opens at `$HOME`. Navigate with `↑`, `↓`, and `→`. To
+   go directly to another path or drive, press `p`, type the path, and confirm
+   with `Enter`.
 3. Highlight the directory you want to use as your startup directory.
-4. Press `Ctrl+S`.
-5. Verify the full path and press `Enter`; press `Esc` to cancel.
+4. Press `Ctrl+S` (**save as startup directory**).
+5. Review the displayed path and press `Enter` to confirm or `Esc` to cancel.
 
-For scripts and coding agents, the equivalent command is:
+The next `dev` starts directly in that directory. You can repeat these steps at
+any time to change it. `Ctrl+S` deliberately uses a chord plus confirmation to
+avoid accidental changes.
+
+### Alternative for terminals, scripts, or agents
+
+After installation, Codex, Cursor, or any script can configure the same path
+without opening the TUI:
 
 ```powershell
 Set-DevRoot $HOME
 Get-DevRoot
 ```
 
-For existing setups, `DEV_HOME` remains a fallback until a saved startup
-directory exists; a directory saved with `Ctrl+S` or `Set-DevRoot` takes
-precedence.
+`Set-DevRoot` validates that the directory exists and saves the same local
+configuration as `Ctrl+S`.
 
-## Global favorites
+For compatibility with existing setups, `DEV_HOME` continues to work when no
+startup directory has been saved yet. A directory selected with `Ctrl+S` or
+`Set-DevRoot` takes precedence:
 
-Press `f` on a directory to add or remove it from global favorites. Every saved
-favorite stays at the top while you navigate, including the favorite matching
-the current directory.
+```powershell
+$env:DEV_HOME = $HOME
+```
+
+## Global favorites, even outside the root
+
+Favorites are not limited to the startup directory. They always appear at the
+top of the list while you navigate elsewhere. The favorite matching the current
+directory is also shown, so entering a favorite never makes it disappear.
 
 Global favorite shortcuts are visible by default. Press `Shift+F` to hide or
-show them. DevNav persists this preference between sessions; hiding shortcuts
-does not delete favorites or hide real child directories.
+show them; DevNav persists that preference between sessions. Hiding shortcuts
+does not delete favorites or hide real directories in the current folder.
 
-Favorites, aliases, startup directory, and UI preferences live outside the
-repository in `%LOCALAPPDATA%\DevNav\config.tsv`. Updates do not overwrite it.
+To add a directory from another drive or outside the startup directory:
+
+1. Run `dev`.
+2. Press `p`.
+3. Type an absolute path, for example `D:\Clients` or `C:\Work\Repo`.
+4. Press `Enter` to open that location.
+5. Navigate with the arrow keys and `→` until the target directory is
+   highlighted.
+6. Press `f` to save it as a favorite.
+
+It will then appear at the top from any location. Highlight it and press `f`
+again to remove it. Press `a` to display it as `alias - directory-name`.
+
+The startup directory, favorites, aliases, and UI preferences are local and
+live outside the repository in `%LOCALAPPDATA%\DevNav\config.tsv`.
 
 ## Shortcuts
 
-Press `F1` at any time for the complete, scrollable help panel.
+Shortcuts are grouped by workflow. The most frequently used actions appear
+first so they are easy to discover and remember.
 
-### Navigation and organization
+### Navigation and selection
 
 | Shortcut | Action |
 |---|---|
 | `↑` / `↓` or `j` / `k` | Move the selection |
 | `Enter` | Select the directory and return to PowerShell |
 | `→` / `l` | Enter the highlighted directory |
-| `←` / `h` / `Backspace` | Go to the parent directory |
-| `/` | Start incremental fuzzy filtering |
-| `p` | Open any absolute path or drive |
+| `←` / `h` | Go to the parent directory |
+| `Backspace` | Go to the parent directory |
 | `.` | Select the directory currently shown |
 | `g` | Return to the startup directory |
-| `Ctrl+S` | Save the highlighted directory as startup directory, with confirmation |
-| `f` | Add or remove a global favorite |
-| `Shift+F` | Show or hide global favorite shortcuts |
-| `a` | Create or edit an alias |
+| `p` | Open any absolute path, including another drive |
+| `Ctrl+S` | Save the highlighted directory as the startup directory; requires confirmation |
+| `F1` | Open the full shortcut help panel |
+| `F2` | Switch between English and Español |
+| `F3` | Open the custom-command manager |
 
-### Coding agents and commands
+### Agents
 
 | Shortcut | Action |
 |---|---|
-| `c` | Codex: new session in the highlighted repository |
-| `r` | Codex: resume the repository's last session |
-| `d` / `Shift+D` | Claude Code: new / last session |
-| `o` / `Shift+O` | OpenCode: new / last session |
-| `i` / `Shift+I` | Kimi: new / last session |
+| `c` | Codex: start a new session (`codex`) in the highlighted directory |
+| `r` | Codex: resume the repository's last session (`codex resume --last`) |
+| `d` | Start Claude Code (`claude`) in the highlighted directory |
+| `Shift+D` | Resume the repository's last Claude Code session (`claude --continue`) |
+| `o` | Start OpenCode (`opencode`) in the highlighted directory |
+| `Shift+O` | Resume the repository's last OpenCode session (`opencode --continue`) |
+| `i` | Start Kimi Code (`kimi`) in the highlighted directory |
+| `Shift+I` | Resume the repository's last Kimi Code session (`kimi --continue`) |
+
+### Organization, search and actions
+
+| Shortcut | Action |
+|---|---|
+| `/` | Start incremental fuzzy filtering |
+| `f` | Add or remove a global favorite |
+| `Shift+F` | Show or hide global favorite shortcuts; the state persists between sessions |
+| `a` | Edit the highlighted directory alias |
 | `e` | Enter and run a command in the highlighted directory |
 | `u` | Refresh the current directory |
-| `Ctrl+U` | Enable or disable update checks at startup |
-| `Shift+U` | Check for and install a DevNav update |
-| `F1` | Open or close the shortcuts panel |
-| `F2` | Switch between English and Español |
-| `F3` | Open the custom-command manager |
-| `q` / `Esc` | Exit or cancel |
+| `Ctrl+U` | Enable or disable startup update checks |
+| `Shift+U` | Check for and install the latest DevNav release |
+| `q` / `Esc` | Cancel and return to PowerShell |
+
+The bottom bar shows only essential actions to avoid visual overload. Press
+`F1` at any time for the complete panel; scroll with `↑` / `↓` and close it
+with `F1`, `Esc`, or `Enter`.
 
 `:` remains available as a Vim-style alias for `e`.
 
@@ -359,11 +395,15 @@ Set-DevUpdateCheck $false  # disable
 - Local configuration is excluded from the repository and preserved on updates.
 - GitHub Actions use minimal permissions and commit-pinned actions.
 - npm releases use OIDC Trusted Publishing; no `NPM_TOKEN` is stored.
+- Dependabot monitors Cargo and GitHub Actions dependencies.
 - Security reports use GitHub Private Vulnerability Reporting; use the issue or
   pull-request templates for non-sensitive work.
 
-See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the
-[troubleshooting guide](TROUBLESHOOTING.md).
+See [SECURITY.md](SECURITY.md) for the security policy and expectations,
+[ARCHITECTURE.md](ARCHITECTURE.md) for component and trust boundaries,
+[ASSURANCE.md](ASSURANCE.md) for the evidence-based assurance case,
+[CONTRIBUTING.md](CONTRIBUTING.md) for development policy, and the
+[troubleshooting guide](TROUBLESHOOTING.md) for diagnostics.
 
 ## Build from source
 
@@ -383,8 +423,13 @@ cargo check --workspace --all-targets
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo deny check
+cargo llvm-cov --workspace --json --output-path target/llvm-cov-export.json
+python scripts/rust-production-coverage.py target/llvm-cov-export.json --threshold 80
+python -m unittest discover -s tests/coverage
 ./scripts/validate-powershell.ps1
-Invoke-Pester -Path ./tests/powershell
+./scripts/invoke-pester-coverage.ps1
+node --test "tests/npm/**/*.test.mjs"
+./scripts/invoke-npm-coverage.ps1
 ```
 
 The MSRV is Rust 1.97; CI pins Rust 1.97.1 with `rustfmt` and `clippy`.
@@ -393,6 +438,66 @@ Pester 6.1.0. Dependency licenses, advisories, registries and duplicate versions
 `cargo-deny` using [deny.toml](deny.toml). CI runs all of these checks.
 
 See the public [roadmap](ROADMAP.md) for planned distribution work.
+
+## FAQ
+
+Quick answers are listed here. Full diagnostics and procedures are available in
+the [troubleshooting guide](TROUBLESHOOTING.md).
+
+### Does normal installation require Rust or Visual Studio?
+
+No. The installer downloads and verifies the published binary. Rust and MSVC
+are required only with `-BuildFromSource`.
+[See details](TROUBLESHOOTING.md#rust-or-cargo-is-missing).
+
+### Why is `dev` not recognized after installation?
+
+`dev` is an alias loaded by the PowerShell module, not an executable added to
+`PATH`. Restart PowerShell 7 and check the profile if it does not appear.
+[See the solution](TROUBLESHOOTING.md#the-dev-command-is-unavailable).
+
+### How do I correct the startup directory?
+
+Highlight the correct directory in the TUI and press `Ctrl+S`, or run
+`Set-DevRoot $HOME`.
+[See the commands](TROUBLESHOOTING.md#correct-the-startup-directory).
+
+### Why does Codex, Claude, OpenCode, or Kimi not open?
+
+Each CLI is optional and must be installed and available on PowerShell's
+`PATH`.
+[See diagnostics](TROUBLESHOOTING.md#a-coding-agent-does-not-open).
+
+### What should I do if PowerShell blocks `install.ps1`?
+
+Inspect the script and unblock only that file if you trust its origin. Do not
+disable execution policy globally.
+[See the procedure](TROUBLESHOOTING.md#installps1-is-blocked-by-powershell).
+
+### What should I do if a download or checksum fails?
+
+Check the connection, proxy, or firewall and retry. Do not bypass SHA-256
+verification.
+[See the explanation](TROUBLESHOOTING.md#download-or-checksum-failure).
+
+### What should I do if the TUI exits or keys do not respond?
+
+Run `dev` from PowerShell 7 in Windows Terminal, close older instances, and
+update DevNav.
+[See diagnostics](TROUBLESHOOTING.md#unexpected-exit-or-incorrect-keyboard-input).
+
+### How do I update DevNav?
+
+Run `dev update` from PowerShell or press `Shift+U` inside the TUI. This also
+applies to installations bootstrapped through npm, Bun, pnpm, or Yarn.
+[See the steps](TROUBLESHOOTING.md#install-an-update-manually).
+
+### How do I disable or re-enable the startup update check?
+
+Press `Ctrl+U` inside the TUI. You can also use
+`Set-DevUpdateCheck $false` or `Set-DevUpdateCheck $true` from PowerShell. The
+preference survives updates.
+[See details](TROUBLESHOOTING.md#change-the-startup-check-preference).
 
 ## License
 
