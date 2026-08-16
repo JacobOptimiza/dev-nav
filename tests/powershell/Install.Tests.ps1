@@ -124,7 +124,12 @@ Describe 'install.ps1 release bootstrap behavior' {
         $global:installImportRecords.Name | Should -Be "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\DevNav.psm1"
         $global:installImportRecords.Force | Should -BeTrue
         $global:installProfileAdds.Count | Should -Be 0
-        $global:installRemovedPaths | Should -Be $global:installDownloadPaths
+        $global:installRemovedPaths | Should -Be @(
+            "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\dev.pdb",
+            $global:installDownloadPaths[0],
+            $global:installDownloadPaths[1],
+            $global:installDownloadPaths[2]
+        )
         Should -Invoke Test-Path -Times 0 -Scope It
         $global:installContentPaths | Should -Not -Contain $PROFILE
         Should -Invoke Add-Content -Times 0 -Scope It
@@ -137,7 +142,12 @@ Describe 'install.ps1 release bootstrap behavior' {
         $global:installProfileAdds.Count | Should -Be 1
         $global:installProfileAdds[0].LiteralPath | Should -Be $PROFILE
         $global:installProfileAdds[0].Value | Should -Be "`nImport-Module 'C:\Users\Profile''Test\AppData\Local\Programs\DevNav\DevNav.psm1'"
-        $global:installRemovedPaths | Should -Be $global:installDownloadPaths
+        $global:installRemovedPaths | Should -Be @(
+            "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\dev.pdb",
+            $global:installDownloadPaths[0],
+            $global:installDownloadPaths[1],
+            $global:installDownloadPaths[2]
+        )
     }
 
     It 'does not append a duplicate import when the profile already contains it' {
@@ -209,6 +219,101 @@ Describe 'install.ps1 release bootstrap behavior' {
         }
 
         (Get-Location).Path | Should -Be $originalCallerLocation
+    }
+
+    It 'installs the PDB produced by the current build when symbols are requested' {
+        $originalCallerLocation = (Get-Location).Path
+        $shimPath = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-cargo-{0}.cmd" -f [guid]::NewGuid().ToString('N'))
+        $logPath = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-cargo-{0}.log" -f [guid]::NewGuid().ToString('N'))
+        $sourceExecutable = Join-Path $repositoryRoot 'target\release\dev.exe'
+        $sourcePdb = Join-Path $repositoryRoot 'target\release\dev.pdb'
+        $shim = "@echo off`r`n>>`"$logPath`" echo %CD%^|%*`r`nexit /b 0`r`n"
+        [System.IO.File]::WriteAllText($shimPath, $shim)
+
+        try {
+            Mock Get-Command { [pscustomobject]@{ Source = $shimPath } }
+            Mock Test-Path {
+                param($LiteralPath, $PathType)
+                return ($LiteralPath -eq $shimPath) -or ($LiteralPath -eq $sourcePdb)
+            }
+
+            & $installScriptPath -BuildFromSource -ModifyProfile:$false
+
+            $global:installCopyRecords.LiteralPath | Should -Be @(
+                $sourceExecutable,
+                $sourcePdb,
+                (Join-Path $repositoryRoot 'powershell\DevNav.psm1')
+            )
+            $global:installCopyRecords.Destination | Should -Be @(
+                "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\dev.exe",
+                "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\dev.pdb",
+                "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\DevNav.psm1"
+            )
+            # The stale target PDB is purged before the build and any stale
+            # installed symbols are removed before the fresh PDB is copied
+            # (the remaining removals are the temporary download cleanup).
+            $symbolRemovals = @($global:installRemovedPaths | Where-Object { $_ -like '*dev.pdb' })
+            $symbolRemovals | Should -Be @(
+                $sourcePdb,
+                "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\dev.pdb"
+            )
+            $global:installDownloadUris.Count | Should -Be 0
+        }
+        finally {
+            Set-Location -LiteralPath $originalCallerLocation
+            if ([System.IO.File]::Exists($shimPath)) { [System.IO.File]::Delete($shimPath) }
+            if ([System.IO.File]::Exists($logPath)) { [System.IO.File]::Delete($logPath) }
+        }
+    }
+
+    It 'does not install a residual PDB when the current build produces no symbols' {
+        $originalCallerLocation = (Get-Location).Path
+        $shimPath = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-cargo-{0}.cmd" -f [guid]::NewGuid().ToString('N'))
+        $logPath = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-cargo-{0}.log" -f [guid]::NewGuid().ToString('N'))
+        $sourcePdb = Join-Path $repositoryRoot 'target\release\dev.pdb'
+        $shim = "@echo off`r`n>>`"$logPath`" echo %CD%^|%*`r`nexit /b 0`r`n"
+        [System.IO.File]::WriteAllText($shimPath, $shim)
+
+        try {
+            Mock Get-Command { [pscustomobject]@{ Source = $shimPath } }
+            Mock Test-Path {
+                param($LiteralPath, $PathType)
+                return ($LiteralPath -eq $shimPath)
+            }
+
+            & $installScriptPath -BuildFromSource -ModifyProfile:$false
+
+            $global:installCopyRecords.LiteralPath | Should -Be @(
+                (Join-Path $repositoryRoot 'target\release\dev.exe'),
+                (Join-Path $repositoryRoot 'powershell\DevNav.psm1')
+            )
+            # A leftover target PDB is purged before the build and the stale
+            # installed symbols never survive next to the new executable
+            # (the remaining removals are the temporary download cleanup).
+            $symbolRemovals = @($global:installRemovedPaths | Where-Object { $_ -like '*dev.pdb' })
+            $symbolRemovals | Should -Be @(
+                $sourcePdb,
+                "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\dev.pdb"
+            )
+        }
+        finally {
+            Set-Location -LiteralPath $originalCallerLocation
+            if ([System.IO.File]::Exists($shimPath)) { [System.IO.File]::Delete($shimPath) }
+            if ([System.IO.File]::Exists($logPath)) { [System.IO.File]::Delete($logPath) }
+        }
+    }
+
+    It 'leaves no installed symbols behind when installing from the release channel' {
+        & $installScriptPath -ModifyProfile:$false
+
+        # The release channel ships no symbols: any PDB installed by an
+        # earlier debug build is removed next to the newly installed exe.
+        $global:installRemovedPaths[0] | Should -Be "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\dev.pdb"
+        $global:installCopyRecords.LiteralPath | Should -Be @(
+            $global:installDownloadPaths[0],
+            $global:installDownloadPaths[1]
+        )
+        $global:installCopyRecords.Destination | Should -Not -Contain "C:\Users\Profile'Test\AppData\Local\Programs\DevNav\dev.pdb"
     }
 
     It 'fails when the executable checksum entry is missing' {

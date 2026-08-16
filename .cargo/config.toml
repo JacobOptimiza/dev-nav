@@ -1,0 +1,10 @@
+# DevNav build configuration.
+#
+# /Brepro makes the MSVC linker emit deterministic PE timestamps instead of
+# wall-clock values, so two clean builds from the same source tree produce
+# bit-for-bit identical binaries (verified by
+# scripts/verify-build-repeatability.ps1). An explicit RUSTFLAGS environment
+# variable still takes precedence over these flags, so externally provided
+# compiler/linker settings are honored unchanged.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "link-arg=/Brepro"]
