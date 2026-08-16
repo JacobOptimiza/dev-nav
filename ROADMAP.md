@@ -5,6 +5,30 @@ and the public Scoop bucket.
 Release payloads are checksum-verified with SHA-256; checksums verify integrity
 and are not digital signatures.
 
+## Current maintenance and quality baseline
+
+- [x] Rust, PowerShell and npm bootstrap test suites green on every push and
+  pull request (pinned toolchains: Rust 1.97.1, Pester 6.1.0,
+  PSScriptAnalyzer 1.25.0, Node 22/24/26 with 24 as the release baseline).
+- [x] Coverage floors enforced in CI at >= 80% for all three languages:
+  Rust production-only lines and regions, PowerShell commands and lines, and
+  npm bootstrap lines (Node native coverage).
+- [x] CodeQL static analysis for Rust, GitHub Actions and
+  JavaScript/TypeScript; ClusterFuzzLite fuzzing of the `config.tsv` parser;
+  `cargo deny` advisory/license/ban checks.
+- [x] Version consistency across all channels enforced mechanically.
+
+## Near-term quality and security work
+
+- [ ] Keep reducing CodeQL Rust extraction errors if upstream extractor
+  support improves (current residual is macro-expansion-related and documented
+  in [SECURITY.md](SECURITY.md)).
+- [ ] Revisit OpenSSF Scorecard findings that require organizational decisions
+  (branch protection coverage, review and maintenance signals) rather than
+  code changes.
+- [ ] Validate a real cross-version Scoop upgrade on a future release and
+  automate WinGet submissions once a catalog installation is verified.
+
 ## Distribution status
 
 - [x] GitHub releases with x64 and ARM64 application binaries.
