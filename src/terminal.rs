@@ -90,3 +90,26 @@ fn validate_handle(handle: HANDLE) -> io::Result<()> {
 fn win32(success: i32) -> io::Result<()> {
     if success == 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_handle, win32};
+    use windows_sys::Win32::Foundation::{HANDLE, INVALID_HANDLE_VALUE};
+
+    #[test]
+    fn validate_handle_rejects_null_and_invalid_handles() {
+        assert!(validate_handle(std::ptr::null_mut::<std::ffi::c_void>() as HANDLE).is_err());
+        assert!(validate_handle(INVALID_HANDLE_VALUE).is_err());
+    }
+
+    #[test]
+    fn validate_handle_accepts_any_other_handle_value() {
+        assert!(validate_handle(1 as HANDLE).is_ok());
+    }
+
+    #[test]
+    fn win32_maps_zero_to_error_and_nonzero_to_ok() {
+        assert!(win32(0).is_err());
+        assert!(win32(1).is_ok());
+    }
+}

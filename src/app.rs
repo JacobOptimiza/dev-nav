@@ -802,8 +802,16 @@ impl App {
 
     fn render(&mut self, terminal: &Terminal) -> io::Result<()> {
         let (width, height) = terminal.size();
-        let width = usize::from(width.max(42));
-        let height = usize::from(height.max(12));
+        let rows = self.render_rows(usize::from(width), usize::from(height));
+        self.renderer.draw(rows)
+    }
+
+    /// Builds the full frame for a terminal of `width` x `height` cells.
+    /// Pure string generation: no I/O, so tests can exercise every mode
+    /// without a real console. `render` is a thin wrapper around this.
+    fn render_rows(&mut self, width: usize, height: usize) -> Vec<String> {
+        let width = width.max(42);
+        let height = height.max(12);
         let inner = width.saturating_sub(4);
         let list_height = height.saturating_sub(7);
         if self.selected < self.scroll {
@@ -924,7 +932,7 @@ impl App {
         rows.push(format!("{FRAME}│{RESET} {} {FRAME}│{RESET}", fit(&prompt, inner)));
         let help = self.footer_line();
         rows.push(format!("{FRAME}╰─{}─╯{RESET}", fit(&help, width.saturating_sub(4))));
-        self.renderer.draw(rows)
+        rows
     }
 
     fn command_panel_layout(&mut self, inner: usize, list_height: usize) -> Option<PanelLayout> {
@@ -1593,8 +1601,8 @@ mod tests {
     };
 
     use super::{
-        App, Mode, PanelLayout, ShellResult, TextField, agent_command, command_scroll, cursor_text,
-        editor_footer_for, footer_fits, footer_help, fuzzy_score, help_lines_for,
+        App, EditorField, Mode, PanelLayout, ShellResult, TextField, agent_command, command_scroll,
+        cursor_text, editor_footer_for, footer_fits, footer_help, fuzzy_score, help_lines_for,
         is_command_shortcut, manager_footer_for, panel_binding_row, panel_border,
         panel_border_with_binding, panel_field_dimensions, panel_field_row, panel_slot_row,
         panel_text_row, visible_width,
@@ -2171,5 +2179,677 @@ mod tests {
         // Unconfigured slots must not clutter the footer.
         assert!(!footer.contains("Mayús+3"));
         fs::remove_dir_all(sandbox).expect("clean test sandbox");
+    }
+
+    fn sandbox_app(label: &str) -> (App, std::path::PathBuf) {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let sandbox = std::env::temp_dir().join(format!("devnav-app-{label}-{unique}"));
+        let root = sandbox.join("home");
+        fs::create_dir_all(&root).expect("create sandbox root");
+        let app =
+            App::new(root, Config::default(), sandbox.join("config.tsv")).expect("create app");
+        (app, sandbox)
+    }
+
+    fn sandbox_app_with_dirs(label: &str, dirs: &[&str]) -> (App, std::path::PathBuf) {
+        let (app, sandbox) = sandbox_app(label);
+        for dir in dirs {
+            fs::create_dir_all(sandbox.join("home").join(dir)).expect("create child dir");
+        }
+        let mut app = app;
+        app.refresh().expect("refresh after creating dirs");
+        (app, sandbox)
+    }
+
+    #[test]
+    fn ctrl_c_quits_from_any_mode() {
+        let (mut app, sandbox) = sandbox_app("ctrlc");
+        assert_eq!(app.handle_key(Key::CtrlC).expect("quit"), Some(None));
+        app.handle_key(Key::Char('/')).expect("open filter");
+        assert_eq!(app.handle_key(Key::CtrlC).expect("quit from filter"), Some(None));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn normal_mode_q_and_escape_quit_without_a_shell_result() {
+        let (mut app, sandbox) = sandbox_app("quit");
+        assert_eq!(app.handle_key(Key::Char('q')).expect("q"), Some(None));
+
+        let (mut app, sandbox2) = sandbox_app("quit-esc");
+        assert_eq!(app.handle_key(Key::Escape).expect("esc"), Some(None));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+        fs::remove_dir_all(sandbox2).expect("clean sandbox2");
+    }
+
+    #[test]
+    fn enter_and_dot_emit_change_directory_results() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("enter", &["project"]);
+        let project = app.selected_entry().expect("entry").path.clone();
+        match app.handle_key(Key::Enter).expect("enter") {
+            Some(Some(ShellResult::ChangeDirectory(path))) => assert_eq!(path, project),
+            other => panic!("expected ChangeDirectory, got {other:?}"),
+        }
+
+        let (mut app, sandbox2) = sandbox_app("dot");
+        let current = app.current.clone();
+        match app.handle_key(Key::Char('.')).expect("dot") {
+            Some(Some(ShellResult::ChangeDirectory(path))) => assert_eq!(path, current),
+            other => panic!("expected ChangeDirectory for current, got {other:?}"),
+        }
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+        fs::remove_dir_all(sandbox2).expect("clean sandbox2");
+    }
+
+    #[test]
+    fn enter_on_an_empty_list_is_a_no_op() {
+        let (mut app, sandbox) = sandbox_app("enter-empty");
+        assert_eq!(app.handle_key(Key::Enter).expect("enter"), None);
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn g_returns_to_the_startup_folder_and_u_refreshes_with_feedback() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("home-refresh", &["sub"]);
+        let home = app.home.clone();
+        app.handle_key(Key::Right).expect("enter subdir");
+        assert_ne!(app.current, home);
+        app.handle_key(Key::Char('g')).expect("go home");
+        assert_eq!(app.current, home);
+
+        app.handle_key(Key::Char('u')).expect("refresh");
+        assert_eq!(app.message, "Directorio actualizado");
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn shift_u_emits_an_update_shell_result() {
+        let (mut app, sandbox) = sandbox_app("update");
+        match app.handle_key(Key::Char('U')).expect("update") {
+            Some(Some(ShellResult::Update)) => {}
+            other => panic!("expected Update, got {other:?}"),
+        }
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn ctrl_u_toggles_update_checks_and_persists_the_choice() {
+        let (mut app, sandbox) = sandbox_app("update-checks");
+        let config_path = sandbox.join("config.tsv");
+        app.handle_key(Key::CtrlU).expect("toggle off");
+        assert_eq!(app.message, "Comprobación de actualizaciones al iniciar: desactivada");
+        assert_eq!(Config::load(&config_path).expect("load").check_updates(), Some(false));
+        app.handle_key(Key::CtrlU).expect("toggle on");
+        assert_eq!(app.message, "Comprobación de actualizaciones al iniciar: activada");
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn selection_moves_and_clamps_at_both_ends() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("move", &["a", "b", "c"]);
+        app.handle_key(Key::Up).expect("up at top");
+        assert_eq!(app.selected, 0);
+        app.handle_key(Key::Down).expect("down");
+        app.handle_key(Key::Char('j')).expect("j down");
+        assert_eq!(app.selected, 2);
+        app.handle_key(Key::Down).expect("down at bottom");
+        assert_eq!(app.selected, 2);
+        app.handle_key(Key::Char('k')).expect("k up");
+        assert_eq!(app.selected, 1);
+
+        // An empty list ignores movement entirely.
+        let (mut empty, sandbox2) = sandbox_app("move-empty");
+        empty.handle_key(Key::Down).expect("down on empty");
+        assert_eq!(empty.selected, 0);
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+        fs::remove_dir_all(sandbox2).expect("clean sandbox2");
+    }
+
+    #[test]
+    fn right_opens_the_highlighted_folder_and_left_returns_to_the_parent() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("nav", &["sub"]);
+        let root = app.current.clone();
+        app.handle_key(Key::Char('l')).expect("open with l");
+        assert_eq!(app.current, root.join("sub"));
+        app.handle_key(Key::Char('h')).expect("parent with h");
+        assert_eq!(app.current, root);
+        app.handle_key(Key::Right).expect("open with right");
+        assert_eq!(app.current, root.join("sub"));
+        app.handle_key(Key::Backspace).expect("parent with backspace");
+        assert_eq!(app.current, root);
+        app.handle_key(Key::Left).expect("parent with left");
+        assert_eq!(app.current, root.parent().expect("parent").to_path_buf());
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn filter_mode_narrows_reorders_and_restores_the_list() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("filter", &["alpha", "beta", "alpine"]);
+        app.handle_key(Key::Char('/')).expect("open filter");
+        assert!(matches!(app.mode, Mode::Filter));
+        for character in "al".chars() {
+            app.handle_key(Key::Char(character)).expect("type filter");
+        }
+        assert_eq!(app.visible.len(), 2);
+        // Prefix matches outrank substring matches deeper in the name.
+        let labels: Vec<String> =
+            app.visible.iter().map(|index| app.entries[*index].label()).collect();
+        assert_eq!(labels, vec!["alpha", "alpine"]);
+
+        app.handle_key(Key::Backspace).expect("backspace filter");
+        assert_eq!(app.visible.len(), 3);
+        app.handle_key(Key::Char('l')).expect("retype");
+        app.handle_key(Key::Down).expect("move in filter");
+        app.handle_key(Key::Escape).expect("cancel filter");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(app.input.is_empty());
+        assert_eq!(app.visible.len(), 3);
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn filter_enter_applies_the_query_and_keeps_the_mode_clean() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("filter-enter", &["alpha", "beta"]);
+        app.handle_key(Key::Char('/')).expect("open filter");
+        app.handle_key(Key::Char('a')).expect("type a");
+        // "a" matches both "alpha" (prefix) and "beta" (substring).
+        assert_eq!(app.visible.len(), 2);
+        app.handle_key(Key::Enter).expect("apply filter");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert_eq!(app.input, "a");
+        assert_eq!(app.visible.len(), 2);
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn path_mode_navigates_to_relative_and_absolute_paths() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("path", &["sub"]);
+        let root = app.current.clone();
+        app.handle_key(Key::Char('p')).expect("open path mode");
+        assert!(matches!(app.mode, Mode::Path));
+        for character in "sub".chars() {
+            app.handle_key(Key::Char(character)).expect("type path");
+        }
+        app.handle_key(Key::Enter).expect("open relative path");
+        assert_eq!(app.current, root.join("sub"));
+
+        app.handle_key(Key::Char('p')).expect("open path mode again");
+        let absolute = root.display().to_string();
+        for character in absolute.chars() {
+            app.handle_key(Key::Char(character)).expect("type absolute path");
+        }
+        app.handle_key(Key::Backspace).expect("fix a typo");
+        app.handle_key(Key::Char(absolute.chars().last().expect("char"))).expect("retype");
+        app.handle_key(Key::Enter).expect("open absolute path");
+        assert_eq!(app.current, root);
+
+        app.handle_key(Key::Char('p')).expect("open path mode third time");
+        app.handle_key(Key::Char('x')).expect("type");
+        app.handle_key(Key::Escape).expect("cancel");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(app.input.is_empty());
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn path_mode_reports_an_invalid_path_in_both_locales() {
+        let (mut app, sandbox) = sandbox_app("path-invalid");
+        app.handle_key(Key::Char('p')).expect("open path mode");
+        for character in "no-existe".chars() {
+            app.handle_key(Key::Char(character)).expect("type");
+        }
+        app.handle_key(Key::Enter).expect("submit invalid path");
+        assert!(app.message.starts_with("La ruta no existe:"));
+        assert!(matches!(app.mode, Mode::Normal));
+
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let sandbox2 = std::env::temp_dir().join(format!("devnav-app-path-en-{unique}"));
+        fs::create_dir_all(sandbox2.join("home")).expect("create root");
+        let mut config = Config::default();
+        config.set_language("en-US");
+        let mut app = App::new(sandbox2.join("home"), config, sandbox2.join("config.tsv"))
+            .expect("create app");
+        app.handle_key(Key::Char('p')).expect("open path mode");
+        app.handle_key(Key::Char('x')).expect("type");
+        app.handle_key(Key::Enter).expect("submit invalid path");
+        assert!(app.message.starts_with("Path does not exist:"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+        fs::remove_dir_all(sandbox2).expect("clean sandbox2");
+    }
+
+    #[test]
+    fn alias_mode_saves_trims_and_clears_aliases() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("alias", &["project"]);
+        let config_path = sandbox.join("config.tsv");
+        let target = app.selected_entry().expect("entry").path.clone();
+
+        app.handle_key(Key::Char('a')).expect("open alias");
+        assert!(matches!(app.mode, Mode::Alias { .. }));
+        for character in "principal".chars() {
+            app.handle_key(Key::Char(character)).expect("type alias");
+        }
+        app.handle_key(Key::Enter).expect("save alias");
+        assert_eq!(app.message, "Alias guardado");
+        assert_eq!(Config::load(&config_path).expect("load").alias(&target), Some("principal"));
+        assert_eq!(app.selected_entry().expect("entry").label(), "principal - project");
+
+        // Submitting a blank alias removes it again.
+        app.handle_key(Key::Char('a')).expect("reopen alias");
+        assert_eq!(app.input, "principal");
+        for _ in 0..9 {
+            app.handle_key(Key::Backspace).expect("erase alias");
+        }
+        app.handle_key(Key::Enter).expect("save blank alias");
+        assert_eq!(Config::load(&config_path).expect("load").alias(&target), None);
+
+        app.handle_key(Key::Char('a')).expect("open alias third time");
+        app.handle_key(Key::Char('x')).expect("type");
+        app.handle_key(Key::Escape).expect("cancel alias");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(app.input.is_empty());
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn command_mode_executes_a_trimmed_command_and_ignores_empty_input() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("command", &["project"]);
+        let target = app.selected_entry().expect("entry").path.clone();
+
+        app.handle_key(Key::Char('e')).expect("open command mode");
+        assert!(matches!(app.mode, Mode::Command { .. }));
+        app.handle_key(Key::Enter).expect("empty command is ignored");
+        assert!(matches!(app.mode, Mode::Command { .. }));
+        for character in " cargo test ".chars() {
+            app.handle_key(Key::Char(character)).expect("type command");
+        }
+        match app.handle_key(Key::Enter).expect("run command") {
+            Some(Some(ShellResult::Execute { directory, command })) => {
+                assert_eq!(directory, target);
+                assert_eq!(command, "cargo test");
+            }
+            other => panic!("expected Execute, got {other:?}"),
+        }
+
+        let (mut app, sandbox2) = sandbox_app("command-escape");
+        app.handle_key(Key::Char(':')).expect("open command mode with colon");
+        app.handle_key(Key::Char('x')).expect("type");
+        app.handle_key(Key::Backspace).expect("erase");
+        assert!(app.input.is_empty());
+        assert_eq!(app.handle_key(Key::Escape).expect("cancel"), None);
+        assert!(matches!(app.mode, Mode::Normal));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+        fs::remove_dir_all(sandbox2).expect("clean sandbox2");
+    }
+
+    #[test]
+    fn command_mode_targets_the_current_folder_when_the_list_is_empty() {
+        let (mut app, sandbox) = sandbox_app("command-empty");
+        app.handle_key(Key::Char('e')).expect("open command mode");
+        assert!(matches!(&app.mode, Mode::Command { target } if target == &app.current.clone()));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn confirm_root_can_be_cancelled_with_escape_or_q() {
+        let (mut app, sandbox) = sandbox_app("root-cancel");
+        app.handle_key(Key::CtrlS).expect("open confirmation");
+        app.handle_key(Key::Escape).expect("cancel with escape");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert_eq!(app.message, "Cambio de ruta cancelado");
+
+        app.handle_key(Key::CtrlS).expect("open confirmation again");
+        app.handle_key(Key::Char('q')).expect("cancel with q");
+        assert_eq!(app.message, "Cambio de ruta cancelado");
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn help_opens_scrolls_and_returns_to_the_previous_mode() {
+        let (mut app, sandbox) = sandbox_app("help");
+        app.handle_key(Key::Char('/')).expect("open filter");
+        app.handle_key(Key::F1).expect("open help over filter");
+        assert!(matches!(app.mode, Mode::Help));
+        app.handle_key(Key::Down).expect("scroll down");
+        app.handle_key(Key::Char('j')).expect("scroll down with j");
+        assert_eq!(app.help_scroll, 2);
+        app.handle_key(Key::Up).expect("scroll up");
+        app.handle_key(Key::Char('x')).expect("unrelated key is ignored");
+        assert_eq!(app.help_scroll, 1);
+        app.handle_key(Key::F1).expect("close help with F1");
+        assert!(matches!(app.mode, Mode::Filter));
+
+        app.handle_key(Key::F1).expect("reopen help");
+        app.handle_key(Key::Char('q')).expect("close help with q");
+        assert!(matches!(app.mode, Mode::Filter));
+        app.handle_key(Key::F1).expect("reopen help again");
+        app.handle_key(Key::Enter).expect("close help with enter");
+        assert!(matches!(app.mode, Mode::Filter));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn agent_keys_execute_against_the_highlighted_entry() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("agent", &["project"]);
+        let target = app.selected_entry().expect("entry").path.clone();
+        match app.handle_key(Key::Char('c')).expect("codex") {
+            Some(Some(ShellResult::Execute { directory, command })) => {
+                assert_eq!(directory, target);
+                assert_eq!(command, "codex");
+            }
+            other => panic!("expected Execute, got {other:?}"),
+        }
+
+        // Unknown characters and agent keys without a selection are no-ops.
+        let (mut empty, sandbox2) = sandbox_app("agent-empty");
+        assert_eq!(empty.handle_key(Key::Char('z')).expect("unknown char"), None);
+        assert_eq!(empty.handle_key(Key::Char('c')).expect("agent without selection"), None);
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+        fs::remove_dir_all(sandbox2).expect("clean sandbox2");
+    }
+
+    #[test]
+    fn toggle_favorite_adds_and_removes_with_localized_feedback() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("favorite", &["project"]);
+        let target = app.selected_entry().expect("entry").path.clone();
+        app.handle_key(Key::Char('f')).expect("add favorite");
+        assert_eq!(app.message, "Añadido a favoritos");
+        assert!(app.entries.iter().any(|entry| entry.path == target && entry.favorite));
+        app.handle_key(Key::Char('f')).expect("remove favorite");
+        assert_eq!(app.message, "Eliminado de favoritos");
+        assert!(app.entries.iter().all(|entry| !entry.favorite));
+
+        // With an empty list the toggle is a no-op.
+        let (mut empty, sandbox2) = sandbox_app("favorite-empty");
+        empty.handle_key(Key::Char('f')).expect("favorite on empty list");
+        assert!(empty.message.is_empty());
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+        fs::remove_dir_all(sandbox2).expect("clean sandbox2");
+    }
+
+    #[test]
+    fn shift_f_toggles_global_favorites_visibility_with_feedback() {
+        let (mut app, sandbox) = sandbox_app("fav-visibility");
+        let config_path = sandbox.join("config.tsv");
+        app.handle_key(Key::Char('F')).expect("hide favorites");
+        assert_eq!(app.message, "Favoritos globales ocultos");
+        assert!(!Config::load(&config_path).expect("load").show_favorites());
+        app.handle_key(Key::Char('F')).expect("show favorites");
+        assert_eq!(app.message, "Favoritos globales visibles");
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn f3_is_reserved_while_the_editor_or_delete_confirmation_is_open() {
+        let (mut app, sandbox) = sandbox_app("f3-reserved");
+        let mut config = Config::default();
+        config.set_shortcut(1, Some("Dev".into()), "bun run dev".into());
+        app.config = config;
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Enter).expect("open editor");
+        app.handle_key(Key::F3).expect("F3 ignored in editor");
+        assert!(matches!(app.mode, Mode::CommandEditor { .. }));
+        app.handle_key(Key::Escape).expect("back to manager");
+        app.handle_key(Key::Delete).expect("open delete confirmation");
+        app.handle_key(Key::F3).expect("F3 ignored in confirmation");
+        assert!(matches!(app.mode, Mode::ConfirmDelete { .. }));
+        app.handle_key(Key::Escape).expect("back to manager again");
+        app.handle_key(Key::F3).expect("F3 closes the manager");
+        assert!(matches!(app.mode, Mode::Normal));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn manager_navigation_clamps_and_delete_ignores_empty_slots() {
+        let (mut app, sandbox) = sandbox_app("manager-nav");
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Up).expect("up clamps at first slot");
+        assert!(matches!(app.mode, Mode::Commands { selected: 0, .. }));
+        app.handle_key(Key::Down).expect("down");
+        app.handle_key(Key::Down).expect("down again");
+        assert!(matches!(app.mode, Mode::Commands { selected: 2, .. }));
+        for _ in 0..20 {
+            app.handle_key(Key::Down).expect("down");
+        }
+        assert!(matches!(app.mode, Mode::Commands { selected: 8, .. }));
+        app.handle_key(Key::Delete).expect("delete on empty slot does nothing");
+        assert!(matches!(app.mode, Mode::Commands { selected: 8, .. }));
+        app.handle_key(Key::Escape).expect("close manager");
+        assert!(matches!(app.mode, Mode::Normal));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn editor_field_navigation_edits_both_fields() {
+        let (mut app, sandbox) = sandbox_app("editor-fields");
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Enter).expect("open editor");
+        for character in "abc".chars() {
+            app.handle_key(Key::Char(character)).expect("type alias");
+        }
+        app.handle_key(Key::Home).expect("home");
+        app.handle_key(Key::Delete).expect("delete first char");
+        app.handle_key(Key::End).expect("end");
+        app.handle_key(Key::Left).expect("left");
+        app.handle_key(Key::Right).expect("right");
+        app.handle_key(Key::Backspace).expect("backspace");
+        if let Mode::CommandEditor { alias, field, .. } = &app.mode {
+            assert_eq!(alias.value, "b");
+            assert_eq!(*field, EditorField::Alias);
+        } else {
+            panic!("expected editor mode");
+        }
+        app.handle_key(Key::Tab).expect("switch to command");
+        app.handle_key(Key::Tab).expect("switch back to alias");
+        if let Mode::CommandEditor { field, .. } = &app.mode {
+            assert_eq!(*field, EditorField::Alias);
+        } else {
+            panic!("expected editor mode");
+        }
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn execute_shortcut_is_a_no_op_without_a_selection() {
+        let (mut app, sandbox) = sandbox_app("shortcut-no-selection");
+        app.config.set_shortcut(1, None, "cargo test".into());
+        assert_eq!(app.handle_key(Key::Shortcut(1)).expect("empty list"), None);
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn text_field_cursor_operations_are_safe_at_the_edges() {
+        let mut field = TextField::new("ab".into());
+        field.delete();
+        assert_eq!(field.value, "ab");
+        field.right();
+        assert_eq!(field.cursor, 2);
+        field.backspace();
+        assert_eq!(field.value, "a");
+        field.home();
+        field.backspace();
+        assert_eq!(field.value, "a");
+        field.left();
+        assert_eq!(field.cursor, 0);
+        field.right();
+        field.insert('ñ');
+        // Deleting at the end of the buffer is a no-op, then the multibyte
+        // character is removed with a single delete after moving left.
+        field.delete();
+        assert_eq!(field.value, "añ");
+        field.left();
+        field.delete();
+        assert_eq!(field.value, "a");
+        field.end();
+        field.ensure_viewport(1);
+        assert!(field.viewport > 0);
+        field.home();
+        field.ensure_viewport(4);
+        assert_eq!(field.viewport, 0);
+    }
+
+    #[test]
+    fn normal_frame_renders_header_list_prompt_and_footer() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("render-normal", &["project"]);
+        app.message = "hola".into();
+        let rows = app.render_rows(80, 24);
+        let joined = rows.join("\n");
+        assert!(joined.contains("DEV"));
+        assert!(joined.contains("project"));
+        assert!(joined.contains("hola"));
+        assert!(joined.contains("F1 Ayuda"));
+
+        app.message.clear();
+        let rows = app.render_rows(80, 24);
+        assert!(rows.join("\n").contains("1 carpetas"));
+
+        // The frame honors the minimum terminal size.
+        let small = app.render_rows(10, 5);
+        assert!(small.join("\n").contains("DEV"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn help_panel_renders_in_both_locales() {
+        let (mut app, sandbox) = sandbox_app("render-help");
+        app.handle_key(Key::F1).expect("open help");
+        let rows = app.render_rows(100, 30);
+        let joined = rows.join("\n");
+        assert!(joined.contains("ATAJOS DE TECLADO"));
+        assert!(joined.contains("Navegar por las carpetas"));
+        assert!(joined.contains("acciones disponibles"));
+
+        let (mut app, sandbox2) = sandbox_app("render-help-en");
+        app.config.set_language("en-US");
+        app.locale = crate::i18n::Locale::EnUs;
+        app.handle_key(Key::F1).expect("open help");
+        app.handle_key(Key::Down).expect("scroll");
+        let rows = app.render_rows(100, 30);
+        let joined = rows.join("\n");
+        assert!(joined.contains("KEYBOARD SHORTCUTS"));
+        assert!(joined.contains("actions available"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+        fs::remove_dir_all(sandbox2).expect("clean sandbox2");
+    }
+
+    #[test]
+    fn command_panels_render_manager_editor_and_delete_confirmation() {
+        let (mut app, sandbox) = sandbox_app("render-panels");
+        app.config.set_shortcut(1, Some("Dev".into()), "bun run dev".into());
+
+        app.handle_key(Key::F3).expect("open manager");
+        let rows = app.render_rows(100, 30);
+        let joined = rows.join("\n");
+        assert!(joined.contains("COMANDOS PERSONALIZADOS"));
+        assert!(joined.contains("bun run dev"));
+        assert!(joined.contains("Vacío"));
+
+        app.handle_key(Key::Enter).expect("open editor");
+        app.handle_key(Key::Char('X')).expect("type into alias");
+        let rows = app.render_rows(100, 30);
+        let joined = rows.join("\n");
+        assert!(joined.contains("EDITAR COMANDO"));
+        assert!(joined.contains("Alias (opcional)"));
+        assert!(joined.contains("X_"));
+
+        app.handle_key(Key::Escape).expect("back to manager");
+        app.handle_key(Key::Delete).expect("open delete confirmation");
+        let rows = app.render_rows(100, 30);
+        let joined = rows.join("\n");
+        assert!(joined.contains("ELIMINAR COMANDO"));
+        assert!(joined.contains("¿Eliminar este comando?"));
+        // Full-height delete panel renders the alias and command on their own rows.
+        assert!(joined.contains("Dev"));
+        assert!(joined.contains("bun run dev"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn delete_panel_uses_the_compact_layout_when_the_terminal_is_short() {
+        let (mut app, sandbox) = sandbox_app("render-delete-compact");
+        app.config.set_shortcut(1, None, "cargo test".into());
+        app.handle_key(Key::F3).expect("open manager");
+        app.handle_key(Key::Delete).expect("open delete confirmation");
+        // list_height 5 forces the compact 5-row delete panel.
+        let rows = app.render_rows(90, 12);
+        let joined = rows.join("\n");
+        assert!(joined.contains("¿Eliminar este comando?"));
+        assert!(joined.contains("cargo test"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn prompts_reflect_the_active_mode() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("render-prompts", &["project"]);
+        app.handle_key(Key::Char('/')).expect("filter");
+        app.handle_key(Key::Char('a')).expect("type");
+        assert!(app.render_rows(80, 24).join("\n").contains("/a"));
+
+        app.handle_key(Key::Escape).expect("close filter");
+        app.handle_key(Key::Char('p')).expect("path");
+        app.handle_key(Key::Char('x')).expect("type");
+        assert!(app.render_rows(80, 24).join("\n").contains("ruta › x_"));
+
+        app.handle_key(Key::Escape).expect("close path");
+        app.handle_key(Key::Char('a')).expect("alias");
+        assert!(app.render_rows(80, 24).join("\n").contains("alias › _"));
+
+        app.handle_key(Key::Escape).expect("close alias");
+        app.handle_key(Key::Char('e')).expect("command");
+        assert!(app.render_rows(80, 24).join("\n").contains("comando › _"));
+
+        app.handle_key(Key::Escape).expect("close command");
+        app.handle_key(Key::CtrlS).expect("confirm root");
+        assert!(app.render_rows(80, 24).join("\n").contains("¿Guardar como inicio?"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn english_frame_uses_english_copy() {
+        let (mut app, sandbox) = sandbox_app("render-en");
+        app.locale = crate::i18n::Locale::EnUs;
+        app.config.set_language("en-US");
+        let joined = app.render_rows(80, 24).join("\n");
+        assert!(joined.contains("0 folders"));
+        assert!(joined.contains("F1 Help  F2 Language"));
+        assert!(joined.contains("FAVORITES VISIBLE"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn selection_marker_and_favorite_star_are_rendered() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("render-markers", &["alpha", "beta"]);
+        let target = app.selected_entry().expect("entry").path.clone();
+        app.handle_key(Key::Char('f')).expect("favorite");
+        let joined = app.render_rows(80, 24).join("\n");
+        assert!(joined.contains("★"));
+        assert!(joined.contains('›'));
+        assert!(app.entries.iter().any(|entry| entry.path == target && entry.favorite));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn render_scrolls_to_keep_the_selection_visible() {
+        let dirs: Vec<String> = (0..30).map(|index| format!("dir{index:02}")).collect();
+        let (mut app, sandbox) = sandbox_app("render-scroll");
+        for dir in &dirs {
+            fs::create_dir_all(sandbox.join("home").join(dir)).expect("create child");
+        }
+        app.refresh().expect("refresh");
+        for _ in 0..25 {
+            app.handle_key(Key::Down).expect("move down");
+        }
+        let rows = app.render_rows(80, 12);
+        assert!(rows.join("\n").contains("dir25"));
+        assert!(app.scroll > 0);
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn help_layout_renders_blank_rows_outside_the_panel() {
+        let (mut app, sandbox) = sandbox_app("render-help-viewport");
+        app.handle_key(Key::F1).expect("open help");
+        let rows = app.render_rows(60, 40);
+        // Header + subheader + separator + list + separator + prompt + footer.
+        assert_eq!(rows.len(), 40 - 7 + 6);
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 }

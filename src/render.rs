@@ -52,3 +52,43 @@ pub fn fit(text: &str, width: usize) -> String {
         text.chars().take(width).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{SELECTED_BG, SELECTED_FG, fit, selected};
+
+    #[test]
+    fn fit_pads_short_text_to_the_requested_width() {
+        assert_eq!(fit("dev", 6), "dev   ");
+        assert_eq!(fit("", 3), "   ");
+        assert_eq!(fit("exact", 5), "exact");
+    }
+
+    #[test]
+    fn fit_truncates_long_text_with_an_ellipsis() {
+        assert_eq!(fit("abcdef", 4), "abc…");
+        assert_eq!(fit("carpeta", 2), "c…");
+    }
+
+    #[test]
+    fn fit_handles_degenerate_widths() {
+        assert_eq!(fit("abc", 1), "a");
+        assert_eq!(fit("abc", 0), "");
+        assert_eq!(fit("", 0), "");
+    }
+
+    #[test]
+    fn fit_counts_unicode_scalar_values_not_bytes() {
+        assert_eq!(fit("áé", 4), "áé  ");
+        assert_eq!(fit("áéí", 2), "á…");
+        assert_eq!(fit("日本語", 2), "日…");
+    }
+
+    #[test]
+    fn selected_wraps_the_fitted_text_in_highlight_colors() {
+        let row = selected("entry", 8);
+        assert!(row.starts_with(SELECTED_BG));
+        assert!(row.contains(SELECTED_FG));
+        assert!(row.contains("entry   "));
+    }
+}

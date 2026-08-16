@@ -178,3 +178,105 @@ fn parse_shortcut_index(raw: Option<&str>) -> io::Result<u8> {
 
 #[allow(dead_code)]
 fn _assert_shell_result_is_used(_: ShellResult) {}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use super::{Config, argument_value, parse_shortcut_index, try_config_command};
+
+    fn temp_config_path(label: &str) -> std::path::PathBuf {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        std::env::temp_dir().join(format!("devnav-main-{label}-{unique}.tsv"))
+    }
+
+    #[test]
+    fn argument_value_returns_the_value_after_the_flag() {
+        let args = vec!["dev".to_string(), "--result".to_string(), "out.bin".to_string()];
+        assert_eq!(argument_value(&args, "--result"), Some("out.bin".to_string()));
+        assert_eq!(argument_value(&args, "--root"), None);
+        assert_eq!(argument_value(&[], "--result"), None);
+        let trailing = vec!["--result".to_string()];
+        assert_eq!(argument_value(&trailing, "--result"), None);
+    }
+
+    #[test]
+    fn parse_shortcut_index_accepts_only_one_to_nine() {
+        assert_eq!(parse_shortcut_index(Some("1")).expect("one"), 1);
+        assert_eq!(parse_shortcut_index(Some("9")).expect("nine"), 9);
+        assert!(parse_shortcut_index(Some("0")).is_err());
+        assert!(parse_shortcut_index(Some("10")).is_err());
+        assert!(parse_shortcut_index(Some("x")).is_err());
+        assert!(parse_shortcut_index(None).is_err());
+    }
+
+    #[test]
+    fn non_config_arguments_are_not_config_commands() {
+        let config_path = temp_config_path("none");
+        assert!(!try_config_command(&[], &config_path).expect("no args"));
+        assert!(
+            !try_config_command(&["--root".to_string()], &config_path).expect("unknown command")
+        );
+    }
+
+    #[test]
+    fn set_language_persists_the_resolved_locale() {
+        let config_path = temp_config_path("language");
+        let args = vec!["--set-language".to_string(), "es-MX".to_string()];
+        assert!(try_config_command(&args, &config_path).expect("set language"));
+        assert_eq!(Config::load(&config_path).expect("load").language(), Some("es-ES"));
+        fs::remove_file(config_path).expect("remove config");
+    }
+
+    #[test]
+    fn set_language_rejects_unsupported_locales() {
+        let config_path = temp_config_path("bad-language");
+        let args = vec!["--set-language".to_string(), "de-DE".to_string()];
+        assert!(try_config_command(&args, &config_path).is_err());
+        assert!(!config_path.exists());
+    }
+
+    #[test]
+    fn set_shortcut_parses_command_and_optional_alias() {
+        let config_path = temp_config_path("shortcut");
+        let args = vec![
+            "--set-shortcut".to_string(),
+            "2".to_string(),
+            "cargo".to_string(),
+            "test".to_string(),
+            "--alias".to_string(),
+            "Tests".to_string(),
+        ];
+        assert!(try_config_command(&args, &config_path).expect("set shortcut"));
+        let loaded = Config::load(&config_path).expect("load");
+        let slot = loaded.shortcut(2).expect("slot");
+        // Only the first positional token becomes the command; the alias flag
+        // is recognized after it.
+        assert_eq!(slot.command, "cargo");
+        assert_eq!(slot.alias.as_deref(), Some("Tests"));
+        fs::remove_file(config_path).expect("remove config");
+    }
+
+    #[test]
+    fn set_shortcut_requires_a_command() {
+        let config_path = temp_config_path("no-command");
+        let args = vec!["--set-shortcut".to_string(), "2".to_string()];
+        assert!(try_config_command(&args, &config_path).is_err());
+    }
+
+    #[test]
+    fn clear_shortcut_removes_the_binding() {
+        let config_path = temp_config_path("clear");
+        let mut config = Config::default();
+        config.set_shortcut(4, Some("Build".into()), "bun run build".into());
+        config.save(&config_path).expect("save shortcut");
+
+        let args = vec!["--clear-shortcut".to_string(), "4".to_string()];
+        assert!(try_config_command(&args, &config_path).expect("clear shortcut"));
+        assert!(Config::load(&config_path).expect("load").shortcut(4).is_none());
+        fs::remove_file(config_path).expect("remove config");
+    }
+}

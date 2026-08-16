@@ -46,7 +46,40 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::ShellResult;
+    use super::{DirectoryEntry, ShellResult};
+
+    #[test]
+    fn label_prefers_a_non_empty_alias_over_the_name() {
+        let mut entry = DirectoryEntry {
+            path: std::path::PathBuf::from("C:\\code\\dev-nav"),
+            name: "dev-nav".into(),
+            alias: Some("principal".into()),
+            favorite: false,
+        };
+        assert_eq!(entry.label(), "principal - dev-nav");
+
+        entry.alias = Some("   ".into());
+        assert_eq!(entry.label(), "    - dev-nav");
+
+        entry.alias = Some(String::new());
+        assert_eq!(entry.label(), "dev-nav");
+
+        entry.alias = None;
+        assert_eq!(entry.label(), "dev-nav");
+    }
+
+    #[test]
+    fn change_directory_result_carries_the_path_verbatim() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let path = std::env::temp_dir().join(format!("devnav-cd-{unique}"));
+        let directory = std::path::PathBuf::from("C:\\code\\dev-nav");
+
+        ShellResult::ChangeDirectory(directory.clone()).write_to(&path).expect("write cd result");
+
+        let payload = fs::read_to_string(&path).expect("read cd result");
+        assert_eq!(payload, format!("cd\0{}\0", directory.display()));
+        fs::remove_file(path).expect("remove result");
+    }
 
     #[test]
     fn update_result_uses_a_dedicated_shell_message() {

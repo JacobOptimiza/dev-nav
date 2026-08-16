@@ -567,4 +567,142 @@ mod tests {
         assert_eq!(slot.command, command);
         fs::remove_file(config_path).expect("remove config");
     }
+
+    #[test]
+    fn default_path_points_inside_localappdata() {
+        let path = Config::default_path().expect("LOCALAPPDATA is set on Windows");
+        assert!(path.ends_with(std::path::Path::new("DevNav").join("config.tsv")));
+    }
+
+    #[test]
+    fn load_returns_defaults_when_the_file_is_missing() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let missing = std::env::temp_dir().join(format!("devnav-missing-{unique}")).join("c.tsv");
+        let config = Config::load(&missing).expect("missing file yields defaults");
+        assert!(config.root().is_none());
+        assert!(config.show_favorites());
+        assert_eq!(config.language(), None);
+        assert!(config.configured_shortcuts().is_empty());
+    }
+
+    #[test]
+    fn load_propagates_real_io_errors_instead_of_swallowing_them() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let directory = std::env::temp_dir().join(format!("devnav-load-dir-{unique}"));
+        fs::create_dir_all(&directory).expect("create directory");
+        assert!(Config::load(&directory).is_err());
+        fs::remove_dir_all(directory).expect("clean directory");
+    }
+
+    #[test]
+    fn parse_tsv_reads_every_supported_record_type() {
+        let config = Config::parse_tsv(
+            "root\tC:\\code\nshow_favorites\tfalse\ncheck_updates\ttrue\nlanguage\ten-US\n\
+             favorite\tC:\\code\\dev-nav\nalias\tC:\\code\\dev-nav\tprincipal\n\
+             shortcut\t3\tDev\tbun run dev\nunknown\trecord\n\n",
+        );
+        assert_eq!(config.root(), Some(std::path::Path::new("C:\\code")));
+        assert!(!config.show_favorites());
+        assert_eq!(config.check_updates(), Some(true));
+        assert_eq!(config.language(), Some("en-US"));
+        assert!(config.is_favorite(std::path::Path::new("C:\\code\\dev-nav")));
+        assert_eq!(config.alias(std::path::Path::new("C:\\code\\dev-nav")), Some("principal"));
+        assert_eq!(config.shortcut(3).map(|s| s.command.as_str()), Some("bun run dev"));
+    }
+
+    #[test]
+    fn parse_tsv_rejects_invalid_languages_and_shortcut_records() {
+        let config = Config::parse_tsv(
+            "language\tfr-FR\ncheck_updates\tbogus\nshortcut\t10\ta\tcmd\n\
+             shortcut\tx\ta\tcmd\nshortcut\t2\talias-only-no-tab\nshortcut\t4\t\t   \n",
+        );
+        assert_eq!(config.language(), None);
+        assert_eq!(config.check_updates(), Some(false));
+        assert!(config.shortcut(10).is_none());
+        assert!(config.shortcut(2).is_none());
+        assert!(config.shortcut(4).is_none());
+    }
+
+    #[test]
+    fn toggle_favorite_adds_then_removes_the_path() {
+        let mut config = Config::default();
+        let path = std::path::Path::new("C:\\code\\dev-nav");
+        assert!(config.toggle_favorite(path));
+        assert!(config.is_favorite(path));
+        assert!(config.favorite_paths().any(|favorite| favorite == path));
+        assert!(!config.toggle_favorite(path));
+        assert!(!config.is_favorite(path));
+    }
+
+    #[test]
+    fn set_alias_trims_and_removes_on_blank_values() {
+        let mut config = Config::default();
+        let path = std::path::PathBuf::from("C:\\code\\dev-nav");
+        config.set_alias(path.clone(), "  principal  ".into());
+        assert_eq!(config.alias(&path), Some("principal"));
+        config.set_alias(path.clone(), "   ".into());
+        assert_eq!(config.alias(&path), None);
+        config.set_alias(path.clone(), String::new());
+        assert_eq!(config.alias(&path), None);
+    }
+
+    #[test]
+    fn set_language_accepts_only_supported_locales() {
+        let mut config = Config::default();
+        config.set_language("en-US");
+        assert_eq!(config.language(), Some("en-US"));
+        config.set_language("de-DE");
+        assert_eq!(config.language(), Some("en-US"));
+    }
+
+    #[test]
+    fn toggle_update_checks_flips_the_stored_value() {
+        let mut config = Config::default();
+        assert!(!config.toggle_update_checks());
+        assert_eq!(config.check_updates(), Some(false));
+        assert!(config.toggle_update_checks());
+        assert_eq!(config.check_updates(), Some(true));
+    }
+
+    #[test]
+    fn configured_shortcuts_are_ordered_by_slot_index() {
+        let mut config = Config::default();
+        config.set_shortcut(7, None, "seven".into());
+        config.set_shortcut(2, None, "two".into());
+        config.set_shortcut(5, None, "five".into());
+        let slots: Vec<u8> =
+            config.configured_shortcuts().iter().map(|(index, _)| *index).collect();
+        assert_eq!(slots, vec![2, 5, 7]);
+    }
+
+    #[test]
+    fn save_creates_missing_parent_directories_and_round_trips() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let sandbox = std::env::temp_dir().join(format!("devnav-nested-{unique}"));
+        let config_path = sandbox.join("deep").join("deeper").join("config.tsv");
+        let mut config = Config::default();
+        config.set_root(std::path::PathBuf::from("C:\\code"));
+        config.set_alias(std::path::PathBuf::from("C:\\code\\tab\tsheet"), "con\ttab".into());
+        config.save(&config_path).expect("save into nested directory");
+
+        let loaded = Config::load(&config_path).expect("load");
+        assert_eq!(loaded.root(), Some(std::path::Path::new("C:\\code")));
+        assert_eq!(loaded.alias(std::path::Path::new("C:\\code\\tab\tsheet")), Some("con\ttab"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+    }
+
+    #[test]
+    fn save_replaces_an_existing_config_atomically() {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
+        let config_path = std::env::temp_dir().join(format!("devnav-replace-{unique}.tsv"));
+        let mut config = Config::default();
+        config.save(&config_path).expect("initial save");
+        config.set_shortcut(1, Some("Dev".into()), "bun run dev".into());
+        config.save(&config_path).expect("replace existing file");
+        assert_eq!(
+            Config::load(&config_path).expect("load").shortcut(1).map(|s| s.command.as_str()),
+            Some("bun run dev")
+        );
+        fs::remove_file(config_path).expect("remove config");
+    }
 }
