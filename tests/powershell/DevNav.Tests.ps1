@@ -1134,6 +1134,50 @@ Describe 'DevNav shortcut commands' {
         { InvokeShortcutViaDev -Tokens 'shortcut', '1', 'a', 'b', 'c' } | Should -Throw '*Uso*'
     }
 
+    It 'rejects too many arguments with the English usage message' {
+        $global:DevNavShortcutTokens = @('shortcut', '1', 'a', 'b', 'c')
+        $devModule.Invoke({
+            $tokens = $global:DevNavShortcutTokens
+            Mock Get-DevLanguage { 'en-US' }
+            Mock Invoke-DevCli { return 0 }
+            Mock Write-Host {}
+            { Invoke-DevNavigator @tokens } | Should -Throw '*Usage: dev shortcut <1..9>*'
+        })
+    }
+
+    It 'rejects too many arguments with the Spanish usage message' {
+        $global:DevNavShortcutTokens = @('shortcut', '1', 'a', 'b', 'c')
+        $devModule.Invoke({
+            $tokens = $global:DevNavShortcutTokens
+            Mock Get-DevLanguage { 'es-ES' }
+            Mock Invoke-DevCli { return 0 }
+            Mock Write-Host {}
+            { Invoke-DevNavigator @tokens } | Should -Throw '*Uso: dev shortcut <1..9>*'
+        })
+    }
+
+    It 'rejects dev shortcut without arguments with the English usage message' {
+        $global:DevNavShortcutTokens = @('shortcut')
+        $devModule.Invoke({
+            $tokens = $global:DevNavShortcutTokens
+            Mock Get-DevLanguage { 'en-US' }
+            Mock Invoke-DevCli { return 0 }
+            Mock Write-Host {}
+            { Invoke-DevNavigator @tokens } | Should -Throw '*Usage: dev shortcut <1..9>*'
+        })
+    }
+
+    It 'rejects dev shortcut without arguments with the Spanish usage message' {
+        $global:DevNavShortcutTokens = @('shortcut')
+        $devModule.Invoke({
+            $tokens = $global:DevNavShortcutTokens
+            Mock Get-DevLanguage { 'es-ES' }
+            Mock Invoke-DevCli { return 0 }
+            Mock Write-Host {}
+            { Invoke-DevNavigator @tokens } | Should -Throw '*Uso: dev shortcut <1..9>*'
+        })
+    }
+
     It 'persists, overwrites and clears shortcuts through dev.exe without corrupting existing config' {
         $devModule.Invoke({
             Mock Get-DevExecutable { $global:DevNavTestDevExe }
