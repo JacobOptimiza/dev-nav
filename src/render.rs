@@ -52,3 +52,58 @@ pub fn fit(text: &str, width: usize) -> String {
         text.chars().take(width).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Renderer, SELECTED_BG, SELECTED_FG, fit, selected};
+
+    #[test]
+    fn fit_pads_short_text_to_the_requested_width() {
+        assert_eq!(fit("dev", 6), "dev   ");
+        assert_eq!(fit("", 3), "   ");
+        assert_eq!(fit("exact", 5), "exact");
+    }
+
+    #[test]
+    fn fit_truncates_long_text_with_an_ellipsis() {
+        assert_eq!(fit("abcdef", 4), "abc…");
+        assert_eq!(fit("carpeta", 2), "c…");
+    }
+
+    #[test]
+    fn fit_handles_degenerate_widths() {
+        assert_eq!(fit("abc", 1), "a");
+        assert_eq!(fit("abc", 0), "");
+        assert_eq!(fit("", 0), "");
+    }
+
+    #[test]
+    fn fit_counts_unicode_scalar_values_not_bytes() {
+        assert_eq!(fit("áé", 4), "áé  ");
+        assert_eq!(fit("áéí", 2), "á…");
+        assert_eq!(fit("日本語", 2), "日…");
+    }
+
+    #[test]
+    fn selected_wraps_the_fitted_text_in_highlight_colors() {
+        let row = selected("entry", 8);
+        assert!(row.starts_with(SELECTED_BG));
+        assert!(row.contains(SELECTED_FG));
+        assert!(row.contains("entry   "));
+    }
+
+    #[test]
+    fn renderer_draws_rows_and_skips_unchanged_ones() {
+        let mut renderer = Renderer::new();
+        let rows: Vec<String> = (0..5).map(|index| format!("row {index}")).collect();
+        renderer.draw(rows.clone()).expect("first draw");
+        // Identical frame: only the sync markers are emitted, nothing fails.
+        renderer.draw(rows.clone()).expect("unchanged draw");
+        // A shorter frame clears the leftover rows from the previous one.
+        renderer.draw(rows[..2].to_vec()).expect("shrinking draw");
+        // A changed row is redrawn in place.
+        let mut changed = rows;
+        changed[1] = "edited".to_string();
+        renderer.draw(changed).expect("growing draw");
+    }
+}

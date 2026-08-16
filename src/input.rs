@@ -139,9 +139,14 @@ fn shortcut_slot(virtual_key: u16) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Key, VK_DOWN, VK_ESCAPE, VK_F1, VK_F2, VK_F3, VK_UP, map_key};
+    use super::{
+        Key, VK_BACK, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE, VK_F1, VK_F2, VK_F3, VK_HOME, VK_LEFT,
+        VK_RETURN, VK_RIGHT, VK_TAB, VK_UP, map_key, shortcut_slot,
+    };
     use windows_sys::Win32::System::Console::KEY_EVENT_RECORD;
-    use windows_sys::Win32::System::Console::{LEFT_CTRL_PRESSED, SHIFT_PRESSED};
+    use windows_sys::Win32::System::Console::{
+        LEFT_ALT_PRESSED, LEFT_CTRL_PRESSED, RIGHT_ALT_PRESSED, SHIFT_PRESSED,
+    };
 
     fn key_event(virtual_key: u16) -> KEY_EVENT_RECORD {
         KEY_EVENT_RECORD {
@@ -150,6 +155,12 @@ mod tests {
             wVirtualKeyCode: virtual_key,
             ..Default::default()
         }
+    }
+
+    fn key_event_with_char(virtual_key: u16, character: char) -> KEY_EVENT_RECORD {
+        let mut event = key_event(virtual_key);
+        event.uChar.UnicodeChar = character as u16;
+        event
     }
 
     #[test]
@@ -220,5 +231,58 @@ mod tests {
         let mut shifted = key_event(u16::from(b'1'));
         shifted.dwControlKeyState = SHIFT_PRESSED;
         assert_eq!(map_key(shifted), Key::Shortcut(1));
+    }
+
+    #[test]
+    fn editing_and_function_keys_map_to_dedicated_variants() {
+        assert_eq!(map_key(key_event(VK_LEFT)), Key::Left);
+        assert_eq!(map_key(key_event(VK_RIGHT)), Key::Right);
+        assert_eq!(map_key(key_event(VK_RETURN)), Key::Enter);
+        assert_eq!(map_key(key_event(VK_BACK)), Key::Backspace);
+        assert_eq!(map_key(key_event(VK_DELETE)), Key::Delete);
+        assert_eq!(map_key(key_event(VK_HOME)), Key::Home);
+        assert_eq!(map_key(key_event(VK_END)), Key::End);
+        assert_eq!(map_key(key_event(VK_TAB)), Key::Tab);
+    }
+
+    #[test]
+    fn control_c_maps_to_a_dedicated_quit_signal() {
+        let mut event = key_event(u16::from(b'C'));
+        event.dwControlKeyState = LEFT_CTRL_PRESSED;
+        assert_eq!(map_key(event), Key::CtrlC);
+    }
+
+    #[test]
+    fn printable_characters_map_through_including_unicode() {
+        assert_eq!(map_key(key_event_with_char(u16::from(b'A'), 'a')), Key::Char('a'));
+        assert_eq!(map_key(key_event_with_char(0x31, 'ñ')), Key::Char('ñ'));
+        assert_eq!(map_key(key_event_with_char(0x4E, '界')), Key::Char('界'));
+    }
+
+    #[test]
+    fn control_characters_without_a_virtual_key_are_unknown() {
+        assert_eq!(map_key(key_event_with_char(0x41, '\u{1}')), Key::Unknown);
+        assert_eq!(map_key(key_event_with_char(0x41, '\u{7f}')), Key::Unknown);
+    }
+
+    #[test]
+    fn alt_shift_digit_stays_available_for_the_os() {
+        let mut event = key_event_with_char(u16::from(b'1'), '!');
+        event.dwControlKeyState = SHIFT_PRESSED | LEFT_ALT_PRESSED;
+        assert_ne!(map_key(event), Key::Shortcut(1));
+
+        let mut event = key_event_with_char(u16::from(b'2'), '@');
+        event.dwControlKeyState = SHIFT_PRESSED | RIGHT_ALT_PRESSED;
+        assert_ne!(map_key(event), Key::Shortcut(2));
+    }
+
+    #[test]
+    fn shortcut_slot_only_accepts_top_row_digits_one_to_nine() {
+        assert_eq!(shortcut_slot(0x30), None);
+        assert_eq!(shortcut_slot(0x31), Some(1));
+        assert_eq!(shortcut_slot(0x39), Some(9));
+        assert_eq!(shortcut_slot(0x3A), None);
+        assert_eq!(shortcut_slot(0x2F), None);
+        assert_eq!(shortcut_slot(0x61), None);
     }
 }

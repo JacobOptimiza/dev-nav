@@ -270,8 +270,9 @@ pub fn official_bindings() -> &'static [KeyBinding] {
 #[cfg(test)]
 mod tests {
     use super::{
-        KeyBinding, KeyToken, Locale, Modifier, format_binding, official_bindings,
-        resolve_preferred_tags,
+        KeyBinding, KeyToken, Locale, Modifier, TextId, delete_footer, editor_footer,
+        editor_footer_compact, editor_title, format_binding, manager_footer,
+        manager_footer_compact, official_bindings, resolve_preferred_tags, shift_range, text,
     };
 
     #[test]
@@ -304,5 +305,116 @@ mod tests {
         assert_eq!(resolve_preferred_tags(["de-DE", "en-GB"]), Locale::EnUs);
         assert_eq!(resolve_preferred_tags(["de-DE", "es-ES", "en-US"]), Locale::EsEs);
         assert_eq!(resolve_preferred_tags(["de-DE", "fr-FR"]), Locale::EnUs);
+    }
+
+    #[test]
+    fn locale_tags_and_alternation_are_symmetric() {
+        assert_eq!(Locale::EsEs.tag(), "es-ES");
+        assert_eq!(Locale::EnUs.tag(), "en-US");
+        assert_eq!(Locale::EsEs.other(), Locale::EnUs);
+        assert_eq!(Locale::EnUs.other(), Locale::EsEs);
+        assert_eq!(Locale::EsEs.other().other(), Locale::EsEs);
+    }
+
+    #[test]
+    fn every_defined_text_id_is_translated_in_both_locales() {
+        let cases: [(TextId, &str, &str); 14] = [
+            (TextId::ManagerTitle, "COMANDOS PERSONALIZADOS", "CUSTOM COMMANDS"),
+            (TextId::DeleteTitle, "ELIMINAR COMANDO", "REMOVE COMMAND"),
+            (TextId::Empty, "Vacío", "Empty"),
+            (TextId::AliasOptional, "Alias (opcional)", "Alias (optional)"),
+            (TextId::Command, "Comando", "Command"),
+            (TextId::Save, "Guardar", "Save"),
+            (TextId::Cancel, "Cancelar", "Cancel"),
+            (TextId::Delete, "Eliminar", "Delete"),
+            (TextId::ConfirmDelete, "¿Eliminar comando?", "Remove command?"),
+            (TextId::SaveError, "No se pudo guardar", "Could not save"),
+            (TextId::DeleteError, "No se pudo eliminar", "Could not delete"),
+            (TextId::CommandSaved, "Comando guardado", "Command saved"),
+            (TextId::CommandDeleted, "Comando eliminado", "Command deleted"),
+            (TextId::ManageCommands, "Gestionar comandos personalizados", "Manage custom commands"),
+        ];
+        for (id, expected_es, expected_en) in cases {
+            assert_eq!(text(Locale::EsEs, id), expected_es, "es-ES {id:?}");
+            assert_eq!(text(Locale::EnUs, id), expected_en, "en-US {id:?}");
+        }
+        // Identifiers without UI copy resolve to an empty string.
+        assert_eq!(text(Locale::EsEs, TextId::Help), "");
+        assert_eq!(text(Locale::EnUs, TextId::Quit), "");
+    }
+
+    #[test]
+    fn shift_range_and_panel_copy_are_localized() {
+        assert_eq!(shift_range(Locale::EsEs), "Mayús+1–9");
+        assert_eq!(shift_range(Locale::EnUs), "Shift+1–9");
+        assert!(manager_footer(Locale::EsEs).contains("Supr"));
+        assert!(manager_footer(Locale::EnUs).contains("Delete"));
+        assert!(manager_footer_compact(Locale::EsEs).contains("Supr"));
+        assert!(manager_footer_compact(Locale::EnUs).contains("Del"));
+        assert!(editor_footer(Locale::EsEs).contains("Tab"));
+        assert!(editor_footer(Locale::EnUs).contains("Tab"));
+        assert_eq!(editor_footer_compact(Locale::EsEs), "Tab · Enter · Esc");
+        assert_eq!(editor_footer_compact(Locale::EnUs), "Tab · Enter · Esc");
+        assert!(delete_footer(Locale::EsEs).contains("Confirmar"));
+        assert!(delete_footer(Locale::EnUs).contains("Confirm"));
+    }
+
+    #[test]
+    fn editor_title_distinguishes_new_from_edit_in_both_locales() {
+        assert_eq!(editor_title(Locale::EsEs, true), "NUEVO COMANDO");
+        assert_eq!(editor_title(Locale::EsEs, false), "EDITAR COMANDO");
+        assert_eq!(editor_title(Locale::EnUs, true), "NEW COMMAND");
+        assert_eq!(editor_title(Locale::EnUs, false), "EDIT COMMAND");
+    }
+
+    #[test]
+    fn format_binding_covers_modifiers_and_special_keys() {
+        let cases: [(KeyBinding, Locale, &str); 18] = [
+            (
+                KeyBinding::with_modifier(Modifier::Ctrl, KeyToken::Char('S')),
+                Locale::EsEs,
+                "Ctrl+S",
+            ),
+            (
+                KeyBinding::with_modifier(Modifier::Ctrl, KeyToken::Char('U')),
+                Locale::EnUs,
+                "Ctrl+U",
+            ),
+            (
+                KeyBinding::with_modifier(Modifier::Shift, KeyToken::Char('F')),
+                Locale::EsEs,
+                "Mayús+F",
+            ),
+            (
+                KeyBinding::with_modifier(Modifier::Shift, KeyToken::Char('F')),
+                Locale::EnUs,
+                "Shift+F",
+            ),
+            (KeyBinding::plain(KeyToken::Char('q')), Locale::EsEs, "q"),
+            (KeyBinding::plain(KeyToken::F1), Locale::EsEs, "F1"),
+            (KeyBinding::plain(KeyToken::F2), Locale::EnUs, "F2"),
+            (KeyBinding::plain(KeyToken::F3), Locale::EsEs, "F3"),
+            (KeyBinding::plain(KeyToken::Enter), Locale::EnUs, "Enter"),
+            (KeyBinding::plain(KeyToken::Escape), Locale::EsEs, "Esc"),
+            (KeyBinding::plain(KeyToken::Up), Locale::EsEs, "↑"),
+            (KeyBinding::plain(KeyToken::Down), Locale::EnUs, "↓"),
+            (KeyBinding::plain(KeyToken::Left), Locale::EsEs, "←"),
+            (KeyBinding::plain(KeyToken::Right), Locale::EnUs, "→"),
+            (KeyBinding::plain(KeyToken::Backspace), Locale::EsEs, "Retroceso"),
+            (KeyBinding::plain(KeyToken::Backspace), Locale::EnUs, "Backspace"),
+            (
+                KeyBinding::with_modifier(Modifier::Shift, KeyToken::Enter),
+                Locale::EnUs,
+                "Shift+Enter",
+            ),
+            (
+                KeyBinding::with_modifier(Modifier::Ctrl, KeyToken::Backspace),
+                Locale::EsEs,
+                "Ctrl+Retroceso",
+            ),
+        ];
+        for (binding, locale, expected) in cases {
+            assert_eq!(format_binding(binding, locale), expected);
+        }
     }
 }
