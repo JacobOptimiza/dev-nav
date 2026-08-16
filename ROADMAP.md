@@ -7,8 +7,8 @@ and are not digital signatures.
 
 ## Current maintenance and quality baseline
 
-- [x] Rust, PowerShell and npm bootstrap test suites green on every push and
-  pull request (pinned toolchains: Rust 1.97.1, Pester 6.1.0,
+- [x] Rust, PowerShell and npm bootstrap test suites green in CI on pushes to
+  `main` and on pull requests (pinned toolchains: Rust 1.97.1, Pester 6.1.0,
   PSScriptAnalyzer 1.25.0, Node 22/24/26 with 24 as the release baseline).
 - [x] Coverage floors enforced in CI at >= 80% for all three languages:
   Rust production-only lines and regions, PowerShell commands and lines, and

@@ -32,7 +32,8 @@ on `main` and publishes its current result through the repository badge.
 
 Additional automated controls:
 
-- `cargo deny check` (advisories, bans, licenses, sources) on every push.
+- `cargo deny check` (advisories, bans, licenses, sources) in CI on pushes to
+  `main` and pull requests.
 - ClusterFuzzLite fuzzing of the `config.tsv` parser on qualifying pull
   requests.
 - Coverage floors enforced in CI (>= 80%): Rust production-only lines and

@@ -40,13 +40,13 @@ PowerShell integration, and the npm bootstrap, enforced in CI.
 **Residual limitation.** Rust coverage excludes host-bound code paths
 (`Terminal::enter/size/drop`, `read_key`, `Renderer::draw`, `run()/main()`,
 `detect_system_locale`) from the numerator only because they require a real
-interactive console; they remain in the denominator and are exercised by
-manual use.
+interactive console; they remain in the denominator and are not automatically
+covered by this suite.
 
 ## Dependency policy
 
 **Claim.** Dependencies are pinned (`Cargo.lock`), license-audited and
-vulnerability-checked on every push.
+vulnerability-checked in CI on pushes to `main` and pull requests.
 
 **Evidence.** `cargo deny check` (advisories, bans, licenses, sources) in the
 CI `validate` job; Dependabot configuration; the npm bootstrap has zero
@@ -71,7 +71,8 @@ analysis.
 
 ## Fuzzing
 
-**Claim.** The `config.tsv` parser is fuzzed continuously.
+**Claim.** The `config.tsv` parser is fuzz-tested automatically on qualifying
+pull requests.
 
 **Evidence.** ClusterFuzzLite (`.clusterfuzzlite/`, `.github/workflows/cflite_pr.yml`)
 on pull requests affecting its Rust source or fuzzing integration.

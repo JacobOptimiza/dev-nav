@@ -80,8 +80,8 @@ channels derive from it:
 
 Single flat TSV file owned jointly by the Rust binary and the PowerShell
 module, read and written by both through stable key prefixes: `root`,
-`show_favorites`, `check_updates`, `language`, `favorite\0t<path>`,
-`alias\0t<path>\0t<alias>`, and `shortcut\0t<slot>\0t<alias>\0t<command>`
+`show_favorites`, `check_updates`, `language`, `favorite\t<path>`,
+`alias\t<path>\t<alias>`, and `shortcut\t<slot>\t<alias>\t<command>`
 (1–9, executed as Shift+digit in the TUI). The Rust writer escapes `%`, tab
 and newline and replaces the file atomically.
 
