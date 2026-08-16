@@ -8,7 +8,6 @@ BeforeAll {
         Import-Module $modulePath -Force
     $devModule = Get-Module | Where-Object { $_.Path -eq $modulePath } | Select-Object -First 1
 }
-
 AfterAll {
     $env:LOCALAPPDATA = $previousLocalAppData
     Remove-Item -LiteralPath $testLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
@@ -1350,5 +1349,129 @@ Describe 'DevNav shortcut failure and confirmation behavior' {
         finally {
             Remove-Variable DevNavShortcutCliArguments, DevNavShortcutMessages -Scope Global -ErrorAction SilentlyContinue
         }
+    }
+}
+Describe 'DevNav navigator early dispatch behavior' {
+    BeforeAll {
+        $navigatorModule = Get-Module -Name DevNav | Select-Object -First 1
+        $navigatorModulePath = $navigatorModule.Path
+    }
+
+    BeforeEach {
+        Get-Module -Name DevNav | Remove-Module -Force -ErrorAction SilentlyContinue
+        Import-Module $navigatorModulePath -Force
+        $navigatorModule = Get-Module -Name DevNav | Select-Object -First 1
+        $global:DevNavNavigatorCalls = [System.Collections.Generic.List[string]]::new()
+        $global:DevNavNavigatorWarnings = [System.Collections.Generic.List[string]]::new()
+        $global:DevNavNavigatorLanguage = $null
+    }
+
+    AfterEach {
+        Remove-Variable -Name DevNavNavigatorCalls, DevNavNavigatorWarnings, DevNavNavigatorLanguage -Scope Global -ErrorAction SilentlyContinue
+        Get-Module -Name DevNav | Remove-Module -Force -ErrorAction SilentlyContinue
+        Import-Module $navigatorModulePath -Force
+        $navigatorModule = Get-Module -Name DevNav | Select-Object -First 1
+    }
+
+    It 'reports the saved English language without system detection' {
+        $result = InModuleScope DevNav {
+            function Get-DevLanguage { 'en-US' }
+            function Get-DevSystemLanguage { throw 'system detection should not run' }
+            Invoke-DevNavigator language
+        }
+
+        $result | Should -Be 'English (en-US)'
+    }
+
+    It 'falls back to the Spanish system language when no language is saved' {
+        $result = InModuleScope DevNav {
+            function Get-DevLanguage { $null }
+            function Get-DevSystemLanguage { 'es-ES' }
+            Invoke-DevNavigator language
+        }
+
+        $result | Should -Be 'Español (es-ES)'
+    }
+
+    It 'delegates an explicit language change to Set-DevLanguage' {
+        InModuleScope DevNav {
+            function Set-DevLanguage { param([string]$Language) $global:DevNavNavigatorLanguage = $Language }
+            function Initialize-DevLanguage { throw 'initialization should not run' }
+            Invoke-DevNavigator language es
+        }
+
+        $global:DevNavNavigatorLanguage | Should -Be 'es'
+    }
+
+    It 'delegates the update command before initialization' {
+        InModuleScope DevNav {
+            function Update-DevNavigator { $global:DevNavNavigatorCalls.Add('update') }
+            function Initialize-DevLanguage { throw 'initialization should not run' }
+            function Get-DevExecutable { throw 'executable lookup should not run' }
+            Invoke-DevNavigator update
+        }
+
+        $global:DevNavNavigatorCalls.Count | Should -Be 1
+    }
+
+    It 'returns when language initialization does not select a language' {
+        InModuleScope DevNav {
+            function Initialize-DevLanguage { $null }
+            function Invoke-DevStartupUpdateCheck { throw 'startup update should not run' }
+            function Get-DevExecutable { throw 'executable lookup should not run' }
+            Invoke-DevNavigator
+        }
+
+    }
+
+    It 'returns when the startup update completes' {
+        InModuleScope DevNav {
+            $script:DevNavUpdateCompleted = $false
+            $script:DevNavRestartRequired = $false
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck {
+                $script:DevNavUpdateCompleted = $true
+                $script:DevNavRestartRequired = $false
+            }
+            function Get-DevExecutable { throw 'executable lookup should not run' }
+            Invoke-DevNavigator
+        }
+
+    }
+
+    It 'reports the English restart warning and does not launch the navigator' {
+        InModuleScope DevNav {
+            $script:DevNavUpdateCompleted = $false
+            $script:DevNavRestartRequired = $false
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck {
+                $script:DevNavUpdateCompleted = $false
+                $script:DevNavRestartRequired = $true
+            }
+            function Get-DevLanguage { 'en-US' }
+            function Write-Warning { param($Message) $global:DevNavNavigatorWarnings.Add($Message) }
+            function Get-DevExecutable { throw 'executable lookup should not run' }
+            Invoke-DevNavigator
+        }
+
+        $global:DevNavNavigatorWarnings | Should -Contain 'DevNav was updated. Restart PowerShell to load the updated module.'
+    }
+
+    It 'reports the Spanish restart warning and does not launch the navigator' {
+        InModuleScope DevNav {
+            $script:DevNavUpdateCompleted = $false
+            $script:DevNavRestartRequired = $false
+            function Initialize-DevLanguage { 'es-ES' }
+            function Invoke-DevStartupUpdateCheck {
+                $script:DevNavUpdateCompleted = $false
+                $script:DevNavRestartRequired = $true
+            }
+            function Get-DevLanguage { 'es-ES' }
+            function Write-Warning { param($Message) $global:DevNavNavigatorWarnings.Add($Message) }
+            function Get-DevExecutable { throw 'executable lookup should not run' }
+            Invoke-DevNavigator
+        }
+
+        $global:DevNavNavigatorWarnings | Should -Contain 'DevNav se ha actualizado. Reinicia PowerShell para cargar el módulo actualizado.'
     }
 }
