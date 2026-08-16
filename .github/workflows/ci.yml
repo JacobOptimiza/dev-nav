@@ -22,7 +22,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # upstream commit
         with:
           toolchain: 1.97.1
-          components: rustfmt, clippy
+          components: rustfmt, clippy, llvm-tools-preview
       - run: cargo fmt -- --check
       - run: cargo check --workspace --all-targets
       - run: cargo test
@@ -32,6 +32,17 @@ jobs:
         shell: pwsh
         run: cargo install cargo-deny --version 0.20.2 --locked
       - run: cargo deny check
+      - name: Install cargo-llvm-cov
+        shell: pwsh
+        run: cargo install cargo-llvm-cov --version 0.8.7 --locked
+      - name: Test the production coverage analyzer
+        shell: pwsh
+        run: python -m unittest discover -s tests/coverage
+      - name: Enforce Rust production coverage >= 80%
+        shell: pwsh
+        run: |
+          cargo llvm-cov --workspace --json --output-path target/llvm-cov-export.json
+          python scripts/rust-production-coverage.py target/llvm-cov-export.json --threshold 80 --json target/production-coverage.json
 
   powershell:
     runs-on: windows-latest
@@ -47,9 +58,9 @@ jobs:
       - name: Parse and lint PowerShell
         shell: pwsh
         run: ./scripts/validate-powershell.ps1
-      - name: Run Pester tests
+      - name: Run Pester tests with coverage gate
         shell: pwsh
-        run: Invoke-Pester -Path ./tests/powershell -Output Detailed
+        run: ./scripts/invoke-pester-coverage.ps1
 
   distribution:
     strategy:
@@ -83,7 +94,14 @@ jobs:
             }
           }
       - name: Run the npm bootstrap unit tests
+        # The canonical Node 24 leg also enforces the coverage gate; the
+        # 22/26 legs only check compatibility with the plain test run.
+        if: matrix.node-version != '24'
         run: node --test "tests/npm/**/*.test.mjs"
+      - name: Run the npm bootstrap tests with coverage gate
+        if: matrix.node-version == '24'
+        shell: pwsh
+        run: ./scripts/invoke-npm-coverage.ps1
       - name: Validate the npm tarball allow-list
         shell: pwsh
         run: |

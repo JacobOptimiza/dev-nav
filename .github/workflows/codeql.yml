@@ -15,7 +15,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     permissions:
       actions: read
       contents: read
@@ -24,9 +24,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Rust runs the buildless extractor (build-mode: none). It was tried
+          # on windows-latest in #43 with no extraction improvement (9/10
+          # files with macro-expansion errors on both platforms), so the
+          # simpler Ubuntu lane is kept. The residual is documented in
+          # SECURITY.md.
           - language: rust
+            os: ubuntu-latest
             build-mode: none
           - language: actions
+            os: ubuntu-latest
+            build-mode: none
+          - language: javascript-typescript
+            os: ubuntu-latest
             build-mode: none
     steps:
       - name: Checkout

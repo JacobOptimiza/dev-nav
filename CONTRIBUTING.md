@@ -27,10 +27,52 @@ cargo check --workspace --all-targets
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo deny check
+# Rust production-only coverage gate (requires cargo-llvm-cov 0.8.7):
+cargo llvm-cov --workspace --json --output-path target/llvm-cov-export.json
+python scripts/rust-production-coverage.py target/llvm-cov-export.json --threshold 80
+python -m unittest discover -s tests/coverage   # analyzer unit tests
 ./scripts/validate-powershell.ps1
-Invoke-Pester -Path ./tests/powershell
+./scripts/invoke-pester-coverage.ps1            # Pester + coverage gate
 node --test "tests/npm/**/*.test.mjs"
+./scripts/invoke-npm-coverage.ps1               # Node coverage gate
 ```
+
+## Coding standards
+
+### Rust
+
+- `cargo fmt` formatting is mandatory; `clippy -D warnings` must stay clean.
+- Use `Result`/`Option` and explicit error propagation (`?`) instead of
+  panicking in recoverable paths; keep `unwrap`/`expect` to tests and truly
+  invariant conditions.
+- New behavior needs unit tests next to the module (`#[cfg(test)]`); bug fixes
+  need regression tests. Coverage gates enforce >= 80% production-only lines
+  and regions.
+- `unsafe` is allowed only where a Win32 API boundary requires it and must
+  carry a `// SAFETY:` justification comment.
+
+### PowerShell
+
+- Must pass the repository PSScriptAnalyzer settings
+  (`./scripts/validate-powershell.ps1`) and Pester tests with the coverage
+  gate.
+- Prefer testable, non-interactive functions; use `SupportsShouldProcess`
+  (`-WhatIf`/`-Confirm`) on cmdlets that change state.
+
+### JavaScript (npm bootstrap)
+
+- Node `>= 22` (CI tests 22, 24, 26; Node 24 is the release baseline); use
+  standard-library APIs only — no runtime dependencies.
+- The bootstrap tests (`tests/npm`) must pass; line coverage is gated at
+  >= 80% on the Node 24 leg.
+
+### General
+
+- Keep changes small, scoped to one purpose, and consistent with existing
+  style; behavior changes require behavior tests.
+- GitHub Actions references must be pinned to full commit SHAs.
+- Never edit published release artifacts, versions, or the npm package in
+  place; versions are immutable once public.
 
 The repository also fuzzes the `config.tsv` parser with ClusterFuzzLite on
 pull requests that affect its Rust source or fuzzing integration. Fuzzing is a

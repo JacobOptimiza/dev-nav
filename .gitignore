@@ -10,6 +10,8 @@
 
 # Test, coverage and generated reports
 coverage/
+# ...but the coverage analyzer unit tests are tracked source.
+!tests/coverage/
 coverage.lcov
 TestResults/
 *.trx
@@ -44,3 +46,7 @@ devnav-*.sha256
 *.pem
 *.pfx
 *.p12
+
+# Python tooling caches
+__pycache__/
+*.pyc
