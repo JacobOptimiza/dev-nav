@@ -43,6 +43,9 @@ jobs:
         run: |
           cargo llvm-cov --workspace --json --output-path target/llvm-cov-export.json
           python scripts/rust-production-coverage.py target/llvm-cov-export.json --threshold 80 --json target/production-coverage.json
+      - name: Verify release build repeatability
+        shell: pwsh
+        run: ./scripts/verify-build-repeatability.ps1
 
   powershell:
     runs-on: windows-latest

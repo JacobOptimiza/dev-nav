@@ -16,6 +16,7 @@ $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\DevNav'
 $installedExecutable = Join-Path $installRoot 'dev.exe'
 $installedModule = Join-Path $installRoot 'DevNav.psm1'
 $sourceModule = $null
+$sourceDebugSymbols = $null
 $temporaryDownload = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.exe" -f [guid]::NewGuid().ToString('N'))
 $temporaryModule = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.psm1" -f [guid]::NewGuid().ToString('N'))
 $temporaryChecksums = Join-Path ([System.IO.Path]::GetTempPath()) ("devnav-{0}.sha256" -f [guid]::NewGuid().ToString('N'))
@@ -49,6 +50,7 @@ try {
             Pop-Location
         }
         $sourceExecutable = Join-Path $projectRoot 'target\release\dev.exe'
+        $sourceDebugSymbols = Join-Path $projectRoot 'target\release\dev.pdb'
     }
     else {
         $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
@@ -80,6 +82,11 @@ try {
     }
 
     Copy-Item -LiteralPath $sourceExecutable -Destination $installedExecutable -Force
+    # Preserve debugging information requested through the standard build
+    # configuration (e.g. CARGO_PROFILE_RELEASE_DEBUG); absent by default.
+    if ($BuildFromSource -and (Test-Path -LiteralPath $sourceDebugSymbols -PathType Leaf)) {
+        Copy-Item -LiteralPath $sourceDebugSymbols -Destination (Join-Path $installRoot 'dev.pdb') -Force
+    }
     Copy-Item -LiteralPath $sourceModule -Destination $installedModule -Force
 }
 finally {

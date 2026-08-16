@@ -35,6 +35,7 @@ python -m unittest discover -s tests/coverage   # analyzer unit tests
 ./scripts/invoke-pester-coverage.ps1            # Pester + coverage gate
 node --test "tests/npm/**/*.test.mjs"
 ./scripts/invoke-npm-coverage.ps1               # Node coverage gate
+./scripts/verify-build-repeatability.ps1        # bit-for-bit release build check
 ```
 
 ## Coding standards
