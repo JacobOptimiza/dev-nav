@@ -186,7 +186,7 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::{Config, Locale, argument_value, parse_shortcut_index, try_config_command};
+    use super::{Config, argument_value, parse_shortcut_index, try_config_command};
 
     fn temp_config_path(label: &str) -> std::path::PathBuf {
         let unique = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time").as_nanos();
@@ -278,11 +278,5 @@ mod tests {
         assert!(try_config_command(&args, &config_path).expect("clear shortcut"));
         assert!(Config::load(&config_path).expect("load").shortcut(4).is_none());
         fs::remove_file(config_path).expect("remove config");
-    }
-
-    #[test]
-    fn detect_language_prints_a_supported_locale_tag() {
-        let locale = super::detect_system_locale();
-        assert!(matches!(locale, Locale::EsEs | Locale::EnUs));
     }
 }

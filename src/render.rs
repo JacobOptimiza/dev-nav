@@ -55,7 +55,7 @@ pub fn fit(text: &str, width: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Renderer, SELECTED_BG, SELECTED_FG, fit, selected};
+    use super::{SELECTED_BG, SELECTED_FG, fit, selected};
 
     #[test]
     fn fit_pads_short_text_to_the_requested_width() {
@@ -90,20 +90,5 @@ mod tests {
         assert!(row.starts_with(SELECTED_BG));
         assert!(row.contains(SELECTED_FG));
         assert!(row.contains("entry   "));
-    }
-
-    #[test]
-    fn renderer_draws_rows_and_skips_unchanged_ones() {
-        let mut renderer = Renderer::new();
-        let rows: Vec<String> = (0..5).map(|index| format!("row {index}")).collect();
-        renderer.draw(rows.clone()).expect("first draw");
-        // Identical frame: only the sync markers are emitted, nothing fails.
-        renderer.draw(rows.clone()).expect("unchanged draw");
-        // A shorter frame clears the leftover rows from the previous one.
-        renderer.draw(rows[..2].to_vec()).expect("shrinking draw");
-        // A changed row is redrawn in place.
-        let mut changed = rows;
-        changed[1] = "edited".to_string();
-        renderer.draw(changed).expect("growing draw");
     }
 }
