@@ -611,6 +611,103 @@ Describe 'DevNav updater lifecycle' {
         Copy-Item (Join-Path $sourceRoot 'DevNav.psm1') (Join-Path $installRoot 'DevNav.psm1')
     }
 
+    It 'does not query versions or releases when an update is skipped with WhatIf' {
+        $global:DevNavWhatIfCalls = @{ Installed = 0; Release = 0; Download = 0 }
+        try {
+            $devModule.Invoke({
+                Mock Test-DevManagedInstallation { $false }
+                Mock Get-DevInstalledVersion { $global:DevNavWhatIfCalls.Installed++ }
+                Mock Get-DevLatestRelease { $global:DevNavWhatIfCalls.Release++ }
+                Mock Invoke-DevDownload { $global:DevNavWhatIfCalls.Download++ }
+                Update-DevNavigator -WhatIf
+            })
+            $global:DevNavWhatIfCalls.Installed | Should -Be 0
+            $global:DevNavWhatIfCalls.Release | Should -Be 0
+            $global:DevNavWhatIfCalls.Download | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavWhatIfCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports the English no-op when the installed version is already current' {
+        $global:DevNavCurrentMessages = [System.Collections.Generic.List[string]]::new()
+        $global:DevNavCurrentDownloadCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Test-DevManagedInstallation { $false }
+                Mock Get-DevInstalledVersion { [version]'0.13.0' }
+                Mock Get-DevLatestRelease {
+                    [pscustomobject]@{ tag_name = 'v0.13.0'; assets = @() }
+                }
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Write-Host { [void]$global:DevNavCurrentMessages.Add([string]$Object) }
+                Mock Invoke-DevDownload { $global:DevNavCurrentDownloadCalls++ }
+                Update-DevNavigator -Confirm:$false
+            })
+            $global:DevNavCurrentMessages | Should -Contain 'Installed version: v0.13.0'
+            $global:DevNavCurrentMessages | Should -Contain 'Checking the latest published version...'
+            $global:DevNavCurrentMessages | Should -Contain 'Latest published: v0.13.0'
+            $global:DevNavCurrentMessages | Should -Contain 'You already have the latest version (v0.13.0). No update is needed.'
+            $global:DevNavCurrentDownloadCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavCurrentMessages, DevNavCurrentDownloadCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'reports the Spanish no-op when the installed version is newer than the latest release' {
+        $global:DevNavNewerMessages = [System.Collections.Generic.List[string]]::new()
+        $global:DevNavNewerDownloadCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Test-DevManagedInstallation { $false }
+                Mock Get-DevInstalledVersion { [version]'0.14.0' }
+                Mock Get-DevLatestRelease {
+                    [pscustomobject]@{ tag_name = 'v0.13.0'; assets = @() }
+                }
+                Mock Get-DevLanguage { 'es-ES' }
+                Mock Write-Host { [void]$global:DevNavNewerMessages.Add([string]$Object) }
+                Mock Invoke-DevDownload { $global:DevNavNewerDownloadCalls++ }
+                Update-DevNavigator -Confirm:$false
+            })
+            $global:DevNavNewerMessages | Should -Contain 'Versión instalada: v0.14.0'
+            $global:DevNavNewerMessages | Should -Contain 'Comprobando la última versión publicada...'
+            $global:DevNavNewerMessages | Should -Contain 'Última publicada: v0.13.0'
+            $global:DevNavNewerMessages | Should -Contain 'La versión instalada es más reciente que la última release publicada; no se modificó nada.'
+            $global:DevNavNewerDownloadCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavNewerMessages, DevNavNewerDownloadCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'rejects a release missing DevNav.psm1 before downloading anything' {
+        $global:DevNavMissingModuleDownloadCalls = 0
+        try {
+            $devModule.Invoke({
+                Mock Test-DevManagedInstallation { $false }
+                Mock Get-DevInstalledVersion { [version]'0.12.0' }
+                Mock Get-DevLatestRelease {
+                    [pscustomobject]@{
+                        tag_name = 'v0.13.0'
+                        assets = @(
+                            [pscustomobject]@{ name = 'dev-windows-x86_64.exe' }
+                            [pscustomobject]@{ name = 'dev-windows-aarch64.exe' }
+                            [pscustomobject]@{ name = 'SHA256SUMS.txt' }
+                        )
+                    }
+                }
+                Mock Invoke-DevDownload { $global:DevNavMissingModuleDownloadCalls++ }
+                { Update-DevNavigator -Confirm:$false } | Should -Throw 'La release v0.13.0 no contiene DevNav.psm1.'
+            })
+            $global:DevNavMissingModuleDownloadCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavMissingModuleDownloadCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'requests the latest GitHub release with the expected updater headers' {
         $global:DevNavLatestReleaseRequest = $null
         $global:DevNavLatestReleaseResponse = [pscustomobject]@{ tag_name = 'v9.8.7' }
@@ -937,6 +1034,28 @@ Describe 'DevNav Scoop-managed installation' {
             Update-DevNavigator -Confirm:$false
         })
         $global:DevNavScoopMessageShown | Should -BeTrue
+    }
+
+    It 'reports the English Scoop-managed update instructions without querying GitHub' {
+        $global:DevNavScoopEnglishMessages = [System.Collections.Generic.List[string]]::new()
+        $global:DevNavScoopLatestCalls = 0
+        $global:DevNavScoopDownloadCalls = 0
+        try {
+            $scoopModule.Invoke({
+                Mock Get-DevLanguage { 'en-US' }
+                Mock Get-DevLatestRelease { $global:DevNavScoopLatestCalls++ }
+                Mock Invoke-DevDownload { $global:DevNavScoopDownloadCalls++ }
+                Mock Write-Host { [void]$global:DevNavScoopEnglishMessages.Add([string]$Object) }
+                Update-DevNavigator -Confirm:$false
+            })
+            $global:DevNavScoopEnglishMessages | Should -Contain 'This installation is managed by Scoop; DevNav will not self-update.'
+            $global:DevNavScoopEnglishMessages | Should -Contain 'Update it with: scoop update devnav'
+            $global:DevNavScoopLatestCalls | Should -Be 0
+            $global:DevNavScoopDownloadCalls | Should -Be 0
+        }
+        finally {
+            Remove-Variable DevNavScoopEnglishMessages, DevNavScoopLatestCalls, DevNavScoopDownloadCalls -Scope Global -ErrorAction SilentlyContinue
+        }
     }
 
     It 'never initializes the startup update check' {
