@@ -18,6 +18,23 @@ steps or a proof of concept, impact, and any relevant logs or configuration
 details (with secrets removed). We will acknowledge a report within seven days
 and keep the reporter informed as we investigate.
 
+## Security expectations
+
+Users can expect DevNav to avoid telemetry, keep its configuration local to the
+current Windows user, verify downloaded release files with SHA-256 in the
+supported installation and update paths, and require explicit confirmation
+before an update is installed.
+
+DevNav is not a sandbox. Custom commands, coding-agent CLIs, and other commands
+returned to PowerShell execute with the permissions of the current user.
+SHA-256 checks verify integrity against published metadata but are not digital
+signatures, and the current v0.13.0 release must not be represented as signed.
+Static-analysis coverage also has the Rust extraction limitation documented
+below.
+
+No SLA, absolute-security guarantee, or new vulnerability-response commitment
+is introduced by this section.
+
 ## Security controls
 
 CodeQL analyzes Rust, GitHub Actions and JavaScript/TypeScript on pushes to
