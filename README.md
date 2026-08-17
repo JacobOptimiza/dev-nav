@@ -308,9 +308,9 @@ guessed as agents. Codex uses its per-invocation `tui.terminal_title=[]`
 override, while Claude Code and OpenCode receive their documented process-local
 title-disable environment variables. Kimi uses `NativeAgentTitle`: current
 Kimi Code manages its own terminal title and does not currently offer a
-compatible per-invocation override, so DevNav does not set or restore its
-title. No user configuration is changed and unsupported hosts fall back
-silently.
+compatible per-invocation override, so DevNav does not set its title but
+restores the caller's captured title after Kimi exits. No user configuration is
+changed and unsupported hosts fall back silently.
 
 ### Custom commands
 

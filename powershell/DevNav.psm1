@@ -562,6 +562,21 @@ function Restore-DevWindowTitle {
     try { $HostObject.UI.RawUI.WindowTitle = $OriginalTitle } catch { Write-Verbose 'Host does not support title restoration.' }
 }
 
+function Get-DevWindowTitle {
+    [CmdletBinding()]
+    param([object] $HostObject = $Host)
+
+    try {
+        return [pscustomobject]@{
+            Captured = $true
+            Title = [string]$HostObject.UI.RawUI.WindowTitle
+        }
+    } catch {
+        # Title handling is cosmetic and must never block agent execution.
+        return [pscustomobject]@{ Captured = $false; Title = $null }
+    }
+}
+
 function Get-DevAgentTitlePolicy {
     [CmdletBinding()]
     param(
@@ -699,16 +714,18 @@ function Invoke-DevNavigator {
 
         $commandText = if ($Command.Count -gt 0) { $Command -join ' ' } elseif ($parts.Count -gt 2) { $parts[2] } else { '' }
         $originalWindowTitle = $null
-        $windowTitleChanged = $false
+        $titleCaptured = $false
         $agent = $null
         $launchPolicy = $null
         if ($Command.Count -eq 0 -and $kind -eq 'exec' -and $parts.Count -ge 5) {
             $agent = $parts[3]
             if ($parts.Count -ge 6) { $launchPolicy = $parts[5] }
+            $titleState = Get-DevWindowTitle
+            $originalWindowTitle = $titleState.Title
+            $titleCaptured = $titleState.Captured
             $effectiveTitlePolicy = Get-DevAgentTitlePolicy -Agent $agent -LaunchPolicy $launchPolicy
             if ($effectiveTitlePolicy -eq 'devnav-managed-title') {
-                $originalWindowTitle = Set-DevAgentWindowTitle -Agent $agent -Repository $parts[4]
-                $windowTitleChanged = $null -ne $originalWindowTitle
+                Set-DevAgentWindowTitle -Agent $agent -Repository $parts[4] | Out-Null
             }
         }
         if ($kind -eq 'exec' -or $Command.Count -gt 0) {
@@ -722,7 +739,7 @@ function Invoke-DevNavigator {
                     }
                 }
             } finally {
-                if ($windowTitleChanged) {
+                if ($titleCaptured) {
                     Restore-DevWindowTitle -OriginalTitle $originalWindowTitle
                 }
             }

@@ -13,7 +13,8 @@ Versioning.
   result file. PowerShell now manages titles per process for Codex, Claude, and
   OpenCode, preserves Kimi's native behavior, and restores the previous title
   after managed agent sessions. Current Kimi Code has no compatible
-  per-invocation title override, so DevNav leaves Kimi's title native.
+  per-invocation title override, so DevNav leaves Kimi's live title native and
+  restores the caller's title after Kimi exits.
 
 ### Security
 
