@@ -1702,6 +1702,7 @@ exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
             function Get-DevRoot { $global:DevNavNativeRoot }
             function Get-DevExecutable { $global:DevNavNativeShim }
             function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
+            function Get-DevWindowTitle { [pscustomobject]@{ Captured = $true; Title = 'original title' } }
             function Set-DevAgentWindowTitle { param($Agent, $Repository) $global:DevNavNativeCalls.Add("title:$Agent/$Repository"); 'original title' }
             function Restore-DevWindowTitle { param($OriginalTitle) $global:DevNavNativeCalls.Add("restore:$OriginalTitle") }
             function Invoke-Expression { param($Command) $global:DevNavNativeCalls.Add("command:$Command") }
@@ -1723,13 +1724,51 @@ exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
             function Get-DevExecutable { $global:DevNavNativeShim }
             function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
             function Set-DevAgentWindowTitle { throw 'Kimi must own its native title' }
-            function Restore-DevWindowTitle { throw 'Kimi title was not changed by DevNav' }
-            function Invoke-Expression { param($Command) $global:DevNavNativeCalls.Add("command:$Command") }
+            function Get-DevWindowTitle { [pscustomobject]@{ Captured = $true; Title = 'caller title' } }
+            function Restore-DevWindowTitle {
+                param($OriginalTitle)
+                $global:KimiVisibleTitle = $OriginalTitle
+                $global:DevNavNativeCalls.Add("restore:$OriginalTitle")
+            }
+            function Invoke-Expression {
+                param($Command)
+                $global:KimiVisibleTitle = 'kimi-code'
+                $global:DevNavNativeCalls.Add("command:$Command")
+            }
             Invoke-DevNavigator
         })
         $global:DevNavNativeCalls | Should -Contain 'command:kimi'
         $global:DevNavNativeCalls | Should -Not -Match '^title:'
-        $global:DevNavNativeCalls | Should -Not -Match '^restore:'
+        $global:DevNavNativeCalls | Should -Contain 'restore:caller title'
+        $global:KimiVisibleTitle | Should -Be 'caller title'
+    }
+
+    It 'restores the caller title when Kimi fails after changing it' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes("exec`0$nativeResultDirectory`0kimi`0Kimi`0dev-nav`0native-agent-title")
+        )
+        $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
+            function Set-DevAgentWindowTitle { throw 'Kimi must own its native title' }
+            function Get-DevWindowTitle { [pscustomobject]@{ Captured = $true; Title = 'caller title' } }
+            function Restore-DevWindowTitle {
+                param($OriginalTitle)
+                $global:KimiVisibleTitle = $OriginalTitle
+                $global:DevNavNativeCalls.Add("restore:$OriginalTitle")
+            }
+            function Invoke-Expression {
+                param($Command)
+                $global:KimiVisibleTitle = 'kimi-session-title'
+                throw 'kimi failed'
+            }
+            { Invoke-DevNavigator } | Should -Throw 'kimi failed'
+        })
+        $global:DevNavNativeCalls | Should -Contain 'restore:caller title'
+        $global:KimiVisibleTitle | Should -Be 'caller title'
     }
 
     It 'does not invent an agent title for an arbitrary command or legacy result' {

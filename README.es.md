@@ -312,9 +312,10 @@ resultados legacy nunca se clasifican como agentes. Codex usa su override por
 invocación `tui.terminal_title=[]`; Claude Code y OpenCode reciben sus variables
 de entorno documentadas, sólo para ese proceso. Kimi usa `NativeAgentTitle`: el
 Kimi Code actual gestiona su propio título de terminal y no ofrece actualmente
-un override compatible por invocación, por lo que DevNav no establece ni
-restaura su título. No se modifica la configuración del usuario y los hosts
-incompatibles hacen fallback silencioso.
+un override compatible por invocación, por lo que DevNav no establece su título
+pero restaura el título capturado del caller cuando Kimi termina. No se
+modifica la configuración del usuario y los hosts incompatibles hacen fallback
+silencioso.
 
 ### Comandos personalizados
 
