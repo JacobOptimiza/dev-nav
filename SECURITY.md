@@ -18,6 +18,27 @@ steps or a proof of concept, impact, and any relevant logs or configuration
 details (with secrets removed). We will acknowledge a report within seven days
 and keep the reporter informed as we investigate.
 
+## Response process
+
+Reports received through private vulnerability reporting follow this process:
+
+1. **Acknowledge** the report within seven days.
+2. **Assess** validity, affected versions, and impact, reproducing the issue
+   locally where possible.
+3. **Fix** confirmed vulnerabilities on a private branch, with a regression
+   test where practical, and ship the fix in a new release of the supported
+   line.
+4. **Disclose** through a GitHub security advisory once the fix is available,
+   crediting the reporter unless they prefer otherwise.
+
+No additional SLA is introduced by this process; complex issues may take
+longer, and the reporter is kept informed as work progresses.
+
+There have been no resolved vulnerabilities in the last twelve months and no
+published GitHub security advisories, so no reporter credit has been issued to
+date. Reporters who want credit will be named in the advisory and release
+notes unless they ask to remain anonymous.
+
 ## Security expectations
 
 Users can expect DevNav to avoid telemetry, keep its configuration local to the
