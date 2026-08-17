@@ -14,7 +14,7 @@ pub struct DirectoryEntry {
 impl DirectoryEntry {
     pub fn label(&self) -> String {
         match self.alias.as_deref().filter(|alias| !alias.is_empty()) {
-            Some(alias) => format!("{alias} - {}", self.name),
+            Some(alias) => format!("{alias} | {}", self.name),
             None => self.name.clone(),
         }
     }
@@ -104,10 +104,10 @@ mod tests {
             alias: Some("principal".into()),
             favorite: false,
         };
-        assert_eq!(entry.label(), "principal - dev-nav");
+        assert_eq!(entry.label(), "principal | dev-nav");
 
         entry.alias = Some("   ".into());
-        assert_eq!(entry.label(), "    - dev-nav");
+        assert_eq!(entry.label(), "    | dev-nav");
 
         entry.alias = Some(String::new());
         assert_eq!(entry.label(), "dev-nav");
