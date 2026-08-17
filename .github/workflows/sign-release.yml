@@ -39,8 +39,10 @@ jobs:
         run: |
           set -euo pipefail
           test -f SHA256SUMS.txt
-          # Every downloaded file must be listed in SHA256SUMS.txt and match.
+          # Every downloaded file except SHA256SUMS.txt itself must be listed
+          # in SHA256SUMS.txt and match.
           for f in *; do
+            case "$f" in SHA256SUMS.txt) continue;; esac
             line=$(grep -F "  $f" SHA256SUMS.txt) || { echo "asset $f is not listed in SHA256SUMS.txt"; exit 1; }
             printf '%s\n' "$line" | sha256sum -c -
           done
