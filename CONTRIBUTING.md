@@ -4,9 +4,28 @@ DevNav is a public project. Use the repository's Issue and pull-request
 templates for non-sensitive reports and focused changes. Security
 vulnerabilities must always use private reporting through [SECURITY.md](SECURITY.md).
 
+Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md); how
+decisions are made and who holds which role is documented in
+[GOVERNANCE.md](GOVERNANCE.md).
+
 You may inspect, clone, download, and fork the project under the terms of the
 MIT license. Keep changes small, focused, documented, and scoped to one
 purpose.
+
+## Developer Certificate of Origin (DCO)
+
+All new contributions require a `Signed-off-by` line certifying the
+[Developer Certificate of Origin 1.1](DCO). Add it with `git commit -s`
+(or `git rebase --signoff` for a branch). The sign-off uses your real name
+and a valid email address, for example:
+
+```
+Signed-off-by: Jane Doe <jane.doe@example.com>
+```
+
+The requirement applies to contributions submitted after its adoption;
+historical commits are not rewritten. Pull requests without a sign-off may be
+asked to add one before merge.
 
 ## Development prerequisites
 
