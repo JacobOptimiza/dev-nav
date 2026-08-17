@@ -38,6 +38,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # upstream commit
         with:
           toolchain: 1.97.1
@@ -50,7 +51,7 @@ jobs:
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "${{ matrix.asset }}"
           Copy-Item "target/${{ matrix.target }}/release/dev.exe" "release-assets/dev.exe"
           Copy-Item "powershell/DevNav.psm1" "release-assets/DevNav.psm1"
-          $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
+          $version = "${{ inputs.tag || github.ref_name }}".TrimStart('v')
           git fetch origin main --quiet
           git merge-base --is-ancestor $env:GITHUB_SHA origin/main
           if ($LASTEXITCODE -ne 0) { throw 'Release tags must point to a commit contained in main.' }
@@ -155,6 +156,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -165,7 +167,8 @@ jobs:
         working-directory: artifacts
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${{ inputs.tag || github.ref_name }}"
+          version="${version#v}"
           mkdir -p manifests/j/JacobOptimiza/DevNav/"$version"
           x64_sha=$(sha256sum DevNavSetup-x64.exe | cut -d' ' -f1)
           arm64_sha=$(sha256sum DevNavSetup-arm64.exe | cut -d' ' -f1)
@@ -211,7 +214,8 @@ jobs:
       - name: Generate the Scoop manifest for this release
         working-directory: artifacts
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${{ inputs.tag || github.ref_name }}"
+          version="${version#v}"
           hash() { sha256sum "$1" | cut -d' ' -f1; }
           base="https://github.com/JacobOptimiza/dev-nav/releases/download/v$version"
           jq --arg version "$version" \
@@ -226,7 +230,8 @@ jobs:
       - name: Generate the release manifest
         working-directory: artifacts
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${{ inputs.tag || github.ref_name }}"
+          version="${version#v}"
           hash() { sha256sum "$1" | cut -d' ' -f1; }
           jq -n --arg version "$version" \
             --arg winget_file "winget-manifests-$version.zip" \
@@ -341,7 +346,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         # Upload files only; the unpacked manifests directory is not a release asset.
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
+          gh release create "${{ inputs.tag || github.ref_name }}" \
             artifacts/*.exe \
             artifacts/*.zip \
             artifacts/*.psm1 \
@@ -369,6 +374,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -386,7 +392,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
+          $version = "${{ inputs.tag || github.ref_name }}".TrimStart('v')
           if ([version]$version -le [version]'0.9.7') {
             throw "npm must not publish v${version}; the first multichannel release must be newer than 0.9.7."
           }
@@ -438,7 +444,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = "${env:GITHUB_REF_NAME}".TrimStart('v')
+          $version = "${{ inputs.tag || github.ref_name }}".TrimStart('v')
           $tarball = (Resolve-Path "npm-package\jacoboptimiza-devnav-$version.tgz").Path
           # Same forms the README documents, resolved against the local tarball
           # instead of the registry.
@@ -474,7 +480,7 @@ jobs:
           }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: npm-package-${{ github.ref_name }}
+          name: npm-package-${{ inputs.tag || github.ref_name }}
           path: npm-package/*.tgz
           if-no-files-found: error
 
@@ -489,6 +495,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -500,7 +507,7 @@ jobs:
         uses: ./.github/actions/install-npm-cli
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: npm-package-${{ github.ref_name }}
+          name: npm-package-${{ inputs.tag || github.ref_name }}
           path: npm-package
       - name: Stage the exact tested tarball via OIDC trusted publishing
         working-directory: npm-package
