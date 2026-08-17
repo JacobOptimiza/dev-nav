@@ -9,13 +9,18 @@ on:
         description: 'Existing release tag to recover for npm staging (for example v0.11.0)'
         required: true
         type: string
+      publish_release:
+        description: 'Run the normal release flow for the existing tag'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   build:
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
     strategy:
       fail-fast: false
       matrix:
@@ -101,9 +106,25 @@ jobs:
             -OutputPath "DevNav-build-provenance-${{ matrix.architecture }}.intoto.jsonl" `
             -ExpectedSubject '${{ matrix.asset }}', "DevNavSetup-${{ matrix.architecture }}.exe", "DevNav-scoop-${{ matrix.architecture }}.zip"
       - name: Install cosign
+        if: ${{ matrix.architecture != 'arm64' }}
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: 'v3.1.3'
+      - name: Install cosign (ARM64 runner compatibility)
+        if: ${{ matrix.architecture == 'arm64' }}
+        shell: pwsh
+        run: |
+          $cosignDir = Join-Path $env:RUNNER_TEMP 'cosign'
+          New-Item -ItemType Directory -Path $cosignDir -Force | Out-Null
+          $cosignPath = Join-Path $cosignDir 'cosign.exe'
+          Invoke-WebRequest `
+            -Uri 'https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-windows-amd64.exe' `
+            -OutFile $cosignPath
+          $actual = (Get-FileHash -LiteralPath $cosignPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne '9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be') {
+            throw "Unexpected cosign digest: $actual"
+          }
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $cosignDir
       - name: Sign release artifacts (Sigstore keyless)
         shell: pwsh
         run: |
@@ -130,7 +151,7 @@ jobs:
             DevNav-scoop-${{ matrix.architecture }}.zip.sigstore.json
 
   publish:
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -345,7 +366,7 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag
 
   npm-package:
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
     needs: publish
     runs-on: windows-latest
     permissions:
@@ -463,7 +484,7 @@ jobs:
           if-no-files-found: error
 
   npm-publish:
-    if: ${{ github.event_name == 'push' && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
+    if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)) && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
     needs: npm-package
     runs-on: ubuntu-latest
     environment: npm-production
@@ -496,7 +517,7 @@ jobs:
           npm stage publish "./${tarball[0]}"
 
   npm-recovery-package:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release != true }}
     runs-on: windows-latest
     permissions:
       contents: read
@@ -611,7 +632,7 @@ jobs:
           if-no-files-found: error
 
   npm-recovery-publish:
-    if: ${{ github.event_name == 'workflow_dispatch' && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release != true && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
     needs: npm-recovery-package
     runs-on: ubuntu-latest
     environment: npm-production
