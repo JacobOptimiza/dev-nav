@@ -8,7 +8,7 @@ use crate::{
         manager_footer_compact, shift_range, text,
     },
     input::{self, Key},
-    model::{AgentIdentity, DirectoryEntry, ExecutionContext, ShellResult},
+    model::{AgentIdentity, AgentLaunchPolicy, DirectoryEntry, ExecutionContext, ShellResult},
     render::{CYAN, FRAME, RESET, Renderer, SELECTED_BG, SELECTED_FG, SHORTCUT, fit, selected},
     terminal::Terminal,
 };
@@ -790,7 +790,11 @@ impl App {
         self.selected_entry().map(|entry| ShellResult::Execute {
             directory: entry.path.clone(),
             command: command.to_owned(),
-            context: agent.map(|agent| ExecutionContext { agent, repository: entry.name.clone() }),
+            context: agent.map(|agent| ExecutionContext {
+                launch_policy: agent_launch_policy(&agent),
+                agent,
+                repository: entry.name.clone(),
+            }),
         })
     }
 
@@ -863,8 +867,12 @@ impl App {
                     let entry = &self.entries[*entry_index];
                     let marker = if entry.favorite { "★" } else { " " };
                     let prefix = if visible_index == self.selected { "›" } else { " " };
-                    let label =
-                        format!("{prefix} {marker}  {}", entry_display_label(self.locale, entry));
+                    let relation = fit_relation(
+                        entry.alias.as_deref(),
+                        &entry.name,
+                        inner.saturating_sub(prefix.chars().count() + marker.chars().count() + 4),
+                    );
+                    let label = format!("{prefix} {marker}  {relation}");
                     if visible_index == self.selected {
                         selected(&label, inner)
                     } else {
@@ -995,11 +1003,12 @@ impl App {
             KeyBinding::with_modifier(Modifier::Shift, KeyToken::Char(char::from(b'0' + slot))),
             self.locale,
         );
+        let available_width = layout.width.saturating_sub(2);
+        let binding_width = 10.min(available_width.saturating_sub(4));
+        let text_width = available_width.saturating_sub(binding_width + 3);
         let content = self.config.shortcut(slot).map_or_else(
             || text(self.locale, TextId::Empty).to_owned(),
-            |shortcut| {
-                shortcut_display_label(self.locale, shortcut.alias.as_deref(), &shortcut.command)
-            },
+            |shortcut| fit_relation(shortcut.alias.as_deref(), &shortcut.command, text_width),
         );
         panel_slot_row(layout.width, &binding, &content, usize::from(slot - 1) == selected_slot)
     }
@@ -1061,11 +1070,10 @@ impl App {
         if layout.height == 5 {
             return match local {
                 1 => panel_binding_row(layout.width, &binding, delete_prompt(self.locale)),
-                2 => panel_text_row(
+                2 => panel_relation_row(
                     layout.width,
-                    &shortcut.map_or_else(String::new, |s| {
-                        shortcut_display_label(self.locale, s.alias.as_deref(), &s.command)
-                    }),
+                    shortcut.and_then(|s| s.alias.as_deref()),
+                    shortcut.map_or("", |s| s.command.as_str()),
                 ),
                 3 => panel_text_row(layout.width, self.editor_error.as_deref().unwrap_or("")),
                 _ => panel_text_row(layout.width, ""),
@@ -1073,22 +1081,12 @@ impl App {
         }
         match local {
             1 => panel_binding_row(layout.width, &binding, delete_prompt(self.locale)),
-            2 => panel_text_row(
+            2 => panel_relation_row(
                 layout.width,
-                &format!(
-                    "{}: {}",
-                    text(self.locale, TextId::Alias),
-                    shortcut.and_then(|s| s.alias.as_deref()).unwrap_or("—")
-                ),
+                shortcut.and_then(|s| s.alias.as_deref()),
+                shortcut.map_or("", |s| s.command.as_str()),
             ),
-            3 => panel_text_row(
-                layout.width,
-                &format!(
-                    "{}: {}",
-                    text(self.locale, TextId::Command),
-                    shortcut.map_or("", |s| s.command.as_str())
-                ),
-            ),
+            3 => panel_text_row(layout.width, ""),
             4 => panel_text_row(layout.width, self.editor_error.as_deref().unwrap_or("")),
             _ => panel_text_row(layout.width, ""),
         }
@@ -1396,27 +1394,29 @@ fn render_help_line(line: HelpLine, width: usize) -> String {
     }
 }
 
-fn entry_display_label(locale: Locale, entry: &DirectoryEntry) -> String {
+#[cfg(test)]
+fn entry_display_label(_locale: Locale, entry: &DirectoryEntry) -> String {
     match entry.alias.as_deref().filter(|alias| !alias.trim().is_empty()) {
-        Some(alias) => format!(
-            "{}: {}  {}: {}",
-            text(locale, TextId::Alias),
-            alias,
-            text(locale, TextId::Repo),
-            entry.name
-        ),
-        None => format!("{}: {}", text(locale, TextId::Repo), entry.name),
+        Some(alias) => format!("{alias} · {}", entry.name),
+        None => entry.name.clone(),
     }
 }
 
-fn shortcut_display_label(locale: Locale, alias: Option<&str>, command: &str) -> String {
-    let command_label = text(locale, TextId::Command);
-    match alias.filter(|value| !value.trim().is_empty()) {
-        Some(alias) => {
-            format!("{}: {}  {}: {}", text(locale, TextId::Alias), alias, command_label, command)
+/// Fits the primary identifier and its secondary value without ever leaving
+/// the relationship marker at the end of a row. The primary text wins when
+/// the terminal cannot fit both sides.
+fn fit_relation(alias: Option<&str>, value: &str, width: usize) -> String {
+    let alias = alias.filter(|text| !text.trim().is_empty());
+    let separator = " · ";
+    let alias_width = alias.map_or(0, |text| text.chars().count());
+    if let Some(alias) = alias {
+        if width <= alias_width + separator.chars().count() {
+            return fit(alias, width);
         }
-        None => format!("{command_label}: {command}"),
+        let value_width = width - alias_width - separator.chars().count();
+        return format!("{alias}{separator}{}", fit(value, value_width));
     }
+    fit(value, width)
 }
 
 fn panel_border(width: usize, label: &str, top: bool) -> String {
@@ -1462,6 +1462,18 @@ fn editor_footer_for(locale: Locale, width: usize) -> &'static str {
 fn panel_text_row(width: usize, text: &str) -> String {
     let content_width = width.saturating_sub(2);
     format!("{FRAME}│{RESET}{}{}│{RESET}", fit(&format!(" {text}"), content_width), FRAME)
+}
+
+fn panel_relation_row(width: usize, alias: Option<&str>, value: &str) -> String {
+    let content_width = width.saturating_sub(2);
+    format!(
+        "{FRAME}│{RESET}{}{}│{RESET}",
+        fit(
+            &format!(" {}", fit_relation(alias, value, content_width.saturating_sub(1))),
+            content_width
+        ),
+        FRAME
+    )
 }
 
 fn panel_binding_row(width: usize, binding: &str, text: &str) -> String {
@@ -1606,6 +1618,15 @@ fn agent_command(key: char) -> Option<(AgentIdentity, &'static str)> {
     }
 }
 
+fn agent_launch_policy(agent: &AgentIdentity) -> AgentLaunchPolicy {
+    match agent {
+        AgentIdentity::Codex | AgentIdentity::Claude | AgentIdentity::OpenCode => {
+            AgentLaunchPolicy::DisableAgentTitle
+        }
+        AgentIdentity::Kimi => AgentLaunchPolicy::KeepAgentTitle,
+    }
+}
+
 fn is_command_shortcut(key: char) -> bool {
     matches!(key, 'e' | ':')
 }
@@ -1645,11 +1666,12 @@ mod tests {
     };
 
     use super::{
-        AgentIdentity, App, EditorField, Mode, PanelLayout, ShellResult, TextField, agent_command,
-        command_scroll, cursor_text, editor_footer_for, footer_fits, footer_help, fuzzy_score,
-        help_lines_for, is_command_shortcut, manager_footer_for, panel_binding_row, panel_border,
-        panel_border_with_binding, panel_field_dimensions, panel_field_row, panel_slot_row,
-        panel_text_row, visible_width,
+        AgentIdentity, AgentLaunchPolicy, App, EditorField, Locale, Mode, PanelLayout, ShellResult,
+        TextField, agent_command, agent_launch_policy, command_scroll, cursor_text,
+        editor_footer_for, entry_display_label, fit_relation, footer_fits, footer_help,
+        fuzzy_score, help_lines_for, is_command_shortcut, manager_footer_for, panel_binding_row,
+        panel_border, panel_border_with_binding, panel_field_dimensions, panel_field_row,
+        panel_slot_row, panel_text_row, visible_width,
     };
     use crate::{
         config::Config,
@@ -1681,6 +1703,23 @@ mod tests {
         assert_eq!(agent_command('i'), Some((AgentIdentity::Kimi, "kimi")));
         assert_eq!(agent_command('I'), Some((AgentIdentity::Kimi, "kimi --continue")));
         assert_eq!(agent_command('x'), None);
+    }
+
+    #[test]
+    fn agent_launch_policies_disable_only_known_overwriters() {
+        assert_eq!(
+            agent_launch_policy(&AgentIdentity::Codex),
+            AgentLaunchPolicy::DisableAgentTitle
+        );
+        assert_eq!(
+            agent_launch_policy(&AgentIdentity::Claude),
+            AgentLaunchPolicy::DisableAgentTitle
+        );
+        assert_eq!(
+            agent_launch_policy(&AgentIdentity::OpenCode),
+            AgentLaunchPolicy::DisableAgentTitle
+        );
+        assert_eq!(agent_launch_policy(&AgentIdentity::Kimi), AgentLaunchPolicy::KeepAgentTitle);
     }
 
     #[test]
@@ -1889,7 +1928,8 @@ mod tests {
         assert_eq!(visible_width(&command), 18, "{command:?}");
         assert!(alias.contains('›'));
         assert!(!command.contains('›'));
-        assert!(fit("Alias: principal  Repo: project", 12).ends_with('…'));
+        assert_eq!(fit_relation(Some("principal"), "project", 11).trim_end(), "principal");
+        assert!(!fit_relation(Some("principal"), "project", 12).ends_with('·'));
     }
 
     #[test]
@@ -2776,17 +2816,23 @@ mod tests {
         app.config.set_alias(target, "principal".into());
         app.refresh().expect("refresh");
         let spanish = app.render_rows(100, 24).join("\n");
-        assert!(spanish.contains("Alias: principal"));
-        assert!(spanish.contains("Repo: project"));
+        assert!(spanish.contains("principal · project"));
+        assert!(!spanish.contains("Alias:"));
+        assert!(!spanish.contains("Repo:"));
 
         app.locale = crate::i18n::Locale::EnUs;
         let english = app.render_rows(100, 24).join("\n");
-        assert!(english.contains("Alias: principal"));
-        assert!(english.contains("Repo: project"));
+        assert!(english.contains("principal · project"));
+        assert!(!english.contains("Alias:"));
+        assert!(!english.contains("Repo:"));
 
         let (mut no_alias, sandbox2) = sandbox_app_with_dirs("render-repo-no-alias", &["project"]);
         let plain = no_alias.render_rows(100, 24).join("\n");
-        assert!(plain.contains("Repo: project"));
+        assert!(plain.contains("project"));
+        assert_eq!(
+            entry_display_label(Locale::EsEs, no_alias.selected_entry().expect("entry")),
+            "project"
+        );
         assert!(!plain.contains("Alias:"));
         fs::remove_dir_all(sandbox).expect("clean sandbox");
         fs::remove_dir_all(sandbox2).expect("clean sandbox");
@@ -2824,8 +2870,9 @@ mod tests {
         let rows = app.render_rows(100, 30);
         let joined = rows.join("\n");
         assert!(joined.contains("COMANDOS PERSONALIZADOS"));
-        assert!(joined.contains("Alias: Dev"));
-        assert!(joined.contains("Comando: bun run dev"));
+        assert!(joined.contains("Dev · bun run dev"));
+        assert!(!joined.contains("Alias: Dev"));
+        assert!(!joined.contains("Comando: bun run dev"));
         assert!(joined.contains("Vacío"));
 
         app.handle_key(Key::Enter).expect("open editor");
@@ -2845,8 +2892,9 @@ mod tests {
         assert!(joined.contains("¿Eliminar este comando?"));
         // Full-height delete panel renders the alias and command on their own rows.
         assert!(joined.contains("Dev"));
-        assert!(joined.contains("Alias: Dev"));
-        assert!(joined.contains("Comando: bun run dev"));
+        assert!(joined.contains("Dev · bun run dev"));
+        assert!(!joined.contains("Alias: Dev"));
+        assert!(!joined.contains("Comando: bun run dev"));
         fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 
@@ -2860,7 +2908,8 @@ mod tests {
         let rows = app.render_rows(90, 12);
         let joined = rows.join("\n");
         assert!(joined.contains("¿Eliminar este comando?"));
-        assert!(joined.contains("Comando: cargo test"));
+        assert!(joined.contains("cargo test"));
+        assert!(!joined.contains("Comando:"));
         fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 

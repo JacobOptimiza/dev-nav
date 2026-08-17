@@ -562,6 +562,63 @@ function Restore-DevWindowTitle {
     try { $HostObject.UI.RawUI.WindowTitle = $OriginalTitle } catch { Write-Verbose 'Host does not support title restoration.' }
 }
 
+function Invoke-DevAgentCommand {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string] $CommandText,
+        [Parameter(Mandatory)][ValidateSet('Codex', 'Claude', 'OpenCode', 'Kimi')][string] $Agent,
+        [string] $LaunchPolicy
+    )
+
+    # The native result identifies the agent; this adapter never guesses it
+    # from arbitrary command text. These settings are process-local and are
+    # restored immediately after the child exits.
+    $policy = if ($LaunchPolicy) { $LaunchPolicy } else {
+        switch ($Agent) {
+            'Kimi' { 'keep-agent-title' }
+            default { 'disable-agent-title' }
+        }
+    }
+    $environmentNames = switch ($Agent) {
+        'Claude' { @('CLAUDE_CODE_DISABLE_TERMINAL_TITLE') }
+        'OpenCode' { @('OPENCODE_DISABLE_TERMINAL_TITLE') }
+        default { @() }
+    }
+    $savedEnvironment = @{}
+    foreach ($name in $environmentNames) {
+        $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+        if ($policy -eq 'disable-agent-title') {
+            Set-Item -Path "Env:$name" -Value '1'
+        }
+    }
+
+    # Codex exposes its title policy as an official per-invocation config
+    # override. Keep the user's command semantics and add only that title
+    # setting to the known DevNav launch forms.
+    $launchCommand = $CommandText
+    if ($Agent -eq 'Codex' -and $policy -eq 'disable-agent-title') {
+        $launchCommand = switch ($CommandText) {
+            'codex' { "codex -c 'tui.terminal_title=[]'" }
+            'codex resume --last' { "codex -c 'tui.terminal_title=[]' resume --last" }
+            default { $CommandText }
+        }
+    }
+
+    try {
+        Invoke-Expression $launchCommand
+    }
+    finally {
+        foreach ($name in $environmentNames) {
+            if ($null -eq $savedEnvironment[$name]) {
+                Remove-Item -Path "Env:$name" -ErrorAction SilentlyContinue
+            }
+            else {
+                Set-Item -Path "Env:$name" -Value $savedEnvironment[$name]
+            }
+        }
+    }
+}
+
 function Invoke-DevNavigator {
     [CmdletBinding()]
     param(
@@ -627,14 +684,23 @@ function Invoke-DevNavigator {
         $commandText = if ($Command.Count -gt 0) { $Command -join ' ' } elseif ($parts.Count -gt 2) { $parts[2] } else { '' }
         $originalWindowTitle = $null
         $windowTitleChanged = $false
+        $agent = $null
+        $launchPolicy = $null
         if ($Command.Count -eq 0 -and $kind -eq 'exec' -and $parts.Count -ge 5) {
-            $originalWindowTitle = Set-DevAgentWindowTitle -Agent $parts[3] -Repository $parts[4]
+            $agent = $parts[3]
+            if ($parts.Count -ge 6) { $launchPolicy = $parts[5] }
+            $originalWindowTitle = Set-DevAgentWindowTitle -Agent $agent -Repository $parts[4]
             $windowTitleChanged = $null -ne $originalWindowTitle
         }
         if ($kind -eq 'exec' -or $Command.Count -gt 0) {
             try {
                 if (-not [string]::IsNullOrWhiteSpace($commandText)) {
-                    Invoke-Expression $commandText
+                    if ($null -ne $agent) {
+                        Invoke-DevAgentCommand -CommandText $commandText -Agent $agent -LaunchPolicy $launchPolicy
+                    }
+                    else {
+                        Invoke-Expression $commandText
+                    }
                 }
             } finally {
                 if ($windowTitleChanged) {

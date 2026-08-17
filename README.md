@@ -298,6 +298,17 @@ with `F1`, `Esc`, or `Enter`.
 
 `:` remains available as a Vim-style alias for `e`.
 
+### Agent terminal titles
+
+When DevNav launches a known agent, it temporarily sets the current terminal
+title to `Agent/repository` and restores the previous title when the process
+ends. The result file carries the agent identity explicitly; arbitrary commands
+and legacy results are never guessed as agents. Codex uses its per-invocation
+`tui.terminal_title=[]` override, while Claude Code and OpenCode receive their
+documented process-local title-disable environment variables. Kimi keeps its
+native title behavior because it already preserves the DevNav title. No user
+configuration is changed and unsupported hosts fall back silently.
+
 ### Custom commands
 
 Bind commands to `Shift+1–9` and run them in the highlighted project:
@@ -309,10 +320,10 @@ between Alias and Command, `Enter` saves, and `Esc` cancels. `F2` changes the
 language without losing the manager state or editor draft. `Shift+1–9` execute
 their commands only from the normal navigator, never while managing slots.
 
-The manager shows the editable alias and the real command separately (`Alias: …`
-and `Command: …`); an empty alias leaves the command fully visible. Repository
-rows use the same pattern (`Alias: …` and `Repo: …`), so an alias never hides the
-project identity.
+The manager renders the editable alias and real command as `alias · command`
+(for example, `Dev · bun run dev`), while repository rows use `alias · repo`
+(for example, `principal · dev-nav`). Without an alias, only the real value is
+shown; an alias never hides the project identity.
 
 ```powershell
 dev shortcut 1 "Dev" "bun run dev"
