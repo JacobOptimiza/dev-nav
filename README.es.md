@@ -302,6 +302,18 @@ puedes desplazarte con `↑` / `↓` y cerrarlo con `F1`, `Esc` o `Enter`.
 `:` se conserva como alias compatible de `e` para quienes prefieran el estilo de
 comandos de Vim.
 
+### Títulos de agentes en la terminal
+
+Cuando DevNav lanza un agente conocido, establece temporalmente el título de la
+terminal como `Agente/repositorio` y restaura el título anterior al terminar el
+proceso. El result-file transporta la identidad explícita; los comandos
+arbitrarios y los resultados legacy nunca se clasifican como agentes. Codex usa
+su override por invocación `tui.terminal_title=[]`; Claude Code y OpenCode
+reciben sus variables de entorno documentadas, sólo para ese proceso. Kimi
+mantiene su comportamiento nativo porque ya conserva el título de DevNav. No se
+modifica la configuración del usuario y los hosts incompatibles hacen fallback
+silencioso.
+
 ### Comandos personalizados
 
 Asigna comandos a `Mayús+1–9` para ejecutarlos en el proyecto
@@ -315,10 +327,10 @@ el editor, `Tab` cambia entre Alias y Comando, `Enter` guarda y `Esc` cancela.
 combinaciones `Mayús+1–9` ejecutan comandos únicamente desde el navegador
 normal, nunca mientras gestionas slots.
 
-El gestor muestra por separado el alias editable y el comando real (`Alias: …`
-y `Comando: …`); sin alias, el comando sigue completamente visible. Las filas de
-repositorios usan el mismo patrón (`Alias: …` y `Repo: …`), de modo que un alias
-nunca oculta la identidad del proyecto.
+El gestor muestra el alias editable y el comando real como `alias · comando`
+(por ejemplo, `Dev · bun run dev`), mientras las filas de repositorios usan
+`alias · repo` (por ejemplo, `principal · dev-nav`). Sin alias se muestra sólo
+el valor real; el alias nunca oculta la identidad del proyecto.
 
 ```powershell
 dev shortcut 1 "Dev" "bun run dev"

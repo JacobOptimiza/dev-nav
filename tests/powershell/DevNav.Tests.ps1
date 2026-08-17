@@ -1709,7 +1709,7 @@ exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
         })
         $global:DevNavNativeCalls | Should -Contain 'title:Codex/dev-nav'
         $global:DevNavNativeCalls | Should -Contain 'restore:original title'
-        $global:DevNavNativeCalls | Should -Contain 'command:codex'
+        $global:DevNavNativeCalls | Should -Contain "command:codex -c 'tui.terminal_title=[]'"
     }
 
     It 'does not invent an agent title for an arbitrary command or legacy result' {
@@ -1743,6 +1743,39 @@ exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
             $unsupported = [pscustomobject]@{ UI = $null }
             { Set-DevAgentWindowTitle -Agent 'Kimi' -Repository 'dev-nav' -HostObject $unsupported } |
                 Should -Not -Throw
+        })
+    }
+
+    It 'uses explicit per-agent title policies without changing Kimi or persistent user config' {
+        $nativeModule.Invoke({
+            $env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE = $null
+            $env:OPENCODE_DISABLE_TERMINAL_TITLE = $null
+            function Invoke-Expression {
+                param($Command)
+                $global:DevNavNativeCalls.Add("$Command|claude=$env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE|opencode=$env:OPENCODE_DISABLE_TERMINAL_TITLE")
+            }
+
+            Invoke-DevAgentCommand -CommandText 'codex' -Agent Codex -LaunchPolicy 'disable-agent-title'
+            Invoke-DevAgentCommand -CommandText 'claude' -Agent Claude -LaunchPolicy 'disable-agent-title'
+            Invoke-DevAgentCommand -CommandText 'opencode' -Agent OpenCode -LaunchPolicy 'disable-agent-title'
+            Invoke-DevAgentCommand -CommandText 'kimi' -Agent Kimi -LaunchPolicy 'keep-agent-title'
+        })
+
+        $global:DevNavNativeCalls | Should -Contain "codex -c 'tui.terminal_title=[]'|claude=|opencode="
+        $global:DevNavNativeCalls | Should -Contain 'claude|claude=1|opencode='
+        $global:DevNavNativeCalls | Should -Contain 'opencode|claude=|opencode=1'
+        $global:DevNavNativeCalls | Should -Contain 'kimi|claude=|opencode='
+        $env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE | Should -BeNullOrEmpty
+        $env:OPENCODE_DISABLE_TERMINAL_TITLE | Should -BeNullOrEmpty
+    }
+
+    It 'restores per-process title settings when the agent fails' {
+        $nativeModule.Invoke({
+            $env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE = $null
+            function Invoke-Expression { throw 'agent failed' }
+            { Invoke-DevAgentCommand -CommandText 'claude' -Agent Claude -LaunchPolicy 'disable-agent-title' } |
+                Should -Throw 'agent failed'
+            $env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE | Should -BeNullOrEmpty
         })
     }
 

@@ -7,11 +7,12 @@ Versioning.
 
 ### Changed
 
-- Keep the real repository visible beside its optional alias, and label custom
-  command aliases and commands explicitly in the manager/editor.
-- Carry explicit known-agent and repository context through the result file so
-  PowerShell can temporarily title agent sessions as `Agent/repository` without
-  changing arbitrary commands or legacy results.
+- Render aliases compactly as `alias · value`, keeping the real repository and
+  command visible without verbose row labels.
+- Carry explicit known-agent, repository, and launch-policy context through the
+  result file. PowerShell now disables title updates per process for Codex,
+  Claude, and OpenCode, preserves Kimi's native behavior, and restores the
+  previous title after every agent session.
 
 ### Security
 

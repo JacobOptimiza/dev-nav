@@ -35,6 +35,12 @@ pub enum AgentIdentity {
     Kimi,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AgentLaunchPolicy {
+    KeepAgentTitle,
+    DisableAgentTitle,
+}
+
 impl AgentIdentity {
     pub const fn display_name(&self) -> &'static str {
         match self {
@@ -50,6 +56,7 @@ impl AgentIdentity {
 pub struct ExecutionContext {
     pub agent: AgentIdentity,
     pub repository: String,
+    pub launch_policy: AgentLaunchPolicy,
 }
 
 impl ShellResult {
@@ -59,11 +66,15 @@ impl ShellResult {
             Self::Execute { directory, command, context } => {
                 let payload = match context {
                     Some(context) => format!(
-                        "exec\0{}\0{}\0{}\0{}",
+                        "exec\0{}\0{}\0{}\0{}\0{}",
                         directory.display(),
                         command,
                         context.agent.display_name(),
-                        context.repository
+                        context.repository,
+                        match context.launch_policy {
+                            AgentLaunchPolicy::KeepAgentTitle => "keep-agent-title",
+                            AgentLaunchPolicy::DisableAgentTitle => "disable-agent-title",
+                        }
                     ),
                     None => format!("exec\0{}\0{command}", directory.display()),
                 };
@@ -83,7 +94,7 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::{DirectoryEntry, ShellResult};
+    use super::{AgentLaunchPolicy, DirectoryEntry, ShellResult};
 
     #[test]
     fn label_prefers_a_non_empty_alias_over_the_name() {
@@ -157,6 +168,7 @@ mod tests {
         let context = super::ExecutionContext {
             agent: super::AgentIdentity::Codex,
             repository: "dev-nav".into(),
+            launch_policy: AgentLaunchPolicy::DisableAgentTitle,
         };
 
         ShellResult::Execute {
@@ -169,7 +181,7 @@ mod tests {
 
         assert_eq!(
             fs::read_to_string(&path).expect("read result"),
-            "exec\0C:\\code\\dev-nav\0codex resume --last\0Codex\0dev-nav"
+            "exec\0C:\\code\\dev-nav\0codex resume --last\0Codex\0dev-nav\0disable-agent-title"
         );
         fs::remove_file(path).expect("remove result");
     }
