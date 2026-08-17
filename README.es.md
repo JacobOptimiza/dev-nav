@@ -10,7 +10,7 @@
 [![PowerShell 7+](https://img.shields.io/badge/PowerShell-7%2B-5391FE?logo=powershell&logoColor=white)](https://learn.microsoft.com/powershell/)
 [![Rust 1.97+](https://img.shields.io/badge/Rust-1.97%2B-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/tools/install)
 [![npm](https://img.shields.io/npm/v/@jacoboptimiza/devnav?logo=npm)](https://www.npmjs.com/package/@jacoboptimiza/devnav)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](LICENSE)
 
 [English](README.md) | **Español**
 
@@ -23,7 +23,7 @@ DevNav es una TUI nativa en Rust, rápida y orientada al teclado, para quienes t
 ## Por qué DevNav
 
 - **Salta más rápido** — encuentra proyectos con búsqueda difusa sin memorizar rutas ni recorrer árboles de carpetas.
-- **Mantén el contexto cerca** — favoritos globales y aliases dejan tus espacios de trabajo habituales a una sola acción.
+- **Mantén el contexto cerca** — favoritos globales y alias dejan tus espacios de trabajo habituales a una sola acción.
 - **Lanza donde trabajas** — inicia o reanuda Codex, Claude Code, OpenCode y Kimi directamente en el repositorio seleccionado.
 - **Automatiza lo repetitivo** — asigna hasta nueve comandos de proyecto a `Shift+1–9`.
 - **Sigue siendo nativo** — Rust + Win32, una única dependencia directa, sin framework TUI y sin runtime de aplicación después de instalar.
@@ -83,7 +83,7 @@ Pulsa `F2` para cambiar entre English y Español.
 - **Acciones siempre en contexto** — agentes y comandos se lanzan dentro del directorio seleccionado.
 - **Actualizaciones sencillas** — usa `Shift+U` en la TUI o `dev update` desde PowerShell.
 
-Los aliases de repositorio mantienen visible la identidad real:
+Los alias de repositorio mantienen visible la identidad real:
 
 ```text
 Navegador PowerShell | dev-nav
@@ -112,7 +112,7 @@ dev shortcut 1 "Tests" "cargo test"
 dev shortcut 2 "Dev" "bun run dev"
 ```
 
-Los aliases siguen siendo fáciles de leer sin ocultar lo que realmente se ejecuta, y las asignaciones permanecen en la configuración local de DevNav.
+Los alias siguen siendo fáciles de leer sin ocultar lo que realmente se ejecuta, y las asignaciones permanecen en la configuración local de DevNav.
 
 ## Seguridad por defecto
 
@@ -130,13 +130,13 @@ Consulta [SECURITY.md](SECURITY.md) para la política de seguridad y [SIGNING.md
 - PowerShell 7 o posterior.
 - Windows Terminal recomendado.
 
-Las builds publicadas no necesitan Rust, Visual Studio, Node.js ni Bun en runtime. Node.js o Bun sólo son necesarios si eliges su comando como canal de instalación.
+Los binarios publicados no necesitan Rust, Visual Studio, Node.js ni Bun en tiempo de ejecución. Node.js o Bun sólo son necesarios si eliges uno de esos canales de instalación.
 
 ## Documentación del proyecto
 
 | Documento | Contenido |
 |---|---|
-| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Diagnóstico de instalación y ejecución |
+| [TROUBLESHOOTING.es.md](TROUBLESHOOTING.es.md) | Diagnóstico de instalación y ejecución |
 | [SECURITY.md](SECURITY.md) | Política de seguridad y reporte de vulnerabilidades |
 | [SIGNING.md](SIGNING.md) | Firmas y verificación de releases |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Arquitectura interna y límites de confianza |
