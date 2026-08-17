@@ -10,9 +10,10 @@ Versioning.
 - Render command aliases compactly as `alias > command` and repository aliases
   as `alias | repository`, keeping both values visible without verbose labels.
 - Carry explicit known-agent, repository, and launch-policy context through the
-  result file. PowerShell now disables title updates per process for Codex,
-  Claude, and OpenCode, preserves Kimi's native behavior, and restores the
-  previous title after every agent session.
+  result file. PowerShell now manages titles per process for Codex, Claude, and
+  OpenCode, preserves Kimi's native behavior, and restores the previous title
+  after managed agent sessions. Current Kimi Code has no compatible
+  per-invocation title override, so DevNav leaves Kimi's title native.
 
 ### Security
 

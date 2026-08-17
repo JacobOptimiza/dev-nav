@@ -37,8 +37,8 @@ pub enum AgentIdentity {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AgentLaunchPolicy {
-    KeepAgentTitle,
-    DisableAgentTitle,
+    DevNavManagedTitle,
+    NativeAgentTitle,
 }
 
 impl AgentIdentity {
@@ -72,8 +72,8 @@ impl ShellResult {
                         context.agent.display_name(),
                         context.repository,
                         match context.launch_policy {
-                            AgentLaunchPolicy::KeepAgentTitle => "keep-agent-title",
-                            AgentLaunchPolicy::DisableAgentTitle => "disable-agent-title",
+                            AgentLaunchPolicy::DevNavManagedTitle => "devnav-managed-title",
+                            AgentLaunchPolicy::NativeAgentTitle => "native-agent-title",
                         }
                     ),
                     None => format!("exec\0{}\0{command}", directory.display()),
@@ -168,7 +168,7 @@ mod tests {
         let context = super::ExecutionContext {
             agent: super::AgentIdentity::Codex,
             repository: "dev-nav".into(),
-            launch_policy: AgentLaunchPolicy::DisableAgentTitle,
+            launch_policy: AgentLaunchPolicy::DevNavManagedTitle,
         };
 
         ShellResult::Execute {
@@ -181,7 +181,7 @@ mod tests {
 
         assert_eq!(
             fs::read_to_string(&path).expect("read result"),
-            "exec\0C:\\code\\dev-nav\0codex resume --last\0Codex\0dev-nav\0disable-agent-title"
+            "exec\0C:\\code\\dev-nav\0codex resume --last\0Codex\0dev-nav\0devnav-managed-title"
         );
         fs::remove_file(path).expect("remove result");
     }

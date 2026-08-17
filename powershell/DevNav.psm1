@@ -562,6 +562,27 @@ function Restore-DevWindowTitle {
     try { $HostObject.UI.RawUI.WindowTitle = $OriginalTitle } catch { Write-Verbose 'Host does not support title restoration.' }
 }
 
+function Get-DevAgentTitlePolicy {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('Codex', 'Claude', 'OpenCode', 'Kimi')][string] $Agent,
+        [string] $LaunchPolicy
+    )
+
+    # Accept the pre-0.14 spellings so result files produced by older DevNav
+    # builds remain executable. New results make ownership explicit.
+    switch ($LaunchPolicy) {
+        'native-agent-title' { return 'native-agent-title' }
+        'keep-agent-title' { return 'native-agent-title' }
+        'devnav-managed-title' { return 'devnav-managed-title' }
+        'disable-agent-title' { return 'devnav-managed-title' }
+        default {
+            if ($Agent -eq 'Kimi') { return 'native-agent-title' }
+            return 'devnav-managed-title'
+        }
+    }
+}
+
 function Invoke-DevAgentCommand {
     [CmdletBinding()]
     param(
@@ -573,12 +594,7 @@ function Invoke-DevAgentCommand {
     # The native result identifies the agent; this adapter never guesses it
     # from arbitrary command text. These settings are process-local and are
     # restored immediately after the child exits.
-    $policy = if ($LaunchPolicy) { $LaunchPolicy } else {
-        switch ($Agent) {
-            'Kimi' { 'keep-agent-title' }
-            default { 'disable-agent-title' }
-        }
-    }
+    $policy = Get-DevAgentTitlePolicy -Agent $Agent -LaunchPolicy $LaunchPolicy
     $environmentNames = switch ($Agent) {
         'Claude' { @('CLAUDE_CODE_DISABLE_TERMINAL_TITLE') }
         'OpenCode' { @('OPENCODE_DISABLE_TERMINAL_TITLE') }
@@ -587,7 +603,7 @@ function Invoke-DevAgentCommand {
     $savedEnvironment = @{}
     foreach ($name in $environmentNames) {
         $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
-        if ($policy -eq 'disable-agent-title') {
+        if ($policy -eq 'devnav-managed-title') {
             Set-Item -Path "Env:$name" -Value '1'
         }
     }
@@ -596,7 +612,7 @@ function Invoke-DevAgentCommand {
     # override. Keep the user's command semantics and add only that title
     # setting to the known DevNav launch forms.
     $launchCommand = $CommandText
-    if ($Agent -eq 'Codex' -and $policy -eq 'disable-agent-title') {
+    if ($Agent -eq 'Codex' -and $policy -eq 'devnav-managed-title') {
         $launchCommand = switch ($CommandText) {
             'codex' { "codex -c 'tui.terminal_title=[]'" }
             'codex resume --last' { "codex -c 'tui.terminal_title=[]' resume --last" }
@@ -689,8 +705,11 @@ function Invoke-DevNavigator {
         if ($Command.Count -eq 0 -and $kind -eq 'exec' -and $parts.Count -ge 5) {
             $agent = $parts[3]
             if ($parts.Count -ge 6) { $launchPolicy = $parts[5] }
-            $originalWindowTitle = Set-DevAgentWindowTitle -Agent $agent -Repository $parts[4]
-            $windowTitleChanged = $null -ne $originalWindowTitle
+            $effectiveTitlePolicy = Get-DevAgentTitlePolicy -Agent $agent -LaunchPolicy $launchPolicy
+            if ($effectiveTitlePolicy -eq 'devnav-managed-title') {
+                $originalWindowTitle = Set-DevAgentWindowTitle -Agent $agent -Repository $parts[4]
+                $windowTitleChanged = $null -ne $originalWindowTitle
+            }
         }
         if ($kind -eq 'exec' -or $Command.Count -gt 0) {
             try {

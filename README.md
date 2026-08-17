@@ -301,13 +301,16 @@ with `F1`, `Esc`, or `Enter`.
 ### Agent terminal titles
 
 When DevNav launches a known agent, it temporarily sets the current terminal
-title to `Agent/repository` and restores the previous title when the process
-ends. The result file carries the agent identity explicitly; arbitrary commands
-and legacy results are never guessed as agents. Codex uses its per-invocation
-`tui.terminal_title=[]` override, while Claude Code and OpenCode receive their
-documented process-local title-disable environment variables. Kimi keeps its
-native title behavior because it already preserves the DevNav title. No user
-configuration is changed and unsupported hosts fall back silently.
+title to `Agent/repository` for agents with `DevNavManagedTitle` ownership and
+restores the previous title when the process ends. The result file carries the
+agent identity explicitly; arbitrary commands and legacy results are never
+guessed as agents. Codex uses its per-invocation `tui.terminal_title=[]`
+override, while Claude Code and OpenCode receive their documented process-local
+title-disable environment variables. Kimi uses `NativeAgentTitle`: current
+Kimi Code manages its own terminal title and does not currently offer a
+compatible per-invocation override, so DevNav does not set or restore its
+title. No user configuration is changed and unsupported hosts fall back
+silently.
 
 ### Custom commands
 
