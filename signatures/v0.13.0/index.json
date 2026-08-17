@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "tag": "v0.13.0",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "certificateIdentity": "https://github.com/JacobOptimiza/dev-nav/.github/workflows/sign-release.yml@refs/heads/main",
+  "artifacts": {
+    "DevNav-scoop-arm64.zip": { "sha256": "3a751138ecada8614a918b52685e92f680dd4599703baafd4fed61a0d007f269", "bundle": "DevNav-scoop-arm64.zip.sigstore.json" },
+    "DevNav-scoop-x64.zip": { "sha256": "5f4ec39569df89c12f7c87802701b9b6c62d65853c355b697a8b0d818aa16887", "bundle": "DevNav-scoop-x64.zip.sigstore.json" },
+    "DevNav.psd1": { "sha256": "f5604e90119e989a232fea7db9e3300da02198dc8f68e9f7fda6553c15da5962", "bundle": "DevNav.psd1.sigstore.json" },
+    "DevNav.psm1": { "sha256": "9f9fcf332985a6ef7d6f83fcd0bc8c9bd3f0129e8fe97dcd0c8338bd82630aee", "bundle": "DevNav.psm1.sigstore.json" },
+    "DevNavSetup-arm64.exe": { "sha256": "b26b36c5fedd764a324ea4bb7291ea08410b5d5472292f8eaa2f971b052807c3", "bundle": "DevNavSetup-arm64.exe.sigstore.json" },
+    "DevNavSetup-x64.exe": { "sha256": "50897507b4ee5f4bd8e066c63ae621a95155be21e7c07874993564c7026e7fa2", "bundle": "DevNavSetup-x64.exe.sigstore.json" },
+    "SHA256SUMS.txt": { "sha256": "8eb5047d42fe5d31781ce623a4b5821faebe5c02b82e9017d61a680711aa8603", "bundle": "SHA256SUMS.txt.sigstore.json" },
+    "dev-windows-aarch64.exe": { "sha256": "396c1a8a7216b99d7ec12bcaf998651b99e1ac08a94adbd116efb14db005a765", "bundle": "dev-windows-aarch64.exe.sigstore.json" },
+    "dev-windows-x86_64.exe": { "sha256": "e01fbe7fa6d79c0c7f65ee3820e26e7bc17592f1cc987acf9b7e5e388fd6b49b", "bundle": "dev-windows-x86_64.exe.sigstore.json" },
+    "devnav.scoop.json": { "sha256": "fc84cd134044ed0730cb5debb1e3297bb5ca294940f446b91977434f080c1bf9", "bundle": "devnav.scoop.json.sigstore.json" },
+    "release-manifest.json": { "sha256": "d2df7906dc3fadfad33377fbe1969a46ae66182387f0cd66ec9f616bafec6236", "bundle": "release-manifest.json.sigstore.json" },
+    "winget-manifests-0.13.0.zip": { "sha256": "b711f0d2a9ceefe597c00e9cef4e46de82654288ee6640598dae3fe4ad1aca65", "bundle": "winget-manifests-0.13.0.zip.sigstore.json" }
+  }
+}

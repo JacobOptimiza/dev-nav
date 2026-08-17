@@ -68,7 +68,8 @@ security.
 
 ## Residual limitations
 
-- Artifacts are not code-signed; integrity today is checksum- and
-  attestation-based (build attestations are planned for future releases).
+- Artifacts do not carry Authenticode code signatures; integrity is checksum-
+  and attestation-based, and authenticity is provided by Sigstore cosign
+  keyless signatures published for v0.13.0 and later (see `SIGNING.md`).
 - The TUI paths that touch the Win32 console cannot be fully exercised in
   automated tests; coverage gates apply to everything else.

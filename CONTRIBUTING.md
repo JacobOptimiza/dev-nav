@@ -126,7 +126,9 @@ care as tags.
 
 Future release artifacts receive GitHub build attestations. Consumers can
 verify a downloaded artifact with `gh attestation verify <artifact> -R
-JacobOptimiza/dev-nav`.
+JacobOptimiza/dev-nav`. Release artifacts are additionally signed with
+Sigstore cosign keyless; see `SIGNING.md` for bundle locations and
+verification commands.
 
 The npm and Scoop channels must never publish versions up to and including
 0.9.7 — those releases predate this packaging. v0.10.0 is the first

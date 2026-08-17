@@ -48,10 +48,11 @@ before an update is installed.
 
 DevNav is not a sandbox. Custom commands, coding-agent CLIs, and other commands
 returned to PowerShell execute with the permissions of the current user.
-SHA-256 checks verify integrity against published metadata but are not digital
-signatures, and the current v0.13.0 release must not be represented as signed.
-Static-analysis coverage also has the Rust extraction limitation documented
-below.
+SHA-256 checks verify integrity against published metadata; cryptographic
+authenticity is provided separately by the Sigstore keyless signatures
+published for v0.13.0 and future releases (see [SIGNING.md](SIGNING.md)).
+These are Sigstore signatures, not Authenticode code signing. Static-analysis
+coverage also has the Rust extraction limitation documented below.
 
 No SLA, absolute-security guarantee, or new vulnerability-response commitment
 is introduced by this section.
@@ -78,13 +79,17 @@ Additional automated controls:
   regions (`scripts/rust-production-coverage.py`), PowerShell commands and
   lines (`scripts/invoke-pester-coverage.ps1`), and npm bootstrap lines
   (`scripts/invoke-npm-coverage.ps1`).
-- Release integrity: every artifact ships a SHA-256 checksum; the npm
-  bootstrap verifies installers against `release-manifest.json` before
-  executing them, and Scoop/WinGet manifests pin release hashes. Checksums
-  verify integrity, not authenticity.
+- Release integrity and authenticity: every artifact ships a SHA-256 checksum;
+  the npm bootstrap verifies installers against `release-manifest.json` before
+  executing them, and Scoop/WinGet manifests pin release hashes. All v0.13.0
+  and later artifacts are additionally signed with Sigstore cosign keyless
+  (GitHub Actions OIDC, no persistent private key); the `.sigstore.json`
+  bundles are public and verifiable as documented in
+  [SIGNING.md](SIGNING.md). Checksums verify integrity; the Sigstore
+  signatures verify authenticity.
 - Future release artifacts receive GitHub build attestations; an attestation
-  proves build provenance and is not equivalent to a legacy code-signing
-  signature.
+  proves build provenance and complements, but does not replace, the Sigstore
+  release signatures. Neither is Authenticode code signing of the executable.
 
 These controls complement, but do not replace, private vulnerability
 reporting.
