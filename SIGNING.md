@@ -13,7 +13,11 @@ and recorded in the Rekor transparency log.
   metadata). Bundles live in [`signatures/v0.13.0/`](signatures/v0.13.0/).
 - **Future releases:** every artifact is signed by
   `.github/workflows/release.yml` before the GitHub Release is created, and the
-  `.sigstore.json` bundles are published alongside the assets.
+  `.sigstore.json` bundles are published alongside the assets. The workflow's
+  `actions/attest` build-provenance bundles are also published as
+  `DevNav-build-provenance-<arch>.intoto.jsonl` assets in the standard in-toto
+  JSONL form (one compact DSSE envelope per line), verifiable with
+  `gh attestation verify`.
 
 `signatures/<tag>/index.json` maps each artifact to its SHA-256 digest and its
 bundle file.
