@@ -305,14 +305,16 @@ comandos de Vim.
 ### Títulos de agentes en la terminal
 
 Cuando DevNav lanza un agente conocido, establece temporalmente el título de la
-terminal como `Agente/repositorio` y restaura el título anterior al terminar el
-proceso. El result-file transporta la identidad explícita; los comandos
-arbitrarios y los resultados legacy nunca se clasifican como agentes. Codex usa
-su override por invocación `tui.terminal_title=[]`; Claude Code y OpenCode
-reciben sus variables de entorno documentadas, sólo para ese proceso. Kimi
-mantiene su comportamiento nativo porque ya conserva el título de DevNav. No se
-modifica la configuración del usuario y los hosts incompatibles hacen fallback
-silencioso.
+terminal como `Agente/repositorio` para los agentes cuya propiedad es
+`DevNavManagedTitle` y restaura el título anterior al terminar el proceso. El
+result-file transporta la identidad explícita; los comandos arbitrarios y los
+resultados legacy nunca se clasifican como agentes. Codex usa su override por
+invocación `tui.terminal_title=[]`; Claude Code y OpenCode reciben sus variables
+de entorno documentadas, sólo para ese proceso. Kimi usa `NativeAgentTitle`: el
+Kimi Code actual gestiona su propio título de terminal y no ofrece actualmente
+un override compatible por invocación, por lo que DevNav no establece ni
+restaura su título. No se modifica la configuración del usuario y los hosts
+incompatibles hacen fallback silencioso.
 
 ### Comandos personalizados
 

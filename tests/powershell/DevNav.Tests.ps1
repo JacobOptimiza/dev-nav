@@ -1712,6 +1712,26 @@ exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
         $global:DevNavNativeCalls | Should -Contain "command:codex -c 'tui.terminal_title=[]'"
     }
 
+    It 'leaves the title entirely to Kimi native ownership' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes("exec`0$nativeResultDirectory`0kimi`0Kimi`0dev-nav`0native-agent-title")
+        )
+        $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
+            function Set-DevAgentWindowTitle { throw 'Kimi must own its native title' }
+            function Restore-DevWindowTitle { throw 'Kimi title was not changed by DevNav' }
+            function Invoke-Expression { param($Command) $global:DevNavNativeCalls.Add("command:$Command") }
+            Invoke-DevNavigator
+        })
+        $global:DevNavNativeCalls | Should -Contain 'command:kimi'
+        $global:DevNavNativeCalls | Should -Not -Match '^title:'
+        $global:DevNavNativeCalls | Should -Not -Match '^restore:'
+    }
+
     It 'does not invent an agent title for an arbitrary command or legacy result' {
         $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String(
             [Text.Encoding]::UTF8.GetBytes("exec`0$nativeResultDirectory`0git status")
@@ -1746,8 +1766,13 @@ exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
         })
     }
 
-    It 'uses explicit per-agent title policies without changing Kimi or persistent user config' {
+    It 'uses explicit per-agent title ownership without changing persistent user config' {
         $nativeModule.Invoke({
+            Get-DevAgentTitlePolicy -Agent Codex | Should -Be 'devnav-managed-title'
+            Get-DevAgentTitlePolicy -Agent OpenCode | Should -Be 'devnav-managed-title'
+            Get-DevAgentTitlePolicy -Agent Claude | Should -Be 'devnav-managed-title'
+            Get-DevAgentTitlePolicy -Agent Kimi | Should -Be 'native-agent-title'
+            Get-DevAgentTitlePolicy -Agent Kimi -LaunchPolicy 'keep-agent-title' | Should -Be 'native-agent-title'
             $env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE = $null
             $env:OPENCODE_DISABLE_TERMINAL_TITLE = $null
             function Invoke-Expression {
@@ -1755,10 +1780,10 @@ exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
                 $global:DevNavNativeCalls.Add("$Command|claude=$env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE|opencode=$env:OPENCODE_DISABLE_TERMINAL_TITLE")
             }
 
-            Invoke-DevAgentCommand -CommandText 'codex' -Agent Codex -LaunchPolicy 'disable-agent-title'
-            Invoke-DevAgentCommand -CommandText 'claude' -Agent Claude -LaunchPolicy 'disable-agent-title'
-            Invoke-DevAgentCommand -CommandText 'opencode' -Agent OpenCode -LaunchPolicy 'disable-agent-title'
-            Invoke-DevAgentCommand -CommandText 'kimi' -Agent Kimi -LaunchPolicy 'keep-agent-title'
+            Invoke-DevAgentCommand -CommandText 'codex' -Agent Codex -LaunchPolicy 'devnav-managed-title'
+            Invoke-DevAgentCommand -CommandText 'claude' -Agent Claude -LaunchPolicy 'devnav-managed-title'
+            Invoke-DevAgentCommand -CommandText 'opencode' -Agent OpenCode -LaunchPolicy 'devnav-managed-title'
+            Invoke-DevAgentCommand -CommandText 'kimi' -Agent Kimi -LaunchPolicy 'native-agent-title'
         })
 
         $global:DevNavNativeCalls | Should -Contain "codex -c 'tui.terminal_title=[]'|claude=|opencode="
@@ -1773,7 +1798,7 @@ exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
         $nativeModule.Invoke({
             $env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE = $null
             function Invoke-Expression { throw 'agent failed' }
-            { Invoke-DevAgentCommand -CommandText 'claude' -Agent Claude -LaunchPolicy 'disable-agent-title' } |
+            { Invoke-DevAgentCommand -CommandText 'claude' -Agent Claude -LaunchPolicy 'devnav-managed-title' } |
                 Should -Throw 'agent failed'
             $env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE | Should -BeNullOrEmpty
         })

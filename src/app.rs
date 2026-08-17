@@ -1625,9 +1625,9 @@ fn agent_command(key: char) -> Option<(AgentIdentity, &'static str)> {
 fn agent_launch_policy(agent: &AgentIdentity) -> AgentLaunchPolicy {
     match agent {
         AgentIdentity::Codex | AgentIdentity::Claude | AgentIdentity::OpenCode => {
-            AgentLaunchPolicy::DisableAgentTitle
+            AgentLaunchPolicy::DevNavManagedTitle
         }
-        AgentIdentity::Kimi => AgentLaunchPolicy::KeepAgentTitle,
+        AgentIdentity::Kimi => AgentLaunchPolicy::NativeAgentTitle,
     }
 }
 
@@ -1710,20 +1710,20 @@ mod tests {
     }
 
     #[test]
-    fn agent_launch_policies_disable_only_known_overwriters() {
+    fn agent_launch_policies_distinguish_devnav_and_native_title_owners() {
         assert_eq!(
             agent_launch_policy(&AgentIdentity::Codex),
-            AgentLaunchPolicy::DisableAgentTitle
+            AgentLaunchPolicy::DevNavManagedTitle
         );
         assert_eq!(
             agent_launch_policy(&AgentIdentity::Claude),
-            AgentLaunchPolicy::DisableAgentTitle
+            AgentLaunchPolicy::DevNavManagedTitle
         );
         assert_eq!(
             agent_launch_policy(&AgentIdentity::OpenCode),
-            AgentLaunchPolicy::DisableAgentTitle
+            AgentLaunchPolicy::DevNavManagedTitle
         );
-        assert_eq!(agent_launch_policy(&AgentIdentity::Kimi), AgentLaunchPolicy::KeepAgentTitle);
+        assert_eq!(agent_launch_policy(&AgentIdentity::Kimi), AgentLaunchPolicy::NativeAgentTitle);
     }
 
     #[test]
