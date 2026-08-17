@@ -91,12 +91,17 @@ jobs:
           Copy-Item "${{ steps.attest-release-artifacts.outputs.bundle-path }}" `
             "DevNav-build-provenance-${{ matrix.architecture }}.sigstore.json" `
             -ErrorAction Stop
-          # The same attestation bundle, published under the conventional
-          # in-toto JSONL filename (one compact JSON object per line) so the
-          # provenance is machine-recognizable alongside the signatures.
-          $bundle = Get-Content "${{ steps.attest-release-artifacts.outputs.bundle-path }}" -Raw | ConvertFrom-Json
-          $bundle | ConvertTo-Json -Compress -Depth 32 | Set-Content `
-            "DevNav-build-provenance-${{ matrix.architecture }}.intoto.jsonl" -NoNewline
+          # Extract the DSSE envelope from the Sigstore bundle into a
+          # standards-compliant .intoto.jsonl (one envelope per line). The
+          # script validates the envelope, the SLSA predicate and the
+          # expected subjects before the file can be published; the original
+          # Sigstore bundle with its verification material is kept above.
+          ./scripts/convert-attestation-to-intoto.ps1 `
+            -BundlePath "${{ steps.attest-release-artifacts.outputs.bundle-path }}" `
+            -OutputPath "DevNav-build-provenance-${{ matrix.architecture }}.intoto.jsonl" `
+            -ExpectedSubject '${{ matrix.asset }}' `
+            -ExpectedSubject "DevNavSetup-${{ matrix.architecture }}.exe" `
+            -ExpectedSubject "DevNav-scoop-${{ matrix.architecture }}.zip"
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:

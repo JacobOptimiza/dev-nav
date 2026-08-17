@@ -13,11 +13,29 @@ and recorded in the Rekor transparency log.
   metadata). Bundles live in [`signatures/v0.13.0/`](signatures/v0.13.0/).
 - **Future releases:** every artifact is signed by
   `.github/workflows/release.yml` before the GitHub Release is created, and the
-  `.sigstore.json` bundles are published alongside the assets. The workflow's
-  `actions/attest` build-provenance bundles are also published as
-  `DevNav-build-provenance-<arch>.intoto.jsonl` assets in the standard in-toto
-  JSONL form (one compact DSSE envelope per line), verifiable with
-  `gh attestation verify`.
+  `.sigstore.json` bundles are published alongside the assets. The workflow
+  also publishes `DevNav-build-provenance-<arch>.intoto.jsonl`: the DSSE
+  in-toto envelope extracted from the workflow's `actions/attest` build
+  attestation, written in the standard JSON Lines form (one envelope per
+  line, generated and validated by
+  `scripts/convert-attestation-to-intoto.ps1`).
+
+### What each provenance file is
+
+- **`.sigstore.json` (build provenance)** — the complete Sigstore bundle
+  produced by `actions/attest`: the DSSE envelope plus its verification
+  material (Fulcio certificate and Rekor transparency-log entries). Use
+  `gh attestation verify <artifact> -R JacobOptimiza/dev-nav` to verify it;
+  that command resolves attestations from GitHub's attestation API for the
+  artifact's digest, not from the downloaded file itself.
+- **`.intoto.jsonl`** — the same attestation reduced to the standard in-toto
+  interchange form: each line is the DSSE envelope (`payloadType`, `payload`,
+  `signatures`) whose decoded payload is a SLSA build-provenance Statement
+  naming the release artifacts as subjects. Tools that consume in-toto/SLSA
+  provenance files directly (e.g., `slsa-verifier` with the appropriate
+  flags, or custom DSSE verification against the certificate in the
+  accompanying `.sigstore.json`) use this file. It does not include the
+  certificate or Rekor entries; those live in the `.sigstore.json` bundle.
 
 `signatures/<tag>/index.json` maps each artifact to its SHA-256 digest and its
 bundle file.
