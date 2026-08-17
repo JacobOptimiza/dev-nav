@@ -1,0 +1,80 @@
+name: Sign release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing immutable release tag whose assets will be signed (for example v0.13.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v3.1.3'
+      - name: Download the immutable release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets --clobber
+      - name: Verify downloaded assets against the published SHA256SUMS.txt
+        working-directory: assets
+        run: |
+          set -euo pipefail
+          test -f SHA256SUMS.txt
+          # Every downloaded file must be listed in SHA256SUMS.txt and match.
+          for f in *; do
+            line=$(grep -F "  $f" SHA256SUMS.txt) || { echo "asset $f is not listed in SHA256SUMS.txt"; exit 1; }
+            printf '%s\n' "$line" | sha256sum -c -
+          done
+      - name: Sign every release asset with Sigstore keyless
+        working-directory: assets
+        run: |
+          set -euo pipefail
+          mkdir -p "../signatures/${TAG}"
+          for f in *; do
+            case "$f" in *.sigstore.json) continue;; esac
+            cosign sign-blob --yes --bundle "../signatures/${TAG}/${f}.sigstore.json" "$f"
+          done
+      - name: Generate the signature index
+        working-directory: assets
+        run: |
+          set -euo pipefail
+          {
+            printf '{\n  "schemaVersion": 1,\n  "tag": "%s",\n' "$TAG"
+            printf '  "issuer": "https://token.actions.githubusercontent.com",\n'
+            printf '  "certificateIdentity": "https://github.com/%s/.github/workflows/sign-release.yml@refs/heads/main",\n' "$GITHUB_REPOSITORY"
+            printf '  "artifacts": {\n'
+            first=1
+            for f in *; do
+              case "$f" in *.sigstore.json) continue;; esac
+              sha=$(sha256sum "$f" | cut -d' ' -f1)
+              [ "$first" -eq 0 ] && printf ',\n'
+              first=0
+              printf '    "%s": { "sha256": "%s", "bundle": "%s.sigstore.json" }' "$f" "$sha" "$f"
+            done
+            printf '\n  }\n}\n'
+          } > "../signatures/${TAG}/index.json"
+          cat "../signatures/${TAG}/index.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: signatures-${{ inputs.tag }}
+          path: signatures/${{ inputs.tag }}/
+          if-no-files-found: error
