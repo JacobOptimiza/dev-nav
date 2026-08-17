@@ -91,6 +91,22 @@ jobs:
           Copy-Item "${{ steps.attest-release-artifacts.outputs.bundle-path }}" `
             "DevNav-build-provenance-${{ matrix.architecture }}.sigstore.json" `
             -ErrorAction Stop
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v3.1.3'
+      - name: Sign release artifacts (Sigstore keyless)
+        shell: pwsh
+        run: |
+          $files = @(
+            '${{ matrix.asset }}',
+            "DevNavSetup-${{ matrix.architecture }}.exe",
+            "DevNav-scoop-${{ matrix.architecture }}.zip"
+          )
+          foreach ($f in $files) {
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+            if ($LASTEXITCODE -ne 0) { throw "cosign sign-blob failed for $f" }
+          }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.asset }}
@@ -99,6 +115,9 @@ jobs:
             DevNavSetup-${{ matrix.architecture }}.exe
             DevNav-scoop-${{ matrix.architecture }}.zip
             DevNav-build-provenance-${{ matrix.architecture }}.sigstore.json
+            ${{ matrix.asset }}.sigstore.json
+            DevNavSetup-${{ matrix.architecture }}.exe.sigstore.json
+            DevNav-scoop-${{ matrix.architecture }}.zip.sigstore.json
 
   publish:
     if: ${{ github.event_name == 'push' }}
@@ -106,6 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -212,6 +232,19 @@ jobs:
             }' > release-manifest.json
       - working-directory: artifacts
         run: sha256sum *.exe *.zip DevNav-build-provenance-x64.sigstore.json DevNav-build-provenance-arm64.sigstore.json DevNav.psm1 DevNav.psd1 devnav.scoop.json release-manifest.json > SHA256SUMS.txt
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v3.1.3'
+      # The build job already signed the compiled artifacts; sign here the
+      # files that only exist in this job, before the release is created.
+      - name: Sign publish-job artifacts (Sigstore keyless)
+        working-directory: artifacts
+        run: |
+          set -euo pipefail
+          for f in DevNav.psm1 DevNav.psd1 devnav.scoop.json release-manifest.json winget-manifests-*.zip SHA256SUMS.txt; do
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-manifest
@@ -228,6 +261,12 @@ jobs:
             artifacts/SHA256SUMS.txt \
             artifacts/DevNav-build-provenance-x64.sigstore.json \
             artifacts/DevNav-build-provenance-arm64.sigstore.json \
+            artifacts/*.exe.sigstore.json \
+            artifacts/*.zip.sigstore.json \
+            artifacts/*.psm1.sigstore.json \
+            artifacts/*.psd1.sigstore.json \
+            artifacts/*.json.sigstore.json \
+            artifacts/*.txt.sigstore.json \
             artifacts/release-manifest.json \
             artifacts/devnav.scoop.json \
             --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag
