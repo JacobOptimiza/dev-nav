@@ -24,18 +24,24 @@ and recorded in the Rekor transparency log.
 
 - **`.sigstore.json` (build provenance)** — the complete Sigstore bundle
   produced by `actions/attest`: the DSSE envelope plus its verification
-  material (Fulcio certificate and Rekor transparency-log entries). Use
-  `gh attestation verify <artifact> -R JacobOptimiza/dev-nav` to verify it;
-  that command resolves attestations from GitHub's attestation API for the
-  artifact's digest, not from the downloaded file itself.
-- **`.intoto.jsonl`** — the same attestation reduced to the standard in-toto
-  interchange form: each line is the DSSE envelope (`payloadType`, `payload`,
+  material (Fulcio certificate and Rekor transparency-log entries). This is
+  the authoritative representation of the attestation.
+- **`.intoto.jsonl`** — the same attestation reduced to the interoperable
+  DSSE/in-toto form: each line is the DSSE envelope (`payloadType`, `payload`,
   `signatures`) whose decoded payload is a SLSA build-provenance Statement
-  naming the release artifacts as subjects. Tools that consume in-toto/SLSA
-  provenance files directly (e.g., `slsa-verifier` with the appropriate
-  flags, or custom DSSE verification against the certificate in the
-  accompanying `.sigstore.json`) use this file. It does not include the
-  certificate or Rekor entries; those live in the `.sigstore.json` bundle.
+  naming the release artifacts as subjects. The file does **not** include the
+  certificate or Rekor entries, so it cannot be cryptographically verified on
+  its own; tools that need the signature's trust material must use it
+  together with the accompanying `.sigstore.json` bundle.
+
+### Verifying
+
+- The authenticity of a GitHub Artifact Attestation is verified with
+  `gh attestation verify <artifact> -R JacobOptimiza/dev-nav`, which resolves
+  the attestation from GitHub's Attestations API for the artifact's digest
+  and checks its signature, certificate chain, and transparency-log entry.
+- SHA-256 integrity of every distributed artifact (including both provenance
+  files) is checked against `SHA256SUMS.txt` and `release-manifest.json`.
 
 `signatures/<tag>/index.json` maps each artifact to its SHA-256 digest and its
 bundle file.

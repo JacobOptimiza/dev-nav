@@ -99,9 +99,7 @@ jobs:
           ./scripts/convert-attestation-to-intoto.ps1 `
             -BundlePath "${{ steps.attest-release-artifacts.outputs.bundle-path }}" `
             -OutputPath "DevNav-build-provenance-${{ matrix.architecture }}.intoto.jsonl" `
-            -ExpectedSubject '${{ matrix.asset }}' `
-            -ExpectedSubject "DevNavSetup-${{ matrix.architecture }}.exe" `
-            -ExpectedSubject "DevNav-scoop-${{ matrix.architecture }}.zip"
+            -ExpectedSubject '${{ matrix.asset }}', "DevNavSetup-${{ matrix.architecture }}.exe", "DevNav-scoop-${{ matrix.architecture }}.zip"
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
