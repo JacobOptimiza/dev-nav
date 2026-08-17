@@ -24,7 +24,7 @@ or voting process; the maintainer is the final decision authority.
 | Role | Held by | Responsibilities |
 |---|---|---|
 | Owner / maintainer | JacobOptimiza | Roadmap and scope decisions; review and merge of all changes; releases and tags; distribution-channel credentials (npm trusted publishing, Scoop bucket); security-response handling; dependency and advisory triage. |
-| Emergency successor | sebassm | Designated to keep the project operational (issues, merges, releases) if the maintainer is unavailable. **Currently pending**: the successor's repository invitation has been sent but not yet accepted, so effective access cannot be verified yet. |
+| Emergency successor | sebassm | Designated to keep the project operational (issues, merges, releases) if the maintainer is unavailable. The successor's invitation has been accepted: `sebassm` is an effective collaborator of `JacobOptimiza/dev-nav` with **write** (push/triage) access, verified through the GitHub repository API. |
 
 Contributors submit issues and pull requests; the maintainer may grant
 additional collaborators the ability to triage issues. All participants are
@@ -38,14 +38,22 @@ definitions are on GitHub, and every released artifact is reproducible from a
 tagged commit (see [ASSURANCE.md](ASSURANCE.md) and
 `scripts/verify-build-repeatability.ps1`).
 
-Continuity of *maintenance* currently depends on the owner: bus factor is 1
-today and is honestly reported as such. The emergency-successor role exists
-so the project can continue with minimal interruption, but the successor's
-access is **not yet effective** (invitation pending acceptance). Until the
-successor has confirmed access — repository write permissions and the ability
-to create and close issues, merge changes, and publish a release within a
-week of a confirmed loss of support — the project does not claim to satisfy
-any continuity requirement.
+Continuity of *maintenance* now has a working succession path. The emergency
+successor `sebassm` holds effective **write** access to the repository
+(verified via the GitHub API), which is sufficient to create and close issues,
+review and merge pull requests, and publish a release: the release workflow is
+versioned in this repository (`.github/workflows/release.yml`), and GitHub
+Releases — the project's canonical artifact channel — is reachable with
+repository write permissions. The project can therefore remain operational
+within a short period if the maintainer becomes unavailable.
+
+Two things are deliberately *not* claimed:
+
+- **Bus factor stays 1.** Day-to-day maintenance still depends on the owner;
+  the successor is an emergency path, not an active second maintainer.
+- **External accounts are out of scope.** Nothing here asserts the successor's
+  access to npm, Scoop, WinGet, or any other credential outside this
+  repository.
 
 ## Changes to this document
 
