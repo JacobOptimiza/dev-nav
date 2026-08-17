@@ -5,22 +5,25 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-18
+
 ### Changed
 
 - Render command aliases compactly as `alias > command` and repository aliases
   as `alias | repository`, keeping both values visible without verbose labels.
-- Carry explicit known-agent, repository, and launch-policy context through the
-  result file. PowerShell now manages titles per process for Codex, Claude, and
-  OpenCode, preserves Kimi's native behavior, and restores the previous title
-  after managed agent sessions. Current Kimi Code has no compatible
-  per-invocation title override, so DevNav leaves Kimi's live title native and
-  restores the caller's title after Kimi exits.
+- Carry explicit known-agent and repository context through the launch result.
+  Codex, Claude Code, and OpenCode keep an `Agent/repository` terminal title
+  while running. Kimi keeps its native live session title, and DevNav restores
+  the caller's previous terminal title when Kimi exits.
 
 ### Security
 
-- Add verified npm CLI bootstrapping, Rust parser fuzzing, and artifact
-  attestations for future releases.
-- Publish portable Sigstore build-provenance sidecars with future releases.
+- Add verified npm CLI bootstrapping and Rust parser fuzzing to the release
+  assurance baseline.
+- Add GitHub build attestations, Sigstore keyless signatures, and
+  Scorecard-recognizable `.intoto.jsonl` provenance for release artifacts.
+- Validate release provenance subjects and real SHA-256 artifact digests before
+  GitHub Release publication, aborting publication on any mismatch.
 
 ## [0.13.0] - 2026-08-14
 
