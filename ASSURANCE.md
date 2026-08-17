@@ -83,17 +83,20 @@ replace the unit suites.
 ## Release integrity and provenance
 
 **Claim.** Release artifacts are built once by the release workflow, checksums
-(SHA-256) are published for every artifact, channels derive from the canonical
+(SHA-256) are published for every artifact, all v0.13.0 and later artifacts
+are signed with Sigstore cosign keyless, channels derive from the canonical
 GitHub Release, and future artifacts receive GitHub build attestations.
 
 **Evidence.** `.github/workflows/release.yml`; `release-manifest.json`
 verification in the npm bootstrap; Scoop/WinGet manifests carry release
-SHA-256 hashes; version consistency across `Cargo.toml`, tag, release,
-`DevNav.psd1`, `package.json` and the Scoop template is enforced by CI.
+SHA-256 hashes; signature bundles in `signatures/v0.13.0/` verified with
+`cosign verify-blob` as documented in `SIGNING.md`; version consistency across
+`Cargo.toml`, tag, release, `DevNav.psd1`, `package.json` and the Scoop
+template is enforced by CI.
 
 **Residual limitation.** SHA-256 checksums verify integrity, not authenticity.
-A build attestation proves workflow provenance and is not equivalent to a
-legacy code-signing signature on the binaries.
+A build attestation proves workflow provenance. The Sigstore signatures verify
+authenticity, but they are not Authenticode code signing of the binaries.
 
 ## Package and version consistency
 
