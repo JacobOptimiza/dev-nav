@@ -8,7 +8,7 @@ use crate::{
         manager_footer_compact, shift_range, text,
     },
     input::{self, Key},
-    model::{DirectoryEntry, ShellResult},
+    model::{AgentIdentity, DirectoryEntry, ExecutionContext, ShellResult},
     render::{CYAN, FRAME, RESET, Renderer, SELECTED_BG, SELECTED_FG, SHORTCUT, fit, selected},
     terminal::Terminal,
 };
@@ -297,7 +297,11 @@ impl App {
                     }
                     Key::Enter if !self.input.trim().is_empty() => {
                         let command = self.input.trim().to_owned();
-                        Ok(Some(Some(ShellResult::Execute { directory: target, command })))
+                        Ok(Some(Some(ShellResult::Execute {
+                            directory: target,
+                            command,
+                            context: None,
+                        })))
                     }
                     Key::Backspace => {
                         self.input.pop();
@@ -393,8 +397,8 @@ impl App {
             Key::Char(character) if is_command_shortcut(character) => self.begin_command(),
             Key::Shortcut(slot) => return Ok(self.execute_shortcut(slot).map(Some)),
             Key::Char(character) => {
-                if let Some(command) = agent_command(character) {
-                    return Ok(self.execute_selected(command).map(Some));
+                if let Some((agent, command)) = agent_command(character) {
+                    return Ok(self.execute_selected(command, Some(agent)).map(Some));
                 }
             }
             _ => {}
@@ -782,10 +786,11 @@ impl App {
         self.mode = self.help_return_mode.take().unwrap_or(Mode::Normal);
     }
 
-    fn execute_selected(&self, command: &str) -> Option<ShellResult> {
+    fn execute_selected(&self, command: &str, agent: Option<AgentIdentity>) -> Option<ShellResult> {
         self.selected_entry().map(|entry| ShellResult::Execute {
             directory: entry.path.clone(),
             command: command.to_owned(),
+            context: agent.map(|agent| ExecutionContext { agent, repository: entry.name.clone() }),
         })
     }
 
@@ -797,6 +802,7 @@ impl App {
         self.selected_entry().map(|entry| ShellResult::Execute {
             directory: entry.path.clone(),
             command: shortcut.command.clone(),
+            context: None,
         })
     }
 
@@ -857,7 +863,8 @@ impl App {
                     let entry = &self.entries[*entry_index];
                     let marker = if entry.favorite { "★" } else { " " };
                     let prefix = if visible_index == self.selected { "›" } else { " " };
-                    let label = format!("{prefix} {marker}  {}", entry.label());
+                    let label =
+                        format!("{prefix} {marker}  {}", entry_display_label(self.locale, entry));
                     if visible_index == self.selected {
                         selected(&label, inner)
                     } else {
@@ -990,7 +997,9 @@ impl App {
         );
         let content = self.config.shortcut(slot).map_or_else(
             || text(self.locale, TextId::Empty).to_owned(),
-            |shortcut| format!("{}  {}", shortcut.alias.as_deref().unwrap_or(""), shortcut.command),
+            |shortcut| {
+                shortcut_display_label(self.locale, shortcut.alias.as_deref(), &shortcut.command)
+            },
         );
         panel_slot_row(layout.width, &binding, &content, usize::from(slot - 1) == selected_slot)
     }
@@ -1055,7 +1064,7 @@ impl App {
                 2 => panel_text_row(
                     layout.width,
                     &shortcut.map_or_else(String::new, |s| {
-                        format!("{}: {}", s.alias.as_deref().unwrap_or(""), s.command)
+                        shortcut_display_label(self.locale, s.alias.as_deref(), &s.command)
                     }),
                 ),
                 3 => panel_text_row(layout.width, self.editor_error.as_deref().unwrap_or("")),
@@ -1066,9 +1075,20 @@ impl App {
             1 => panel_binding_row(layout.width, &binding, delete_prompt(self.locale)),
             2 => panel_text_row(
                 layout.width,
-                shortcut.and_then(|s| s.alias.as_deref()).unwrap_or(""),
+                &format!(
+                    "{}: {}",
+                    text(self.locale, TextId::Alias),
+                    shortcut.and_then(|s| s.alias.as_deref()).unwrap_or("—")
+                ),
             ),
-            3 => panel_text_row(layout.width, shortcut.map_or("", |s| s.command.as_str())),
+            3 => panel_text_row(
+                layout.width,
+                &format!(
+                    "{}: {}",
+                    text(self.locale, TextId::Command),
+                    shortcut.map_or("", |s| s.command.as_str())
+                ),
+            ),
             4 => panel_text_row(layout.width, self.editor_error.as_deref().unwrap_or("")),
             _ => panel_text_row(layout.width, ""),
         }
@@ -1376,6 +1396,29 @@ fn render_help_line(line: HelpLine, width: usize) -> String {
     }
 }
 
+fn entry_display_label(locale: Locale, entry: &DirectoryEntry) -> String {
+    match entry.alias.as_deref().filter(|alias| !alias.trim().is_empty()) {
+        Some(alias) => format!(
+            "{}: {}  {}: {}",
+            text(locale, TextId::Alias),
+            alias,
+            text(locale, TextId::Repo),
+            entry.name
+        ),
+        None => format!("{}: {}", text(locale, TextId::Repo), entry.name),
+    }
+}
+
+fn shortcut_display_label(locale: Locale, alias: Option<&str>, command: &str) -> String {
+    let command_label = text(locale, TextId::Command);
+    match alias.filter(|value| !value.trim().is_empty()) {
+        Some(alias) => {
+            format!("{}: {}  {}: {}", text(locale, TextId::Alias), alias, command_label, command)
+        }
+        None => format!("{command_label}: {command}"),
+    }
+}
+
 fn panel_border(width: usize, label: &str, top: bool) -> String {
     let (left, right) = if top { ('╭', '╮') } else { ('╰', '╯') };
     let label = label.chars().take(width.saturating_sub(5)).collect::<String>();
@@ -1454,14 +1497,15 @@ fn panel_slot_row(width: usize, binding: &str, text: &str, is_selected: bool) ->
 
 fn panel_field_row(width: usize, label: &str, value: &str, active: bool) -> String {
     let (label_width, value_width) = panel_field_dimensions(width);
-    let content = format!(" {}: {}", fit(label, label_width), fit(value, value_width));
+    let marker = if active { "›" } else { " " };
+    let content = format!("{marker} {}: {}", fit(label, label_width), fit(value, value_width));
     if active {
         format!(
             "{FRAME}│{RESET}{SELECTED_BG}{SELECTED_FG}{}{RESET}{FRAME}│{RESET}",
             fit(&content, width.saturating_sub(2))
         )
     } else {
-        format!("{FRAME}│{RESET}{content}{FRAME}│{RESET}")
+        format!("{FRAME}│{RESET}{}{FRAME}│{RESET}", fit(&content, width.saturating_sub(2)))
     }
 }
 
@@ -1548,16 +1592,16 @@ fn footer_help_for(mode: &Mode, locale: Locale) -> &'static str {
     }
 }
 
-fn agent_command(key: char) -> Option<&'static str> {
+fn agent_command(key: char) -> Option<(AgentIdentity, &'static str)> {
     match key {
-        'c' => Some("codex"),
-        'r' => Some("codex resume --last"),
-        'd' => Some("claude"),
-        'D' => Some("claude --continue"),
-        'o' => Some("opencode"),
-        'O' => Some("opencode --continue"),
-        'i' => Some("kimi"),
-        'I' => Some("kimi --continue"),
+        'c' => Some((AgentIdentity::Codex, "codex")),
+        'r' => Some((AgentIdentity::Codex, "codex resume --last")),
+        'd' => Some((AgentIdentity::Claude, "claude")),
+        'D' => Some((AgentIdentity::Claude, "claude --continue")),
+        'o' => Some((AgentIdentity::OpenCode, "opencode")),
+        'O' => Some((AgentIdentity::OpenCode, "opencode --continue")),
+        'i' => Some((AgentIdentity::Kimi, "kimi")),
+        'I' => Some((AgentIdentity::Kimi, "kimi --continue")),
         _ => None,
     }
 }
@@ -1601,9 +1645,9 @@ mod tests {
     };
 
     use super::{
-        App, EditorField, Mode, PanelLayout, ShellResult, TextField, agent_command, command_scroll,
-        cursor_text, editor_footer_for, footer_fits, footer_help, fuzzy_score, help_lines_for,
-        is_command_shortcut, manager_footer_for, panel_binding_row, panel_border,
+        AgentIdentity, App, EditorField, Mode, PanelLayout, ShellResult, TextField, agent_command,
+        command_scroll, cursor_text, editor_footer_for, footer_fits, footer_help, fuzzy_score,
+        help_lines_for, is_command_shortcut, manager_footer_for, panel_binding_row, panel_border,
         panel_border_with_binding, panel_field_dimensions, panel_field_row, panel_slot_row,
         panel_text_row, visible_width,
     };
@@ -1628,14 +1672,14 @@ mod tests {
 
     #[test]
     fn agent_shortcuts_map_to_new_and_previous_repo_sessions() {
-        assert_eq!(agent_command('c'), Some("codex"));
-        assert_eq!(agent_command('r'), Some("codex resume --last"));
-        assert_eq!(agent_command('d'), Some("claude"));
-        assert_eq!(agent_command('D'), Some("claude --continue"));
-        assert_eq!(agent_command('o'), Some("opencode"));
-        assert_eq!(agent_command('O'), Some("opencode --continue"));
-        assert_eq!(agent_command('i'), Some("kimi"));
-        assert_eq!(agent_command('I'), Some("kimi --continue"));
+        assert_eq!(agent_command('c'), Some((AgentIdentity::Codex, "codex")));
+        assert_eq!(agent_command('r'), Some((AgentIdentity::Codex, "codex resume --last")));
+        assert_eq!(agent_command('d'), Some((AgentIdentity::Claude, "claude")));
+        assert_eq!(agent_command('D'), Some((AgentIdentity::Claude, "claude --continue")));
+        assert_eq!(agent_command('o'), Some((AgentIdentity::OpenCode, "opencode")));
+        assert_eq!(agent_command('O'), Some((AgentIdentity::OpenCode, "opencode --continue")));
+        assert_eq!(agent_command('i'), Some((AgentIdentity::Kimi, "kimi")));
+        assert_eq!(agent_command('I'), Some((AgentIdentity::Kimi, "kimi --continue")));
         assert_eq!(agent_command('x'), None);
     }
 
@@ -1835,6 +1879,17 @@ mod tests {
             cursor_text(&field, true, 4).chars().count()
                 < cursor_text(&field, true, 20).chars().count()
         );
+    }
+
+    #[test]
+    fn alias_and_command_rows_fit_narrow_terminals_without_relying_on_color() {
+        let alias = panel_field_row(18, "Alias", "a-very-long-name", true);
+        let command = panel_field_row(18, "Comando", "cargo test --all", false);
+        assert_eq!(visible_width(&alias), 18, "{alias:?}");
+        assert_eq!(visible_width(&command), 18, "{command:?}");
+        assert!(alias.contains('›'));
+        assert!(!command.contains('›'));
+        assert!(fit("Alias: principal  Repo: project", 12).ends_with('…'));
     }
 
     #[test]
@@ -2086,9 +2141,10 @@ mod tests {
         assert_eq!(app.selected_entry().map(|entry| entry.path.clone()), Some(project.clone()));
 
         match app.handle_key(Key::Shortcut(1)).expect("run shortcut") {
-            Some(Some(ShellResult::Execute { directory, command })) => {
+            Some(Some(ShellResult::Execute { directory, command, context })) => {
                 assert_eq!(directory, project);
                 assert_eq!(command, "bun run dev");
+                assert!(context.is_none());
             }
             other => panic!("expected ShellResult::Execute for the selected path, got {other:?}"),
         }
@@ -2462,9 +2518,10 @@ mod tests {
             app.handle_key(Key::Char(character)).expect("type command");
         }
         match app.handle_key(Key::Enter).expect("run command") {
-            Some(Some(ShellResult::Execute { directory, command })) => {
+            Some(Some(ShellResult::Execute { directory, command, context })) => {
                 assert_eq!(directory, target);
                 assert_eq!(command, "cargo test");
+                assert!(context.is_none());
             }
             other => panic!("expected Execute, got {other:?}"),
         }
@@ -2531,9 +2588,14 @@ mod tests {
         let (mut app, sandbox) = sandbox_app_with_dirs("agent", &["project"]);
         let target = app.selected_entry().expect("entry").path.clone();
         match app.handle_key(Key::Char('c')).expect("codex") {
-            Some(Some(ShellResult::Execute { directory, command })) => {
+            Some(Some(ShellResult::Execute { directory, command, context })) => {
                 assert_eq!(directory, target);
                 assert_eq!(command, "codex");
+                assert_eq!(context.as_ref().map(|value| value.agent.display_name()), Some("Codex"));
+                assert_eq!(
+                    context.as_ref().map(|value| value.repository.as_str()),
+                    Some("project")
+                );
             }
             other => panic!("expected Execute, got {other:?}"),
         }
@@ -2708,6 +2770,29 @@ mod tests {
     }
 
     #[test]
+    fn repository_rows_keep_alias_and_real_repo_distinct_in_both_locales() {
+        let (mut app, sandbox) = sandbox_app_with_dirs("render-repo-alias", &["project"]);
+        let target = app.selected_entry().expect("entry").path.clone();
+        app.config.set_alias(target, "principal".into());
+        app.refresh().expect("refresh");
+        let spanish = app.render_rows(100, 24).join("\n");
+        assert!(spanish.contains("Alias: principal"));
+        assert!(spanish.contains("Repo: project"));
+
+        app.locale = crate::i18n::Locale::EnUs;
+        let english = app.render_rows(100, 24).join("\n");
+        assert!(english.contains("Alias: principal"));
+        assert!(english.contains("Repo: project"));
+
+        let (mut no_alias, sandbox2) = sandbox_app_with_dirs("render-repo-no-alias", &["project"]);
+        let plain = no_alias.render_rows(100, 24).join("\n");
+        assert!(plain.contains("Repo: project"));
+        assert!(!plain.contains("Alias:"));
+        fs::remove_dir_all(sandbox).expect("clean sandbox");
+        fs::remove_dir_all(sandbox2).expect("clean sandbox");
+    }
+
+    #[test]
     fn help_panel_renders_in_both_locales() {
         let (mut app, sandbox) = sandbox_app("render-help");
         app.handle_key(Key::F1).expect("open help");
@@ -2739,7 +2824,8 @@ mod tests {
         let rows = app.render_rows(100, 30);
         let joined = rows.join("\n");
         assert!(joined.contains("COMANDOS PERSONALIZADOS"));
-        assert!(joined.contains("bun run dev"));
+        assert!(joined.contains("Alias: Dev"));
+        assert!(joined.contains("Comando: bun run dev"));
         assert!(joined.contains("Vacío"));
 
         app.handle_key(Key::Enter).expect("open editor");
@@ -2749,6 +2835,7 @@ mod tests {
         assert!(joined.contains("EDITAR COMANDO"));
         assert!(joined.contains("Alias (opcional)"));
         assert!(joined.contains("X_"));
+        assert!(joined.contains("› Alias"));
 
         app.handle_key(Key::Escape).expect("back to manager");
         app.handle_key(Key::Delete).expect("open delete confirmation");
@@ -2758,7 +2845,8 @@ mod tests {
         assert!(joined.contains("¿Eliminar este comando?"));
         // Full-height delete panel renders the alias and command on their own rows.
         assert!(joined.contains("Dev"));
-        assert!(joined.contains("bun run dev"));
+        assert!(joined.contains("Alias: Dev"));
+        assert!(joined.contains("Comando: bun run dev"));
         fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 
@@ -2772,7 +2860,7 @@ mod tests {
         let rows = app.render_rows(90, 12);
         let joined = rows.join("\n");
         assert!(joined.contains("¿Eliminar este comando?"));
-        assert!(joined.contains("cargo test"));
+        assert!(joined.contains("Comando: cargo test"));
         fs::remove_dir_all(sandbox).expect("clean sandbox");
     }
 

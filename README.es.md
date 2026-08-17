@@ -315,6 +315,11 @@ el editor, `Tab` cambia entre Alias y Comando, `Enter` guarda y `Esc` cancela.
 combinaciones `Mayús+1–9` ejecutan comandos únicamente desde el navegador
 normal, nunca mientras gestionas slots.
 
+El gestor muestra por separado el alias editable y el comando real (`Alias: …`
+y `Comando: …`); sin alias, el comando sigue completamente visible. Las filas de
+repositorios usan el mismo patrón (`Alias: …` y `Repo: …`), de modo que un alias
+nunca oculta la identidad del proyecto.
+
 ```powershell
 dev shortcut 1 "Dev" "bun run dev"
 dev shortcut 2 "Tests" "cargo test"
