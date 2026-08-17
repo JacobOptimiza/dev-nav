@@ -320,10 +320,10 @@ between Alias and Command, `Enter` saves, and `Esc` cancels. `F2` changes the
 language without losing the manager state or editor draft. `Shift+1–9` execute
 their commands only from the normal navigator, never while managing slots.
 
-The manager renders the editable alias and real command as `alias · command`
-(for example, `Dev · bun run dev`), while repository rows use `alias · repo`
-(for example, `principal · dev-nav`). Without an alias, only the real value is
-shown; an alias never hides the project identity.
+The manager renders the editable alias and real command as `alias > command`
+(for example, `Lanzar servidor > bun run dev`), while repository rows use
+`alias | repo` (for example, `Navegador PowerShell | dev-nav`). Without an alias,
+only the real value is shown; an alias never hides the project identity.
 
 ```powershell
 dev shortcut 1 "Dev" "bun run dev"

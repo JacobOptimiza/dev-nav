@@ -7,8 +7,8 @@ Versioning.
 
 ### Changed
 
-- Render aliases compactly as `alias · value`, keeping the real repository and
-  command visible without verbose row labels.
+- Render command aliases compactly as `alias > command` and repository aliases
+  as `alias | repository`, keeping both values visible without verbose labels.
 - Carry explicit known-agent, repository, and launch-policy context through the
   result file. PowerShell now disables title updates per process for Codex,
   Claude, and OpenCode, preserves Kimi's native behavior, and restores the

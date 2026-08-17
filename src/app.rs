@@ -871,6 +871,7 @@ impl App {
                         entry.alias.as_deref(),
                         &entry.name,
                         inner.saturating_sub(prefix.chars().count() + marker.chars().count() + 4),
+                        " | ",
                     );
                     let label = format!("{prefix} {marker}  {relation}");
                     if visible_index == self.selected {
@@ -1008,7 +1009,9 @@ impl App {
         let text_width = available_width.saturating_sub(binding_width + 3);
         let content = self.config.shortcut(slot).map_or_else(
             || text(self.locale, TextId::Empty).to_owned(),
-            |shortcut| fit_relation(shortcut.alias.as_deref(), &shortcut.command, text_width),
+            |shortcut| {
+                fit_relation(shortcut.alias.as_deref(), &shortcut.command, text_width, " > ")
+            },
         );
         panel_slot_row(layout.width, &binding, &content, usize::from(slot - 1) == selected_slot)
     }
@@ -1074,6 +1077,7 @@ impl App {
                     layout.width,
                     shortcut.and_then(|s| s.alias.as_deref()),
                     shortcut.map_or("", |s| s.command.as_str()),
+                    " > ",
                 ),
                 3 => panel_text_row(layout.width, self.editor_error.as_deref().unwrap_or("")),
                 _ => panel_text_row(layout.width, ""),
@@ -1085,6 +1089,7 @@ impl App {
                 layout.width,
                 shortcut.and_then(|s| s.alias.as_deref()),
                 shortcut.map_or("", |s| s.command.as_str()),
+                " > ",
             ),
             3 => panel_text_row(layout.width, ""),
             4 => panel_text_row(layout.width, self.editor_error.as_deref().unwrap_or("")),
@@ -1397,7 +1402,7 @@ fn render_help_line(line: HelpLine, width: usize) -> String {
 #[cfg(test)]
 fn entry_display_label(_locale: Locale, entry: &DirectoryEntry) -> String {
     match entry.alias.as_deref().filter(|alias| !alias.trim().is_empty()) {
-        Some(alias) => format!("{alias} · {}", entry.name),
+        Some(alias) => format!("{alias} | {}", entry.name),
         None => entry.name.clone(),
     }
 }
@@ -1405,9 +1410,8 @@ fn entry_display_label(_locale: Locale, entry: &DirectoryEntry) -> String {
 /// Fits the primary identifier and its secondary value without ever leaving
 /// the relationship marker at the end of a row. The primary text wins when
 /// the terminal cannot fit both sides.
-fn fit_relation(alias: Option<&str>, value: &str, width: usize) -> String {
+fn fit_relation(alias: Option<&str>, value: &str, width: usize, separator: &str) -> String {
     let alias = alias.filter(|text| !text.trim().is_empty());
-    let separator = " · ";
     let alias_width = alias.map_or(0, |text| text.chars().count());
     if let Some(alias) = alias {
         if width <= alias_width + separator.chars().count() {
@@ -1464,12 +1468,12 @@ fn panel_text_row(width: usize, text: &str) -> String {
     format!("{FRAME}│{RESET}{}{}│{RESET}", fit(&format!(" {text}"), content_width), FRAME)
 }
 
-fn panel_relation_row(width: usize, alias: Option<&str>, value: &str) -> String {
+fn panel_relation_row(width: usize, alias: Option<&str>, value: &str, separator: &str) -> String {
     let content_width = width.saturating_sub(2);
     format!(
         "{FRAME}│{RESET}{}{}│{RESET}",
         fit(
-            &format!(" {}", fit_relation(alias, value, content_width.saturating_sub(1))),
+            &format!(" {}", fit_relation(alias, value, content_width.saturating_sub(1), separator)),
             content_width
         ),
         FRAME
@@ -1928,8 +1932,10 @@ mod tests {
         assert_eq!(visible_width(&command), 18, "{command:?}");
         assert!(alias.contains('›'));
         assert!(!command.contains('›'));
-        assert_eq!(fit_relation(Some("principal"), "project", 11).trim_end(), "principal");
-        assert!(!fit_relation(Some("principal"), "project", 12).ends_with('·'));
+        assert_eq!(fit_relation(Some("principal"), "project", 11, " | ").trim_end(), "principal");
+        assert!(!fit_relation(Some("principal"), "project", 12, " | ").ends_with('|'));
+        assert_eq!(fit_relation(Some("principal"), "project", 14, " | "), "principal | p…");
+        assert_eq!(fit_relation(Some("Lanzar"), "bun run dev", 18, " > "), "Lanzar > bun run …");
     }
 
     #[test]
@@ -2526,7 +2532,7 @@ mod tests {
         app.handle_key(Key::Enter).expect("save alias");
         assert_eq!(app.message, "Alias guardado");
         assert_eq!(Config::load(&config_path).expect("load").alias(&target), Some("principal"));
-        assert_eq!(app.selected_entry().expect("entry").label(), "principal - project");
+        assert_eq!(app.selected_entry().expect("entry").label(), "principal | project");
 
         // Submitting a blank alias removes it again.
         app.handle_key(Key::Char('a')).expect("reopen alias");
@@ -2813,16 +2819,22 @@ mod tests {
     fn repository_rows_keep_alias_and_real_repo_distinct_in_both_locales() {
         let (mut app, sandbox) = sandbox_app_with_dirs("render-repo-alias", &["project"]);
         let target = app.selected_entry().expect("entry").path.clone();
-        app.config.set_alias(target, "principal".into());
+        app.config.set_alias(target.clone(), "Navegador PowerShell".into());
+        let config_path = sandbox.join("config.tsv");
+        app.config.save(&config_path).expect("save repo alias");
+        let loaded = Config::load(&config_path).expect("reload repo alias");
+        assert_eq!(loaded.alias(&target), Some("Navegador PowerShell"));
+        app.config = loaded;
         app.refresh().expect("refresh");
         let spanish = app.render_rows(100, 24).join("\n");
-        assert!(spanish.contains("principal · project"));
+        assert!(spanish.contains("Navegador PowerShell | project"));
+        assert!(!spanish.contains("Navegador PowerShell ·"));
         assert!(!spanish.contains("Alias:"));
         assert!(!spanish.contains("Repo:"));
 
         app.locale = crate::i18n::Locale::EnUs;
         let english = app.render_rows(100, 24).join("\n");
-        assert!(english.contains("principal · project"));
+        assert!(english.contains("Navegador PowerShell | project"));
         assert!(!english.contains("Alias:"));
         assert!(!english.contains("Repo:"));
 
@@ -2864,15 +2876,24 @@ mod tests {
     #[test]
     fn command_panels_render_manager_editor_and_delete_confirmation() {
         let (mut app, sandbox) = sandbox_app("render-panels");
-        app.config.set_shortcut(1, Some("Dev".into()), "bun run dev".into());
+        app.config.set_shortcut(1, Some("Lanzar servidor".into()), "bun run dev".into());
+        let config_path = sandbox.join("config.tsv");
+        app.config.save(&config_path).expect("save shortcut alias");
+        let loaded = Config::load(&config_path).expect("reload shortcut alias");
+        let shortcut = loaded.shortcut(1).expect("reloaded shortcut");
+        assert_eq!(shortcut.alias.as_deref(), Some("Lanzar servidor"));
+        assert_eq!(shortcut.command, "bun run dev");
+        app.config = loaded;
 
         app.handle_key(Key::F3).expect("open manager");
         let rows = app.render_rows(100, 30);
         let joined = rows.join("\n");
         assert!(joined.contains("COMANDOS PERSONALIZADOS"));
-        assert!(joined.contains("Dev · bun run dev"));
-        assert!(!joined.contains("Alias: Dev"));
-        assert!(!joined.contains("Comando: bun run dev"));
+        assert!(joined.contains("Lanzar servidor > bun run dev"));
+        assert!(!joined.contains("Lanzar servidor ·"));
+        assert!(!joined.contains("Alias:"));
+        assert!(!joined.contains("Comando:"));
+        assert!(!joined.contains("Command:"));
         assert!(joined.contains("Vacío"));
 
         app.handle_key(Key::Enter).expect("open editor");
@@ -2891,8 +2912,9 @@ mod tests {
         assert!(joined.contains("ELIMINAR COMANDO"));
         assert!(joined.contains("¿Eliminar este comando?"));
         // Full-height delete panel renders the alias and command on their own rows.
-        assert!(joined.contains("Dev"));
-        assert!(joined.contains("Dev · bun run dev"));
+        assert!(joined.contains("Lanzar servidor"));
+        assert!(joined.contains("Lanzar servidor > bun run dev"));
+        assert!(!joined.contains("Lanzar servidor ·"));
         assert!(!joined.contains("Alias: Dev"));
         assert!(!joined.contains("Comando: bun run dev"));
         fs::remove_dir_all(sandbox).expect("clean sandbox");
