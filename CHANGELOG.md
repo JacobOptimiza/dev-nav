@@ -5,6 +5,14 @@ Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Keep the real repository visible beside its optional alias, and label custom
+  command aliases and commands explicitly in the manager/editor.
+- Carry explicit known-agent and repository context through the result file so
+  PowerShell can temporarily title agent sessions as `Agent/repository` without
+  changing arbitrary commands or legacy results.
+
 ### Security
 
 - Add verified npm CLI bootstrapping, Rust parser fuzzing, and artifact

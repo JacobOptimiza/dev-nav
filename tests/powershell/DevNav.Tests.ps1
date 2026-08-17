@@ -1692,6 +1692,60 @@ exit ([int]$env:DEVNAV_NATIVE_EXIT_CODE)
         Assert-NativeInvocation | Should -Not -BeNullOrEmpty
     }
 
+    It 'applies a known agent title from explicit result context and restores it' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes("exec`0$nativeResultDirectory`0codex`0Codex`0dev-nav")
+        )
+        $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
+            function Set-DevAgentWindowTitle { param($Agent, $Repository) $global:DevNavNativeCalls.Add("title:$Agent/$Repository"); 'original title' }
+            function Restore-DevWindowTitle { param($OriginalTitle) $global:DevNavNativeCalls.Add("restore:$OriginalTitle") }
+            function Invoke-Expression { param($Command) $global:DevNavNativeCalls.Add("command:$Command") }
+            Invoke-DevNavigator
+        })
+        $global:DevNavNativeCalls | Should -Contain 'title:Codex/dev-nav'
+        $global:DevNavNativeCalls | Should -Contain 'restore:original title'
+        $global:DevNavNativeCalls | Should -Contain 'command:codex'
+    }
+
+    It 'does not invent an agent title for an arbitrary command or legacy result' {
+        $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes("exec`0$nativeResultDirectory`0git status")
+        )
+        $nativeModule.Invoke({
+            function Initialize-DevLanguage { 'en-US' }
+            function Invoke-DevStartupUpdateCheck { $script:DevNavUpdateCompleted = $false; $script:DevNavRestartRequired = $false }
+            function Get-DevRoot { $global:DevNavNativeRoot }
+            function Get-DevExecutable { $global:DevNavNativeShim }
+            function Set-Location { param($LiteralPath) $global:DevNavNativeCalls.Add("location:$LiteralPath") }
+            function Set-DevAgentWindowTitle { throw 'arbitrary commands must not receive an agent title' }
+            function Invoke-Expression { param($Command) $global:DevNavNativeCalls.Add("command:$Command") }
+            Invoke-DevNavigator
+        })
+        $global:DevNavNativeCalls | Should -Contain 'command:git status'
+        $global:DevNavNativeCalls | Should -Not -Match '^title:'
+    }
+
+    It 'sets and restores a compatible host title, and ignores an unsupported host' {
+        $nativeModule.Invoke({
+            $raw = [pscustomobject]@{ WindowTitle = 'PowerShell' }
+            $fakeHost = [pscustomobject]@{ UI = [pscustomobject]@{ RawUI = $raw } }
+            $old = Set-DevAgentWindowTitle -Agent 'Claude' -Repository 'dev-nav' -HostObject $fakeHost
+            $old | Should -Be 'PowerShell'
+            $fakeHost.UI.RawUI.WindowTitle | Should -Be 'Claude/dev-nav'
+            Restore-DevWindowTitle -OriginalTitle $old -HostObject $fakeHost
+            $fakeHost.UI.RawUI.WindowTitle | Should -Be 'PowerShell'
+
+            $unsupported = [pscustomobject]@{ UI = $null }
+            { Set-DevAgentWindowTitle -Agent 'Kimi' -Repository 'dev-nav' -HostObject $unsupported } |
+                Should -Not -Throw
+        })
+    }
+
     It 'prefers an explicit command over the native result command' {
         $env:DEVNAV_NATIVE_RESULT_BASE64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("exec`0$nativeResultDirectory`0embedded command"))
         $nativeModule.Invoke({

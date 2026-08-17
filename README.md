@@ -309,6 +309,11 @@ between Alias and Command, `Enter` saves, and `Esc` cancels. `F2` changes the
 language without losing the manager state or editor draft. `Shift+1–9` execute
 their commands only from the normal navigator, never while managing slots.
 
+The manager shows the editable alias and the real command separately (`Alias: …`
+and `Command: …`); an empty alias leaves the command fully visible. Repository
+rows use the same pattern (`Alias: …` and `Repo: …`), so an alias never hides the
+project identity.
+
 ```powershell
 dev shortcut 1 "Dev" "bun run dev"
 dev shortcut 2 "Tests" "cargo test"

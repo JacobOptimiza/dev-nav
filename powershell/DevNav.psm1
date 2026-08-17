@@ -527,6 +527,41 @@ function Update-DevNavigator {
     }
 }
 
+function Set-DevAgentWindowTitle {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string] $Agent,
+        [Parameter(Mandatory)][string] $Repository,
+        [object] $HostObject = $Host
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Agent) -or [string]::IsNullOrWhiteSpace($Repository)) {
+        return $null
+    }
+    if (-not $PSCmdlet.ShouldProcess("$Agent/$Repository", 'Set console title')) {
+        return $null
+    }
+    try {
+        $original = $HostObject.UI.RawUI.WindowTitle
+        $HostObject.UI.RawUI.WindowTitle = "$Agent/$Repository"
+        return $original
+    } catch {
+        # Window titles are cosmetic and vary by host. Never block navigation.
+        return $null
+    }
+}
+
+function Restore-DevWindowTitle {
+    [CmdletBinding()]
+    param(
+        [AllowEmptyString()][AllowNull()][string] $OriginalTitle,
+        [object] $HostObject = $Host
+    )
+
+    if ($null -eq $OriginalTitle) { return }
+    try { $HostObject.UI.RawUI.WindowTitle = $OriginalTitle } catch { Write-Verbose 'Host does not support title restoration.' }
+}
+
 function Invoke-DevNavigator {
     [CmdletBinding()]
     param(
@@ -590,9 +625,21 @@ function Invoke-DevNavigator {
         Set-Location -LiteralPath $directory
 
         $commandText = if ($Command.Count -gt 0) { $Command -join ' ' } elseif ($parts.Count -gt 2) { $parts[2] } else { '' }
+        $originalWindowTitle = $null
+        $windowTitleChanged = $false
+        if ($Command.Count -eq 0 -and $kind -eq 'exec' -and $parts.Count -ge 5) {
+            $originalWindowTitle = Set-DevAgentWindowTitle -Agent $parts[3] -Repository $parts[4]
+            $windowTitleChanged = $null -ne $originalWindowTitle
+        }
         if ($kind -eq 'exec' -or $Command.Count -gt 0) {
-            if (-not [string]::IsNullOrWhiteSpace($commandText)) {
-                Invoke-Expression $commandText
+            try {
+                if (-not [string]::IsNullOrWhiteSpace($commandText)) {
+                    Invoke-Expression $commandText
+                }
+            } finally {
+                if ($windowTitleChanged) {
+                    Restore-DevWindowTitle -OriginalTitle $originalWindowTitle
+                }
             }
         }
     }
