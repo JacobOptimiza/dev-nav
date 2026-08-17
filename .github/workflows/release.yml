@@ -259,6 +259,68 @@ jobs:
         with:
           name: release-manifest
           path: artifacts/release-manifest.json
+      - name: Verify release provenance assets
+        working-directory: artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          verify_provenance() {
+            local arch="$1"
+            local binary="$2"
+            local installer="$3"
+            local scoop="$4"
+            local file="DevNav-build-provenance-${arch}.intoto.jsonl"
+
+            test -s "$file"
+            test "$(grep -cve '^$' "$file")" -eq 1
+
+            jq -e '
+              has("payloadType") and
+              has("payload") and
+              has("signatures") and
+              (has("dsseEnvelope") | not) and
+              (has("verificationMaterial") | not)
+            ' "$file" >/dev/null
+
+            statement="$(jq -r '.payload' "$file" | base64 --decode)"
+
+            jq -e '
+              ._type == "https://in-toto.io/Statement/v1" and
+              (
+                .predicateType == "https://slsa.dev/provenance/v1" or
+                .predicateType == "https://slsa.dev/provenance/v0.2"
+              )
+            ' <<<"$statement" >/dev/null
+
+            for artifact in "$binary" "$installer" "$scoop"; do
+              expected="$(
+                jq -r --arg name "$artifact" '
+                  .subject[] |
+                  select(.name == $name) |
+                  .digest.sha256
+                ' <<<"$statement"
+              )"
+
+              test -n "$expected"
+              test "$expected" != "null"
+
+              actual="$(sha256sum "$artifact" | cut -d' ' -f1)"
+              test "$expected" = "$actual"
+            done
+          }
+
+          verify_provenance \
+            x64 \
+            dev-windows-x86_64.exe \
+            DevNavSetup-x64.exe \
+            DevNav-scoop-x64.zip
+
+          verify_provenance \
+            arm64 \
+            dev-windows-aarch64.exe \
+            DevNavSetup-arm64.exe \
+            DevNav-scoop-arm64.zip
       - env:
           GH_TOKEN: ${{ github.token }}
         # Upload files only; the unpacked manifests directory is not a release asset.
