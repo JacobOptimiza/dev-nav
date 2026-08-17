@@ -13,22 +13,23 @@
     compact JSON line, and then validates the result end-to-end before the
     caller publishes it: exactly one JSON object per line, DSSE envelope shape
     at the root (not a renamed Sigstore bundle), a decodable payload that is
-    an in-toto Statement with predicateType
-    "https://slsa.dev/provenance/v1" and the expected subjects/digests.
+    an in-toto Statement with a SLSA provenance predicateType, every expected
+    artifact present as a subject, and each attested digest equal to the real
+    SHA-256 of the artifact file on disk.
 
     Exits non-zero on any validation failure.
 
 .EXAMPLE
     ./scripts/convert-attestation-to-intoto.ps1 -BundlePath attestation.json `
         -OutputPath DevNav-build-provenance-x64.intoto.jsonl `
-        -ExpectedSubject dev-windows-x86_64.exe `
-        -ExpectedSubject DevNavSetup-x64.exe
+        -ExpectedSubject dev-windows-x86_64.exe, DevNavSetup-x64.exe, DevNav-scoop-x64.zip
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string] $BundlePath,
     [Parameter(Mandatory)][string] $OutputPath,
-    # Artifact names (without digest) that must appear as in-toto subjects.
+    # Artifact names (without digest) that must appear as in-toto subjects
+    # with digests matching the real files in the working directory.
     [Parameter(Mandatory)][string[]] $ExpectedSubject
 )
 
@@ -70,11 +71,6 @@ if ($lines.Count -ne 1) {
 }
 $envelope = $lines[0] | ConvertFrom-Json
 
-function Test-JsonProperty {
-    param([psobject] $Object, [string] $Name)
-    return $null -ne ($Object.PSObject.Properties[$Name])
-}
-
 # 2. DSSE envelope shape at the root: payloadType, payload, signatures.
 foreach ($member in @('payloadType', 'payload', 'signatures')) {
     if (-not (Test-JsonProperty $envelope $member)) {
@@ -111,32 +107,41 @@ if ($statement.predicateType -notin $slsaPredicateTypes) {
     throw "predicateType '$($statement.predicateType)' is not a SLSA provenance type."
 }
 
-# 6. Expected subjects with sha256 digests.
+# 6. Every expected artifact is a subject whose attested digest equals the
+#    real SHA-256 of the file on disk.
 $subjects = @($statement.subject)
 if ($subjects.Count -eq 0) {
     throw 'The in-toto statement has no subjects.'
 }
 foreach ($expected in $ExpectedSubject) {
+    $artifactPath = Join-Path (Get-Location) $expected
+    if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+        throw "Expected artifact '$expected' not found on disk for digest verification."
+    }
     $match = $subjects | Where-Object { $_.name -eq $expected }
     if (-not $match) {
         $found = ($subjects | ForEach-Object { $_.name }) -join ', '
         throw "Expected subject '$expected' not attested. Found: $found"
     }
+    $realDigest = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
     foreach ($s in @($match)) {
         if (-not $s.digest.sha256 -or $s.digest.sha256 -notmatch '^[0-9a-f]{64}$') {
             throw "Subject '$expected' lacks a valid sha256 digest."
         }
+        if ($s.digest.sha256 -ne $realDigest) {
+            throw "Subject '$expected' attests digest $($s.digest.sha256) but the real file hashes to $realDigest."
+        }
     }
 }
 
-# 7. The DSSE signature must cover the payload (PAE digest check via the
-#    signature is cryptographic verification; here we verify structural
-#    presence of the signature material the bundle verification relies on).
+# 7. Structural presence of the signature material the bundle verification
+#    relies on (cryptographic verification happens through the Sigstore
+#    bundle, which carries the certificate and Rekor entries).
 foreach ($signature in @($envelope.signatures)) {
     if ([string]::IsNullOrWhiteSpace($signature.sig)) {
         throw 'A DSSE signature has an empty sig value.'
     }
 }
 
-Write-Host "OK: $OutputPath is a valid in-toto/SLSA DSSE envelope (JSONL, 1 line, subjects verified)."
+Write-Host "OK: $OutputPath is a valid in-toto/SLSA DSSE envelope (JSONL, 1 line, subjects and digests verified against the artifacts)."
 exit 0
