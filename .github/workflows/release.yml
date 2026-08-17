@@ -9,18 +9,13 @@ on:
         description: 'Existing release tag to recover for npm staging (for example v0.11.0)'
         required: true
         type: string
-      publish_release:
-        description: 'Run the normal release flow for the existing tag'
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   build:
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.tag == 'v0.14.0') }}
     strategy:
       fail-fast: false
       matrix:
@@ -151,7 +146,7 @@ jobs:
             DevNav-scoop-${{ matrix.architecture }}.zip.sigstore.json
 
   publish:
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.tag == 'v0.14.0') }}
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -366,7 +361,7 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag
 
   npm-package:
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.tag == 'v0.14.0') }}
     needs: publish
     runs-on: windows-latest
     permissions:
@@ -484,7 +479,7 @@ jobs:
           if-no-files-found: error
 
   npm-publish:
-    if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)) && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
+    if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.tag == 'v0.14.0')) && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
     needs: npm-package
     runs-on: ubuntu-latest
     environment: npm-production
@@ -517,7 +512,7 @@ jobs:
           npm stage publish "./${tarball[0]}"
 
   npm-recovery-package:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release != true }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag != 'v0.14.0' }}
     runs-on: windows-latest
     permissions:
       contents: read
@@ -632,7 +627,7 @@ jobs:
           if-no-files-found: error
 
   npm-recovery-publish:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release != true && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag != 'v0.14.0' && vars.NPM_TRUSTED_PUBLISHING_ENABLED == 'true' }}
     needs: npm-recovery-package
     runs-on: ubuntu-latest
     environment: npm-production
