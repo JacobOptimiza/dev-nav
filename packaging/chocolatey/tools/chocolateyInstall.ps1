@@ -15,7 +15,8 @@ $assets = @{
     }
 }
 $selected = Get-DevNavAssetSet -Architecture $architecture -Assets $assets
-$packageTools = Join-Path $env:ChocolateyPackageFolder 'tools'
+$packageRoot = Get-ChocolateyPath -PathType 'PackagePath'
+$packageTools = Join-Path $packageRoot 'tools'
 $moduleRoot = Join-Path $packageTools 'DevNav'
 New-Item -ItemType Directory -Path $moduleRoot -Force | Out-Null
 
