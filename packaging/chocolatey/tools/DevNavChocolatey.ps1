@@ -69,9 +69,12 @@ function Add-DevNavMachineModulePath {
 }
 
 function Remove-DevNavMachineModulePath {
+    [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][string] $PackageTools)
 
     $machine = [Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')
     $entries = @($machine -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and $_ -ne $PackageTools })
-    [Environment]::SetEnvironmentVariable('PSModulePath', ($entries -join ';'), 'Machine')
+    if ($PSCmdlet.ShouldProcess('Machine PSModulePath', "Remove '$PackageTools'")) {
+        [Environment]::SetEnvironmentVariable('PSModulePath', ($entries -join ';'), 'Machine')
+    }
 }
