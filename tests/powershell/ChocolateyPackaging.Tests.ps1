@@ -57,6 +57,7 @@ Describe 'Chocolatey package source contract' {
             $nuspec = Get-Content (Join-Path $output 'devnav.nuspec') -Raw
             $install = Get-Content (Join-Path $output 'tools\chocolateyInstall.ps1') -Raw
             $nuspec | Should -Match '<version>9\.8\.7</version>'
+            $nuspec | Should -Match '<copyright>Copyright \(c\) 2026 JacobOptimiza</copyright>'
             $install | Should -Match 'releases/download/v9\.8\.7/dev-windows-x86_64\.exe'
             $install | Should -Match ('a' * 64)
             $install | Should -Not -Match '__[A-Z0-9_]+__'
@@ -71,5 +72,38 @@ Describe 'Chocolatey package source contract' {
             { Assert-DevNavSha256 -Path $path -Expected ('0' * 64) } | Should -Throw '*SHA-256 mismatch*'
         }
         finally { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+    }
+
+    It 'uses the supported package path API and no CPMR0072 private variables' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('devnav-choco-contract-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $root | Out-Null
+        try {
+            $manifest = [ordered]@{
+                schemaVersion = 1
+                version = '9.8.7'
+                artifacts = [ordered]@{
+                    'binary-x64' = @{ file = 'dev-windows-x86_64.exe'; sha256 = ('a' * 64) }
+                    'binary-arm64' = @{ file = 'dev-windows-aarch64.exe'; sha256 = ('b' * 64) }
+                    module = @{ file = 'DevNav.psm1'; sha256 = ('c' * 64) }
+                    'module-manifest' = @{ file = 'DevNav.psd1'; sha256 = ('d' * 64) }
+                }
+            }
+            $manifestPath = Join-Path $root 'release-manifest.json'
+            $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding utf8NoBOM
+            $output = Join-Path $root 'package'
+            & $script:materializerPath -Version '9.8.7' -ReleaseManifest $manifestPath -OutputDirectory $output | Out-Null
+            $scripts = Get-ChildItem (Join-Path $output 'tools') -File -Filter '*.ps*' -Recurse |
+                ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }
+            $scripts -join "`n" | Should -Match 'Get-ChocolateyPath -PathType ''PackagePath'''
+            foreach ($variable in @(
+                'chocolateyToolsLocation', 'chocolateyBinRoot', 'chocolatey_bin_root',
+                'chocolateyPackageFolder', 'packageFolder', 'chocolateyChecksum32',
+                'chocolateyChecksum64', 'chocolateyChecksumType32',
+                'chocolateyChecksumType64', 'downloadCacheAvailable'
+            )) {
+                $scripts -join "`n" | Should -Not -Match ([regex]::Escape("`$env:$variable"))
+            }
+        }
+        finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
     }
 }
