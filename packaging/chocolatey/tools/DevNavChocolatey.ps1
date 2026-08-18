@@ -54,8 +54,26 @@ function Assert-DevNavSha256 {
         [Parameter(Mandatory)][string] $Path,
         [Parameter(Mandatory)][ValidatePattern('^[A-Fa-f0-9]{64}$')][string] $Expected
     )
-    $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    $actual = Get-DevNavSha256 -Path $Path
     if ($actual -ne $Expected) { throw "SHA-256 mismatch for '$Path'." }
+}
+
+function Get-DevNavSha256 {
+    param([Parameter(Mandatory)][string] $Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '')
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
 }
 
 function Add-DevNavMachineModulePath {
