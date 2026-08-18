@@ -64,6 +64,13 @@ channels derive from it:
   `JacobOptimiza/scoop-bucket` repository (`packaging/scoop/`).
 - **WinGet** — immutable versioned manifests with SHA-256
   (`packaging/winget/`), submitted to `microsoft/winget-pkgs`.
+- **Chocolatey (not published)** — the accepted future design is a
+  machine-owned package layout with a separate
+  `.devnav-managed-by-chocolatey` marker and a machine `PSModulePath` entry.
+  It is not implemented as a distribution channel yet. Chocolatey's Community
+  verifier runs on Windows Server 2019; DevNav currently supports Windows 10
+  and 11, so verifier compatibility or an exemption remains an open release
+  decision.
 
 ## `dev` invocation flow
 

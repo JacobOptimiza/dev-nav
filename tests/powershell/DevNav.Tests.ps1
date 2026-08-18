@@ -1071,6 +1071,102 @@ Describe 'DevNav Scoop-managed installation' {
     }
 }
 
+Describe 'DevNav package-manager ownership' {
+    BeforeAll {
+        $chocolateyModuleRoot = Join-Path $testLocalAppData 'chocolatey-module'
+        $ambiguousModuleRoot = Join-Path $testLocalAppData 'ambiguous-module'
+        foreach ($root in @($chocolateyModuleRoot, $ambiguousModuleRoot)) {
+            New-Item -ItemType Directory -Path $root -Force | Out-Null
+            Copy-Item -LiteralPath $modulePath -Destination (Join-Path $root 'DevNav.psm1')
+        }
+        New-Item -ItemType File -Path (Join-Path $chocolateyModuleRoot '.devnav-managed-by-chocolatey') -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $ambiguousModuleRoot '.devnav-managed-by-scoop') -Force | Out-Null
+        New-Item -ItemType File -Path (Join-Path $ambiguousModuleRoot '.devnav-managed-by-chocolatey') -Force | Out-Null
+        Import-Module (Join-Path $chocolateyModuleRoot 'DevNav.psm1') -Force
+        Import-Module (Join-Path $ambiguousModuleRoot 'DevNav.psm1') -Force
+        $chocolateyModule = Get-Module | Where-Object { $_.Path -eq (Join-Path $chocolateyModuleRoot 'DevNav.psm1') } | Select-Object -First 1
+        $ambiguousModule = Get-Module | Where-Object { $_.Path -eq (Join-Path $ambiguousModuleRoot 'DevNav.psm1') } | Select-Object -First 1
+    }
+
+    It 'keeps unmanaged installations available for normal self-update' {
+        $devModule.Invoke({ Get-DevInstallationOwner }) | Should -Be 'unmanaged'
+        $devModule.Invoke({ Test-DevManagedInstallation }) | Should -BeFalse
+    }
+
+    It 'detects Chocolatey ownership without requiring Chocolatey on the test machine' {
+        $chocolateyModule.Invoke({ Get-DevInstallationOwner }) | Should -Be 'chocolatey'
+        $chocolateyModule.Invoke({ Test-DevManagedInstallation }) | Should -BeTrue
+    }
+
+    It 'detects ambiguous ownership when both markers exist' {
+        $ambiguousModule.Invoke({ Get-DevInstallationOwner }) | Should -Be 'ambiguous'
+        $ambiguousModule.Invoke({ Test-DevManagedInstallation }) | Should -BeTrue
+    }
+
+    It 'skips the startup update check for Chocolatey ownership' {
+        $chocolateyModule.Invoke({
+            Mock Initialize-DevUpdateCheckPreference { throw 'Chocolatey startup must not initialize update preferences.' }
+            Mock Get-DevLatestRelease { throw 'Chocolatey startup must not query GitHub.' }
+            { Invoke-DevStartupUpdateCheck } | Should -Not -Throw
+        })
+    }
+
+    It 'skips the startup update check for ambiguous ownership' {
+        $ambiguousModule.Invoke({
+            Mock Initialize-DevUpdateCheckPreference { throw 'Ambiguous startup must not initialize update preferences.' }
+            Mock Get-DevLatestRelease { throw 'Ambiguous startup must not query GitHub.' }
+            { Invoke-DevStartupUpdateCheck } | Should -Not -Throw
+        })
+    }
+
+    It 'reports Chocolatey instructions in English without downloading' {
+        $global:DevNavChocolateyMessages = [System.Collections.Generic.List[string]]::new()
+        $global:DevNavChocolateyLatestCalls = 0
+        $global:DevNavChocolateyDownloadCalls = 0
+        $chocolateyModule.Invoke({
+            Mock Get-DevLanguage { 'en-US' }
+            Mock Get-DevLatestRelease { $global:DevNavChocolateyLatestCalls++ }
+            Mock Invoke-DevDownload { $global:DevNavChocolateyDownloadCalls++ }
+            Mock Write-Host { [void]$global:DevNavChocolateyMessages.Add([string]$Object) }
+            Update-DevNavigator -Confirm:$false
+        })
+        $global:DevNavChocolateyMessages | Should -Contain 'This installation is managed by Chocolatey; DevNav will not self-update.'
+        $global:DevNavChocolateyMessages | Should -Contain 'Update it with: choco upgrade devnav'
+        $global:DevNavChocolateyLatestCalls | Should -Be 0
+        $global:DevNavChocolateyDownloadCalls | Should -Be 0
+        Remove-Variable DevNavChocolateyMessages, DevNavChocolateyLatestCalls, DevNavChocolateyDownloadCalls -Scope Global -ErrorAction SilentlyContinue
+    }
+
+    It 'reports Chocolatey instructions in Spanish without downloading' {
+        $global:DevNavChocolateyMessages = [System.Collections.Generic.List[string]]::new()
+        $chocolateyModule.Invoke({
+            Mock Get-DevLanguage { 'es-ES' }
+            Mock Write-Host { [void]$global:DevNavChocolateyMessages.Add([string]$Object) }
+            Update-DevNavigator -Confirm:$false
+        })
+        $global:DevNavChocolateyMessages | Should -Contain 'Esta instalación la gestiona Chocolatey; DevNav no se actualiza a sí mismo.'
+        $global:DevNavChocolateyMessages | Should -Contain 'Para actualizar, ejecuta: choco upgrade devnav'
+        Remove-Variable DevNavChocolateyMessages -Scope Global -ErrorAction SilentlyContinue
+    }
+
+    It 'fails safe for ambiguous ownership without downloading' {
+        $global:DevNavAmbiguousMessages = [System.Collections.Generic.List[string]]::new()
+        $global:DevNavAmbiguousLatestCalls = 0
+        $global:DevNavAmbiguousDownloadCalls = 0
+        $ambiguousModule.Invoke({
+            Mock Get-DevLanguage { 'en-US' }
+            Mock Get-DevLatestRelease { $global:DevNavAmbiguousLatestCalls++ }
+            Mock Invoke-DevDownload { $global:DevNavAmbiguousDownloadCalls++ }
+            Mock Write-Host { [void]$global:DevNavAmbiguousMessages.Add([string]$Object) }
+            Update-DevNavigator -Confirm:$false
+        })
+        ($global:DevNavAmbiguousMessages -join "`n") | Should -Match 'ownership is ambiguous'
+        $global:DevNavAmbiguousLatestCalls | Should -Be 0
+        $global:DevNavAmbiguousDownloadCalls | Should -Be 0
+        Remove-Variable DevNavAmbiguousMessages, DevNavAmbiguousLatestCalls, DevNavAmbiguousDownloadCalls -Scope Global -ErrorAction SilentlyContinue
+    }
+}
+
 Describe 'DevNav shortcut commands' {
     BeforeAll {
         cargo build --quiet --manifest-path (Join-Path $repositoryRoot 'Cargo.toml')

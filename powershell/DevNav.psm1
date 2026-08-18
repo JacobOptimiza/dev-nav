@@ -225,16 +225,25 @@ function Initialize-DevUpdateCheckPreference {
     return $enabled
 }
 
+function Get-DevInstallationOwner {
+    # Package managers own the files they install; DevNav must not self-update
+    # underneath them. Each manager has its own marker next to this module.
+    $owners = @(
+        if (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.devnav-managed-by-scoop') -PathType Leaf) { 'scoop' }
+        if (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.devnav-managed-by-chocolatey') -PathType Leaf) { 'chocolatey' }
+    )
+    if ($owners.Count -gt 1) { return 'ambiguous' }
+    if ($owners.Count -eq 1) { return $owners[0] }
+    return 'unmanaged'
+}
+
 function Test-DevManagedInstallation {
-    # Package managers such as Scoop own the files they install; DevNav must not
-    # self-update underneath them. Managed layouts carry a marker file next to
-    # this module.
-    return (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.devnav-managed-by-scoop') -PathType Leaf)
+    return (Get-DevInstallationOwner) -ne 'unmanaged'
 }
 
 function Invoke-DevStartupUpdateCheck {
     if ([Console]::IsInputRedirected) { return }
-    if (Test-DevManagedInstallation) { return }
+    if ((Get-DevInstallationOwner) -ne 'unmanaged') { return }
     Initialize-DevLanguage | Out-Null
     if (-not (Initialize-DevUpdateCheckPreference)) { return }
 
@@ -380,13 +389,37 @@ function Update-DevNavigator {
     [CmdletBinding(SupportsShouldProcess)]
     param()
 
-    if (Test-DevManagedInstallation) {
-        if ((Get-DevLanguage) -eq 'en-US') {
-            Write-Host 'This installation is managed by Scoop; DevNav will not self-update.' -ForegroundColor Yellow
-            Write-Host 'Update it with: scoop update devnav' -ForegroundColor Cyan
-        } else {
-            Write-Host 'Esta instalación la gestiona Scoop; DevNav no se actualiza a sí mismo.' -ForegroundColor Yellow
-            Write-Host 'Para actualizar, ejecuta: scoop update devnav' -ForegroundColor Cyan
+    $owner = Get-DevInstallationOwner
+    if ($owner -ne 'unmanaged') {
+        $english = (Get-DevLanguage) -eq 'en-US'
+        switch ($owner) {
+            'scoop' {
+                if ($english) {
+                    Write-Host 'This installation is managed by Scoop; DevNav will not self-update.' -ForegroundColor Yellow
+                    Write-Host 'Update it with: scoop update devnav' -ForegroundColor Cyan
+                } else {
+                    Write-Host 'Esta instalación la gestiona Scoop; DevNav no se actualiza a sí mismo.' -ForegroundColor Yellow
+                    Write-Host 'Para actualizar, ejecuta: scoop update devnav' -ForegroundColor Cyan
+                }
+            }
+            'chocolatey' {
+                if ($english) {
+                    Write-Host 'This installation is managed by Chocolatey; DevNav will not self-update.' -ForegroundColor Yellow
+                    Write-Host 'Update it with: choco upgrade devnav' -ForegroundColor Cyan
+                } else {
+                    Write-Host 'Esta instalación la gestiona Chocolatey; DevNav no se actualiza a sí mismo.' -ForegroundColor Yellow
+                    Write-Host 'Para actualizar, ejecuta: choco upgrade devnav' -ForegroundColor Cyan
+                }
+            }
+            'ambiguous' {
+                if ($english) {
+                    Write-Host 'DevNav ownership is ambiguous: Scoop and Chocolatey markers are both present. DevNav will not self-update.' -ForegroundColor Red
+                    Write-Host 'Remove the incompatible marker before choosing a package manager.' -ForegroundColor Yellow
+                } else {
+                    Write-Host 'La propiedad de DevNav es ambigua: existen markers de Scoop y Chocolatey. DevNav no se actualiza a sí mismo.' -ForegroundColor Red
+                    Write-Host 'Elimina el marker incompatible antes de elegir un gestor de paquetes.' -ForegroundColor Yellow
+                }
+            }
         }
         return
     }
