@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>devnav</id>
+    <version>__VERSION__</version>
+    <title>DevNav</title>
+    <authors>JacobOptimiza</authors>
+    <owners>JacobOptimiza</owners>
+    <licenseUrl>https://github.com/JacobOptimiza/dev-nav/blob/main/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/JacobOptimiza/dev-nav</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Native Rust workspace navigator and coding-agent launcher for PowerShell 7 on Windows.</description>
+    <summary>Keyboard-first workspace navigation for Windows.</summary>
+    <tags>devnav developer powershell tui workspace navigator portable</tags>
+  </metadata>
+</package>
