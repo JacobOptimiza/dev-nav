@@ -214,7 +214,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           hash() { sha256sum "$1" | cut -d' ' -f1; }
           base="https://github.com/JacobOptimiza/dev-nav/releases/download/v$version"
-          jq --arg version "$version" \
+          jq --indent 4 --arg version "$version" \
             --arg url_x64 "$base/DevNav-scoop-x64.zip" --arg sha_x64 "$(hash DevNav-scoop-x64.zip)" \
             --arg url_arm64 "$base/DevNav-scoop-arm64.zip" --arg sha_arm64 "$(hash DevNav-scoop-arm64.zip)" \
             '.version = $version | .architecture = {
