@@ -40,7 +40,7 @@ committed deliverable.
 - [ ] Revisit OpenSSF Scorecard findings that require organizational decisions
   (branch protection coverage, review and maintenance signals) rather than
   code changes.
-- [ ] Validate a real cross-version Scoop upgrade on a future release and
+- [x] Validate a real cross-version Scoop upgrade on a future release and
   automate WinGet submissions once a catalog installation is verified.
 
 ## Distribution status
@@ -59,7 +59,10 @@ committed deliverable.
 - [ ] Microsoft acceptance and public WinGet catalog propagation.
 - [x] Validate fresh Scoop install, package-manager ownership, update behavior,
   and uninstall on a clean GitHub-hosted Windows runner.
-- [ ] Validate a real cross-version Scoop upgrade on a future release.
+- [x] Validate a real cross-version Scoop upgrade from 0.13.0 to 0.14.0.
+- [x] Complete local Chocolatey machine-owned packaging readiness for x64 and
+  ARM64; Community publication remains pending a future release and verifier
+  exemption.
 - [ ] Automate future WinGet submissions after a real catalog installation has
   been verified.
 

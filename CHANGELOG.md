@@ -5,6 +5,20 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-08-18
+
+### Changed
+
+- Add Chocolatey ownership handling, including package-manager update
+  delegation and an ambiguous-ownership fail-safe.
+- Add machine-owned Chocolatey packaging for Windows x64 and ARM64, with safe
+  rejection of unsupported x86 systems.
+
+### Fixed
+
+- Make Chocolatey SHA-256 verification compatible with its native PowerShell
+  host.
+
 ## [0.14.0] - 2026-08-18
 
 ### Changed
