@@ -11,6 +11,11 @@ and recorded in the Rekor transparency log.
 - **v0.13.0 (retroactive):** the 12 distributed artifacts of the release
   (installers, binaries, PowerShell module files, Scoop/WinGet packages and
   metadata). Bundles live in [`signatures/v0.13.0/`](signatures/v0.13.0/).
+- **v0.14.0:** the assets were built from the immutable `v0.14.0` tag. The
+  final recovery run was triggered with `workflow_dispatch` after the initial
+  ARM64 signing failure, so its Sigstore certificates identify
+  `release.yml@refs/heads/main`, not the tag ref. The recovery workflow commit
+  was `d79cfbccdc8705006faeeb61d8368fd6e534bc4c`.
 - **Future releases:** every artifact is signed by
   `.github/workflows/release.yml` before the GitHub Release is created, and the
   `.sigstore.json` bundles are published alongside the assets. The workflow
@@ -51,6 +56,14 @@ bundle file.
 - OIDC issuer: `https://token.actions.githubusercontent.com`
 - Certificate identity for the retroactive v0.13.0 signatures:
   `https://github.com/JacobOptimiza/dev-nav/.github/workflows/sign-release.yml@refs/heads/main`
+- Certificate identity for v0.14.0 recovery signatures:
+  `https://github.com/JacobOptimiza/dev-nav/.github/workflows/release.yml@refs/heads/main`
+  with repository `JacobOptimiza/dev-nav`, workflow ref `refs/heads/main`,
+  workflow SHA
+  `d79cfbccdc8705006faeeb61d8368fd6e534bc4c`, and trigger
+  `workflow_dispatch`. Verify these claims with the corresponding Cosign
+  `--certificate-github-workflow-*` constraints; the issuer remains
+  `https://token.actions.githubusercontent.com`.
 - Certificate identity pattern for future releases:
   `https://github.com/JacobOptimiza/dev-nav/.github/workflows/release.yml@refs/tags/v<version>`
 
