@@ -4,6 +4,10 @@ BeforeAll {
 }
 
 Describe 'release provenance publication contract' {
+    It 'generates Scoop manifests with Scoop canonical four-space formatting' {
+        $script:workflow | Should -Match 'jq\s+--indent\s+4\s+--arg version'
+    }
+
     It 'produces a Scorecard-recognizable intoto jsonl artifact per architecture' {
         $script:workflow |
             Should -Match 'DevNav-build-provenance-\$\{\{ matrix\.architecture \}\}\.intoto\.jsonl'
