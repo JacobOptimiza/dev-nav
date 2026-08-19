@@ -65,6 +65,43 @@ Describe 'Chocolatey package source contract' {
         finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
     }
 
+    It 'materializes a recognizable URL, SHA-256 and type on every download' {
+        $root = Join-Path ([IO.Path]::GetTempPath()) ('devnav-choco-cpmr0073-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $root | Out-Null
+        try {
+            $manifest = [ordered]@{
+                schemaVersion = 1
+                version = '9.8.7'
+                artifacts = [ordered]@{
+                    'binary-x64' = @{ file = 'dev-windows-x86_64.exe'; sha256 = ('a' * 64) }
+                    'binary-arm64' = @{ file = 'dev-windows-aarch64.exe'; sha256 = ('b' * 64) }
+                    module = @{ file = 'DevNav.psm1'; sha256 = ('c' * 64) }
+                    'module-manifest' = @{ file = 'DevNav.psd1'; sha256 = ('d' * 64) }
+                }
+            }
+            $manifestPath = Join-Path $root 'release-manifest.json'
+            $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding utf8NoBOM
+            $output = Join-Path $root 'package'
+            & $script:materializerPath -Version '9.8.7' -ReleaseManifest $manifestPath -OutputDirectory $output | Out-Null
+            $install = Get-Content (Join-Path $output 'tools\chocolateyInstall.ps1') -Raw
+            $downloads = [regex]::Matches($install, '(?m)^\s*Get-ChocolateyWebFile\s+.+$') |
+                ForEach-Object { $_.Value.Trim() }
+
+            $downloads.Count | Should -Be 4
+            foreach ($download in $downloads) {
+                $download | Should -Match "-Url '[^']+'"
+                $download | Should -Match "-Checksum '[A-Fa-f0-9]{64}'"
+                $download | Should -Match "-ChecksumType 'sha256'"
+                $download | Should -Not -Match '\$selected\.'
+            }
+            ($downloads -join "`n") | Should -Match "dev-windows-x86_64\.exe'.*-Checksum 'a{64}'"
+            ($downloads -join "`n") | Should -Match "dev-windows-aarch64\.exe'.*-Checksum 'b{64}'"
+            ($downloads -join "`n") | Should -Match "DevNav\.psm1'.*-Checksum 'c{64}'"
+            ($downloads -join "`n") | Should -Match "DevNav\.psd1'.*-Checksum 'd{64}'"
+        }
+        finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+
     It 'rejects a tampered file checksum' {
         $path = Join-Path ([IO.Path]::GetTempPath()) ('devnav-choco-tamper-' + [guid]::NewGuid().ToString('N'))
         'original' | Set-Content -LiteralPath $path -NoNewline
